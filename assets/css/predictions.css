@@ -62,7 +62,7 @@ body.has-result.nav-closed:not(.result-closed) #app { grid-template-columns: 0 m
 body.has-result:not(.result-closed) #result { display: block; border-left: 1px solid var(--line); background: var(--panel);
   overflow-y: auto; max-height: calc(100vh - 50px); position: sticky; top: 50px; padding: 8px 10px; font-size: 12px; }
 #resOpen { display: none; }
-body.has-result.result-closed #resOpen { display: inline-block; }
+body.has-result #resOpen { display: inline-block; }
 .res-top { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
 .res-top button { margin-left: auto; }
 table.res { width: 100%; border-collapse: collapse; margin-bottom: 10px; }

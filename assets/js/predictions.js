@@ -2004,7 +2004,8 @@ async function initializeStartup() {
 initializeStartup();
 document.getElementById("driveReload").onclick = () => {
   if (window.confirm("あまり更新しすぎないでね❤")) {
-    location.href = "./";
+    // 取得画面のファイル名を明示して、相対URLの解決先に依存しないようにする。
+    window.location.assign("./index.html");
   }
 };
 document.getElementById("bandOpen").onclick = () => {

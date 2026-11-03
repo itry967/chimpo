@@ -34,8 +34,10 @@
   header h1 {
     font-size: 15px;
     white-space: nowrap;
+    margin-right: auto;
   }
 
+  /* SPではタイトルを左、操作ボタンを右にまとめる */
   header .sp {
     display: none;
   }
@@ -44,9 +46,25 @@
     order: 10;
     flex: 1 0 100%;
     min-width: 0;
-    font-size: 11px;
-    line-height: 1.35;
+    margin-top: 2px;
+    padding: 7px 10px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 7px;
+    background: var(--accent-soft);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.4;
+    letter-spacing: .02em;
     overflow-wrap: anywhere;
+  }
+
+  #status.race-context {
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+    border-left: 4px solid var(--accent);
+    background: var(--accent-soft);
+    color: var(--text);
   }
 
   header button,

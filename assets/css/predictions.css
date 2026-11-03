@@ -34,8 +34,9 @@ header h1 { order: 1; }
 #status { order: 4; }
 header .sp { order: 5; }
 #driveReload { order: 6; }
-#resOpen { order: 7; }
-#theme { order: 8; }
+#driveReloadRace { order: 7; }
+#resOpen { order: 8; }
+#theme { order: 9; }
 header .sp { flex: 1; }
 button, label.btn { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text);
   border-radius: 6px; padding: 4px 10px; cursor: pointer; }

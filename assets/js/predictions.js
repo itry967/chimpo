@@ -911,7 +911,7 @@ function renderRace(rid) {
     (r0["オッズの時刻"] ? `<span class="chip gray" title="単複オッズの発表時刻(過去のレースは確定オッズ)">${r0["オッズの時刻"] === "確定" ? "確定オッズ" : `オッズ ${esc(r0["オッズの時刻"])} 時点`}</span>` : "") +
     `</div>` +
     `<div class="legend" style="margin-bottom:6px">` +
-    `<span>1〜5着の確率:</span><span class="grp">馬券内</span>${[1, 2, 3].map(k => `<span><i style="background:var(--f${k})"></i>${k}着</span>`).join("")}` +
+    `<span>出走馬バー:</span><span><i style="background:var(--bar)"></i>2着内</span><span><i style="background:var(--bar2)"></i>3着内(2着内を含む)</span><span class="sep"></span>` + `<span>1〜5着の確率:</span><span class="grp">馬券内</span>${[1, 2, 3].map(k => `<span><i style="background:var(--f${k})"></i>${k}着</span>`).join("")}` +
     `<span class="sep"></span><span class="grp">馬券外</span>${[4, 5].map(k => `<span><i class="out" style="background-color:var(--f${k})"></i>${k}着</span>`).join("")}` +
     `<span>・行を押すとモデルごとの数字</span></div><div class="scroll"><table><tr>` +
     horseHead(rid) + `<th class="hide-sm">意見</th></tr>`;

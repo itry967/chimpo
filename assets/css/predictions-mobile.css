@@ -467,3 +467,8 @@
     display: none !important;
   }
 }
+
+@media (max-width: 760px) {
+  #bandOpen { order: 1; margin-right: auto; }
+  header h1 { margin-right: 0; }
+}

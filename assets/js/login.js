@@ -98,7 +98,7 @@ async function handleTokenResponse(response) {
       categoryList.hidden = true;
       const note = document.getElementById("targetScopeNote");
       note.hidden = false;
-      note.textContent = targetDate.slice(0,4) + "/" + targetDate.slice(4,6) + "/" + targetDate.slice(6,8) + " の " + targetRaceFolder + " フォルダだけを更新します。";
+      note.textContent = targetDate.slice(0,4) + "/" + targetDate.slice(4,6) + "/" + targetDate.slice(6,8) + " の " + targetRaceFolder + " のデータだけを更新します。";
       downloadButton.textContent = "このRのデータを取得・更新";
     }
     loginButton.textContent = "Googleアカウントを変更・再ログイン";

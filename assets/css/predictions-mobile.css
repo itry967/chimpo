@@ -88,6 +88,7 @@
   }
 
   #status.race-context {
+    text-align: center;
     border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
     border-left: 4px solid var(--accent);
     background: var(--accent-soft);

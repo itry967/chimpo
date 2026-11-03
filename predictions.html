@@ -258,13 +258,9 @@ table.grid td.gc input { width: 16px; height: 16px; cursor: pointer; }
   <h1>予想ビューア</h1>
   <span class="muted" id="status">CSV を落としてください</span>
   <span class="sp"></span>
-  <label class="btn">ファイルを選ぶ<input type="file" id="pick" multiple accept=".csv" hidden></label>
-  <label class="btn">フォルダを選ぶ<input type="file" id="pickdir" webkitdirectory hidden></label>
-  <button id="watch" hidden title="選んだフォルダの CSV を1分ごとに読み直す(Chrome・Edge)">フォルダを見張る</button>
   <button id="driveReload" title="Google DriveからCSVを再取得">Driveから再取得</button>
   <button id="resOpen" title="結果の欄を開く">結果</button>
   <button id="guideBtn" title="総合・能力・適性・調子・人・展開が何を評価しているかの一覧">指標の説明</button>
-  <button id="clear">消す</button>
   <button id="theme" title="明るさを切り替える">◐</button>
 </header>
 <div id="drop">
@@ -2168,23 +2164,7 @@ addEventListener("drop", async e => {
   if (items.length) { const out = []; for (const en of items) await walk(en, out); await loadFiles(out); }
   else await loadFiles([...e.dataTransfer.files]);
 });
-document.getElementById("pick").onchange = e => loadFiles([...e.target.files]);
-if (window.showDirectoryPicker) {
-  const w = document.getElementById("watch"); w.hidden = false; w.onclick = watchDir;
-  // ファイル・フォルダを選ぶも、覚えておける選び方にする
-  document.getElementById("pick").parentElement.onclick = async e => {
-    e.preventDefault();
-    let hs;
-    try { hs = await window.showOpenFilePicker({ multiple: true, types: [{ description: "CSV", accept: { "text/csv": [".csv"] } }] }); } catch (err) { return; }
-    remember(hs); await loadFiles(await readHandles(hs));
-  };
-  document.getElementById("pickdir").parentElement.onclick = async e => {
-    e.preventDefault();
-    let h;
-    try { h = await window.showDirectoryPicker(); } catch (err) { return; }
-    remember([h]); await loadFiles(await readHandles([h]));
-  };
-}
+// 共有向けビューアでは、ローカルのファイル・フォルダ選択機能を表示しない。
 // 結果の欄の開閉(このブラウザに覚えておく)
 try { if (localStorage.getItem("keiba-viewer:result-closed") === "1") document.body.classList.add("result-closed"); } catch (e) {}
 document.getElementById("resOpen").onclick = () => {
@@ -2197,16 +2177,7 @@ document.getElementById("navToggle").onclick = () => {
   const closed = document.body.classList.toggle("nav-closed");
   try { localStorage.setItem("keiba-viewer:nav-closed", closed ? "1" : "0"); } catch (e) {}
 };
-document.getElementById("pickdir").onchange = e => loadFiles([...e.target.files]);
-document.getElementById("clear").onclick = () => {
-  state.races.clear(); state.combos.clear(); state.plans.clear(); state.odds.clear(); state.oddsKind.clear(); state.band = null; state.current = null;
-  state.info.clear(); state.results.clear(); state.pays.clear(); state.review.clear(); document.body.classList.remove("has-result");
-  document.getElementById("app").hidden = true; document.getElementById("drop").hidden = false;
-  document.getElementById("status").textContent = "CSV を落としてください";
-  forget();
-  clearDriveTransferCache().catch(e => console.warn("Drive CSVキャッシュを削除できませんでした:", e));
-  document.getElementById("restore").hidden = true;
-};
+// 共有向けビューアでは、手動クリア機能を表示しない。
 async function initializeStartup() {
   try {
     const loadedFromDrive = await consumeDriveTransfer();

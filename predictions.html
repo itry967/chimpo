@@ -29,17 +29,14 @@
 <header>
   <button id="navToggle" title="レース一覧を開く・たたむ" aria-label="レース一覧を開く・たたむ">☰</button>
   <h1>予想ビューア</h1>
-  <span class="muted" id="status">CSV を落としてください</span>
+  <span class="muted" id="status">「データを更新」を押してデータ取得を行ってください　※2~3分かかります</span>
   <span class="sp"></span>
   <button id="driveReload" title="Google Driveからデータを更新">データを更新</button>
   <button id="resOpen" title="結果の欄を開く">結果</button>
   <button id="guideBtn" title="総合・能力・適性・調子・人・展開が何を評価しているかの一覧">指標の説明</button>
   <button id="theme" title="明るさを切り替える">◐</button>
 </header>
-<div id="drop">
-  <p style="font-size:16px;margin:0 0 8px">当日予想の CSV をここに落とす(フォルダごとでも可)</p>
-  <p class="muted" style="margin:0">Googleログイン後に共有されたGoogle Driveから取得したCSVを表示します。<br>
-  CSVの内容はこのブラウザ内で処理し、分析用サーバーには送信しません。</p>
+<div id="drop" hidden>
   <p id="restore" hidden style="margin:16px 0 0"><button class="btn"></button></p>
 </div>
 <dialog id="guide" aria-labelledby="guideTitle">

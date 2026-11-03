@@ -661,9 +661,13 @@ function renderResult(rid) {
     h += `</table>`;
   }
   box.innerHTML = h + `<div class="note">着順・タイム・人気・単勝オッズ・払戻は DB の結果(表示用)。「予」は予想の順位。</div>`;
-  document.getElementById("resClose").onclick = () => {
-    document.body.classList.add("result-closed");
-    try { localStorage.setItem("keiba-viewer:result-closed", "1"); } catch (e) {}
+  const resClose = document.getElementById("resClose");
+  resClose.textContent = document.body.classList.contains("result-closed") ? "＋" : "−";
+  resClose.onclick = () => {
+    if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.toggle("result-closed");
+    else document.body.classList.add("result-closed");
+    try { localStorage.setItem("keiba-viewer:result-closed", document.body.classList.contains("result-closed") ? "1" : "0"); } catch (e) {}
+    resClose.textContent = document.body.classList.contains("result-closed") ? "＋" : "−";
   };
 }
 
@@ -1932,6 +1936,11 @@ document.getElementById("resOpen").onclick = () => {
 // レース一覧の開閉(このブラウザに覚えておく)
 try { if (localStorage.getItem("keiba-viewer:nav-closed") === "1") document.body.classList.add("nav-closed"); } catch (e) {}
 document.getElementById("navToggle").onclick = () => {
+  if (window.matchMedia("(max-width: 760px)").matches) {
+    document.body.classList.toggle("mobile-nav-collapsed");
+    renderNav();
+    return;
+  }
   const closed = document.body.classList.toggle("nav-closed");
   try { localStorage.setItem("keiba-viewer:nav-closed", closed ? "1" : "0"); } catch (e) {}
 };

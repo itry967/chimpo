@@ -1727,7 +1727,7 @@ function updateRaceStatus() {
   if (state.races.has(state.current)) {
     const rid = state.current;
     const date = rid.slice(0, 8);
-    status.textContent = `${ymdw(date)}　${JYO[rid.slice(8, 10)] || rid.slice(8, 10)}　${+rid.slice(14, 16)}R`;
+    status.innerHTML = `${ymdw(date)}　${JYO[rid.slice(8, 10)] || rid.slice(8, 10)}　${+rid.slice(14, 16)}R`;
   } else {
     status.textContent = "レースを選択してください";
   }

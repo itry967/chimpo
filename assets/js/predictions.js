@@ -870,10 +870,10 @@ function renderRace(rid) {
       (word ? ` <span class="chip ${biasTone(word)}">${esc(word)}</span>` : "") + confChip(src, label) +
       (why || cw ? `<div class="note" style="margin:0">${esc(why)}${why && cw ? "。" : ""}${cw ? "確度の根拠: " + esc(cw) : ""}</div>` : "") + `</div></div>`;
   }).join("");
-  const tenkaiCard = `<div class="card"><h3>展開</h3>${pace || `<span class="muted">列がありません</span>`}` +
+  const tenkaiCard = `<div class="card"><h3>展開予想</h3>${pace || `<span class="muted">列がありません</span>`}` +
     (pace ? `<div class="note">目安(札)は検証期間(2019〜2023年)の同じ芝ダのレースと比べたもの。ペース予想の数字はコースの基準タイムとの差で、ふつうのレースでも前に行く馬は基準より少し速い(平均は下の行のとおり)ので、札はそれと比べた速さ。逃げ・先行馬が多くペースが速いと差しが届きやすく、少なく遅いと前が残りやすい。</div>` : "") +
     `</div>`;
-  const babaCard = `<div class="card"><h3>馬場<button class="help" data-help="baba" title="馬場の各項目の説明(別ウインドウ)">？</button></h3>` +
+  const babaCard = `<div class="card"><h3>馬場傾向予想<button class="help" data-help="baba" title="馬場傾向予想の各項目の説明(別ウインドウ)">？</button></h3>` +
     `${info ? `<dl class="kv">${info}</dl>` : ""}` +
     (bias ? `<div style="margin-top:6px">${bias}</div><div class="note">馬場傾向の数字は、3着以内の馬の位置の平均 − 全馬の平均。` +
       `内外は馬番÷頭数(0 = 内、1 = 外)、前後は最初のコーナーの順位÷頭数(0 = 前、1 = 後ろ)で、マイナスなら内・前が有利。` +
@@ -1927,7 +1927,7 @@ function babaHelpHTML() {
 }
 function openBabaHelp(e) {
   e.stopPropagation();   // 見出しを押したときのたたむ動きをさせない
-  openHelp("keiba-viewer-baba", "馬場の項目の説明", "馬場の項目の説明", babaHelpHTML());
+  openHelp("keiba-viewer-baba", "馬場傾向予想の項目の説明", "馬場傾向予想の項目の説明", babaHelpHTML());
 }
 document.getElementById("guideClose").onclick = () => document.getElementById("guide").close();
 document.getElementById("guide").addEventListener("click", e => { if (e.target.id === "guide") e.target.close(); });

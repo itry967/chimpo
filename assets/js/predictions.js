@@ -1875,11 +1875,20 @@ td, th { border-top: 1px solid var(--line); padding: 4px 6px; text-align: left; 
 th { color: var(--muted); font-weight: normal; white-space: nowrap; }
 .items { display: flex; flex-wrap: wrap; gap: 4px; } .items span { background: var(--bg); border-radius: 999px; padding: 0 8px; font-size: 12px; }`;
 function openHelp(name, title, heading, body) {
-  // 説明を別ウインドウで開く(ポップアップを止められたときは、このページの上に出す)
+  // SPでは同じ画面内のモーダル、PCでは従来どおり別ウインドウで表示する。
+  if (window.matchMedia("(max-width: 760px)").matches) {
+    document.getElementById("guideTitle").textContent = heading;
+    document.getElementById("guideBody").innerHTML = body;
+    const dialog = document.getElementById("guide");
+    if (!dialog.open) dialog.showModal();
+    return;
+  }
   const w = window.open("", name, "width=900,height=820,resizable=yes,scrollbars=yes");
   if (!w) {
     document.getElementById("guideTitle").textContent = heading;
-    document.getElementById("guideBody").innerHTML = body; document.getElementById("guide").showModal(); return;
+    document.getElementById("guideBody").innerHTML = body;
+    document.getElementById("guide").showModal();
+    return;
   }
   const theme = document.documentElement.dataset.theme;
   w.document.open();

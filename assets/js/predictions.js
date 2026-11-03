@@ -51,13 +51,13 @@ async function readFile(file, path, modifiedTime) {
   if (!rows.length) return 0;
   const cols = Object.keys(rows[0]);
   const name = (path || file.webkitRelativePath || file.name).replace(/\\/g, "/");
-  const raceFolder = name.match(/(?:^|\/)([^/]+_\d{2}R)\/[^/]+$/);
-  const fileRaceId = rows[0]?.race_id;
-  if (raceFolder && fileRaceId) {
+  const raceFolder = name.match(/(?:^|\\/)([^/]+_\\d{2}R)\\/[^/]+$/);
+  if (raceFolder) {
     const stamp = modifiedTime || (file.lastModified ? new Date(file.lastModified).toISOString() : "");
     if (stamp) {
-      const prev = state.fileUpdated.get(fileRaceId);
-      if (!prev || new Date(stamp) > new Date(prev)) state.fileUpdated.set(fileRaceId, stamp);
+      const folderKey = raceFolder[1];
+      const prev = state.fileUpdated.get(folderKey);
+      if (!prev || new Date(stamp) > new Date(prev)) state.fileUpdated.set(folderKey, stamp);
     }
   }
   if (cols.includes("race_id") && cols.includes("平均_勝率")) {
@@ -218,7 +218,9 @@ function overview(rid) {
   const i = state.info.get(rid);
   if (!i) return "";
   const course = [i["芝ダ"], i["距離"] ? `${i["距離"]}m` : "", i["回り"] ? `(${i["回り"]})` : ""].join("");
-  const updated = state.fileUpdated.get(rid);
+  const venueName = JYO[rid.slice(8, 10)];
+  const folderKey = venueName ? `${venueName}_${rid.slice(14, 16)}R` : "";
+  const updated = state.fileUpdated.get(folderKey);
   const updatedText = updated ? new Intl.DateTimeFormat("ja-JP", {timeZone:"Asia/Tokyo", year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hourCycle:"h23"}).format(new Date(updated)).replace(/年|月/g, "/").replace("日", "") : "";
   return `<div class="overview"><b>${esc(course)}</b><span class="rname">${esc(i["レース名"] || "")}</span>` +
     (i["グレード"] ? `<span class="chip grade">${esc(i["グレード"])}</span>` : "") +

@@ -20,7 +20,7 @@
 <body>
 <main>
   <h1>Predictions Viewer</h1>
-  <p>Googleアカウントでログインすると、共有されたGoogle DriveフォルダからCSVを取得して予想・分析画面を開きます。</p>
+  <p>Googleアカウントでログインすると、共有されたpredictionsフォルダ以下のCSVを取得して予想・分析画面を開きます。</p>
   <button id="login" disabled>GoogleでログインしてCSVを取得</button>
   <div id="status" class="status" role="status" aria-live="polite">Google認証の準備中…</div>
   <p class="small">CSVの取得には、管理者から共有されたGoogleアカウントを使用してください。取得したCSVはこのブラウザ内で処理します。</p>
@@ -32,11 +32,7 @@
 const GOOGLE_CLIENT_ID = "585615498103-i5804umtma380k2jp4o631uu5mmj1nsb.apps.googleusercontent.com";
 
 // 共有された3つの親フォルダ。①は直下のYYYYMMDDフォルダから取得し、②③は直下から再帰取得。
-const DRIVE_ROOTS = [
-  {id:"10mpZ9x81Q5I1FOyWS3NF9ojLsIDSTMHT", dateFolders:true, label:"① 日付別フォルダ"},
-  {id:"1bupl3pPvzEbOChBFmqedluXRh3tv9gzw", dateFolders:false, label:"② 共有フォルダ"},
-  {id:"1irlFdGP4GMN01sKTprRKKexDPamwik8x", dateFolders:false, label:"③ 共有フォルダ"}
-];
+const DRIVE_ROOT_ID = "10mpZ9x81Q5I1FOyWS3NF9ojLsIDSTMHT"; // predictions フォルダ
 const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email";
 const statusEl = document.getElementById("status");
@@ -145,18 +141,14 @@ async function getAccountEmail(accessToken) {
 async function fetchAllCsv(accessToken) {
   const accountEmail=await getAccountEmail(accessToken);
   const metas=[]; const visited=new Set();
-  for(let index=0;index<DRIVE_ROOTS.length;index++) {
-    const root=DRIVE_ROOTS[index];
-    status(`${root.label} のフォルダを確認中…`,true);
-    if(root.dateFolders) {
-      const children=await listChildren(root.id,accessToken);
-      const dates=children.filter(x=>x.mimeType==="application/vnd.google-apps.folder" && /^\d{8}$/.test(x.name)).sort((a,b)=>a.name.localeCompare(b.name));
-      if(!dates.length) throw new Error("①の親フォルダ直下にYYYYMMDD形式のフォルダが見つかりません。");
-      for(const folder of dates) await collectFolder(folder,accessToken,metas,visited,folder.name+"/");
-    } else {
-      await collectFolder({id:root.id,name:root.label},accessToken,metas,visited,root.label+"/");
-    }
-  }
+  status("predictions フォルダ以下を確認中…",true);
+  await collectFolder(
+    {id:DRIVE_ROOT_ID,name:"predictions"},
+    accessToken,
+    metas,
+    visited,
+    "predictions/"
+  );
 
   const unique=[...new Map(metas.map(x=>[x.id,x])).values()];
   const cachedFiles=await loadDriveCache(accountEmail).catch(error=>{

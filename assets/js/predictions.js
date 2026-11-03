@@ -602,7 +602,7 @@ function renderReview(rid, rows) {
   }
   h += `</dl></div></div>`;
   // 馬ごとの予想と結果
-  h += `<div class="scroll"><table class="rvt"><tr><th class="n">着</th><th>馬名</th><th class="n">予想</th><th class="n" title="予想順位 − 着順。プラスは予想より上">差</th>` +
+  h += `<div class="scroll"><table class="rvt"><tr><th class="n">着</th><th class="n">馬番</th><th>馬名</th><th class="n">予想</th><th class="n" title="予想順位 − 着順。プラスは予想より上">差</th>` +
     `<th class="n">勝率</th><th class="n" title="1〜3着の確率の合計">3着以内</th><th class="n" title="1〜5着の確率の合計">5着以内</th>` +
     `<th class="n">4角 予想→実際</th><th class="n">上がり 予想→実際</th><th>脚質 予想→実際</th></tr>`;
   for (const r of res) {
@@ -610,7 +610,7 @@ function renderReview(rid, rows) {
     const d = k != null && rank != null ? rank - k : null;
     const cls = d == null ? "" : d >= 5 ? "up" : d <= -5 ? "down" : "";
     const l3p = num(pr["上がり3Fの予想"]), l3r = num(r["上がり3F"]);
-    h += `<tr><td class="n"><b>${k ?? "-"}</b></td><td>${esc(r["馬名"])}</td><td class="n">${rank ?? "-"}</td>` +
+    h += `<tr><td class="n"><b>${k ?? "-"}</b></td><td class="n">${esc(r["馬番"] ?? "")}</td><td>${esc(r["馬名"])}</td><td class="n">${rank ?? "-"}</td>` +
       `<td class="n"><span class="${cls}">${d == null ? "" : (d > 0 ? "+" : "") + d}</span></td><td class="n">${pct(num(pr["平均_勝率"]))}</td>` +
       `<td class="n">${pct(upTo(pr, 3))}</td><td class="n">${pct(upTo(pr, 5))}</td>` +
       `<td class="n">${num(pr["4角の番手"]) != null ? Math.round(num(pr["4角の番手"])) : "-"}<span class="dim">→</span>${lastPos(r) ?? "-"}</td>` +

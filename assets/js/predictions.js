@@ -51,7 +51,7 @@ async function readFile(file, path, modifiedTime) {
   if (!rows.length) return 0;
   const cols = Object.keys(rows[0]);
   const name = (path || file.webkitRelativePath || file.name).replace(/\\/g, "/");
-  const raceFolder = name.match(/(?:^|\\/)([^/]+_\\d{2}R)\\/[^/]+$/);
+  const raceFolder = name.match(/(?:^|\/)([^/]+_\d{2}R)\/[^/]+$/);
   if (raceFolder) {
     const stamp = modifiedTime || (file.lastModified ? new Date(file.lastModified).toISOString() : "");
     if (stamp) {

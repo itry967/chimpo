@@ -1979,7 +1979,11 @@ async function initializeStartup() {
   }
 }
 initializeStartup();
-document.getElementById("driveReload").onclick = () => { location.href = "./"; };
+document.getElementById("driveReload").onclick = () => {
+  if (window.confirm("あまり更新しすぎないでね❤")) {
+    location.href = "./";
+  }
+};
 document.getElementById("theme").onclick = () => {
   const root = document.documentElement;
   const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;

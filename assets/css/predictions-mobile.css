@@ -602,9 +602,11 @@
 }
 
 @media (max-width: 760px) {
-  /* 1段目：回収率 → 指標説明 → 注意点 → ダークモード（右端） */
-  #guideBtn { order: 2; }
-  #cautionOpen { order: 3; }
+  /* 1段目：タイトル → 注意点 → 回収率 → 指標説明 → ダークモード */
+  header h1 { order: 0; margin-right: 0; }
+  #cautionOpen { order: 1; margin-left: 0; margin-right: 0; }
+  #bandOpen { order: 2; margin-left: 0; margin-right: 0; }
+  #guideBtn { order: 3; margin-left: 0; margin-right: 0; }
   #theme { order: 4; margin-left: auto; }
 
   /* 2段目：全体更新 → このRの更新（右端） */

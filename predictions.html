@@ -95,6 +95,8 @@ table.res th { color: var(--muted); font-weight: normal; }
 table.res tr.in td { background: var(--accent-soft); }
 .overview { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: -4px 0 10px; font-size: 14px; }
 .overview .rname { font-weight: 600; }
+.review .lapsec { margin-bottom: 10px; }
+.review .rvgrid { align-items: start; }
 .review h4 { margin: 4px 0 6px; font-size: 13px; color: var(--muted); }
 .quality { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 2px 0 12px; }
 .quality .ql { color: var(--muted); font-size: 13px; }
@@ -196,6 +198,8 @@ th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--accent); }
 th.sorted { color: var(--accent); }
 th .sortmark { font-size: 9px; margin-left: 2px; }
+tr.hit td, tr.hit td b { color: var(--up); font-weight: 700; }   /* 結果が出たレースで当たった買い目 */
+tr.hit td:first-child { box-shadow: inset 3px 0 0 var(--up); }
 .budgetbox { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; }
 .budgetbox.on { border-color: var(--accent); background: var(--accent-soft); }
 input.odds:focus { outline: 2px solid var(--accent); border-color: transparent; }
@@ -369,7 +373,10 @@ async function readFile(file, path) {
     state.combos.set(name.split("/").pop(), rows);
     return 1;
   }
-  if (cols.includes("自信の区分") && cols.includes("モデル")) { state.band = rows; return 1; }
+  // 自信の区分ごとの回収率.csv。昔の形の「自信_モデル別.csv」(レースごとの行で race_id があり、回収率の列が無い)は読まない
+  if (cols.includes("自信の区分") && cols.includes("モデル") && !cols.includes("race_id") && cols.some(c => c.endsWith("_回収率"))) {
+    state.band = rows; return 1;
+  }
   return 0;
 }
 
@@ -470,6 +477,7 @@ async function clearDriveTransferCache() {
   });
   db.close();
 }
+
 
 // ---------- 画面 ----------
 function models(rows) {
@@ -684,6 +692,19 @@ function lapGap(laps, pred, marks) {
     `<span class="muted">(いちばんずれたのは ${from}〜${marks[k]}m の ${dk > 0 ? "+" : ""}${dk.toFixed(1)}秒。` +
     `平均のずれが 0.2秒以内なら「ほぼ予想どおり」、0.4秒を超えると「大きく」)</span></dd>`;
 }
+function simpleView() {
+  // 出走馬の簡易表示(このブラウザに覚えておく)
+  try { return localStorage.getItem("keiba-viewer:simple") === "1"; } catch (e) { return !!state.simple; }
+}
+function hitPayout(rid, kind, t) {
+  // 結果が出たレースで、その買い目が当たっていれば 100円あたりの払戻(当たっていなければ null)。馬単・3連単は順番どおり
+  const pays = state.pays.get(rid);
+  if (!pays) return null;
+  const norm = (k, u) => (k === "馬単" || k === "3連単" ? u.map(Number) : u.map(Number).sort((a, b) => a - b)).join("-");
+  const key = norm(kind, t);
+  const p = pays.find(x => x["券種"] === kind && norm(kind, String(x["組み合わせ"]).split("-")) === key);
+  return p ? num(p["払戻金"]) : null;
+}
 function reviewHits(rid, tickets) {
   // 買い目(券種・馬番・金額)の当たりと払戻。馬単・3連単は順番どおり、ほかは順不同で照らし合わせる
   const pays = state.pays.get(rid) || [];
@@ -827,14 +848,14 @@ function renderReview(rid, rows) {
       `順番の当たり方 ${q.sOrder} 点(予想順位と着順の相関 ${q.rho.toFixed(2)})</span>` +
       `<div class="bar"><i style="width:${q.score}%"></i></div></div>`;
   }
-  h += `<div class="grid2"><div><h4>レース内容</h4>`;
   const pl = predictedLaps(r0, state.info.get(rid));
   const predLaps = pl && pl.laps.length === laps.length ? pl.laps : null;
   const lapMk = pl && pl.marks.length === laps.length ? pl.marks : (num(state.info.get(rid)?.["距離"]) ? lapMarks(num(state.info.get(rid)["距離"]), laps.length) : laps.map((_, i) => 200 * (i + 1)));
   const lb = lapBase(state.info.get(rid));
-  if (laps.length) h += lapText(laps, f3, l3) + lapBaseTabs(state.info.get(rid)) +
-    `<div class="scroll">${lapChart(laps, predLaps, lapMk, lb?.laps, lb)}</div>`;
-  h += `<dl class="rv">` +
+  // ラップはレース内容から分けて、回顧の中の独立した欄にする(レース内容と予想との乖離は、その下で上をそろえて並べる)
+  if (laps.length) h += `<div class="lapsec"><h4>ラップ</h4>` + lapText(laps, f3, l3) + lapBaseTabs(state.info.get(rid)) +
+    `<div class="scroll">${lapChart(laps, predLaps, lapMk, lb?.laps, lb)}</div></div>`;
+  h += `<div class="grid2 rvgrid"><div><h4>レース内容</h4><dl class="rv">` +
     (f3 != null ? `<dt>前半3F</dt><dd><b>${f3.toFixed(1)}</b> ${diffTxt(f3, bf3)}${judgeChip(rv, "前半3F", f3)}${baseList(rv, "前半3F", f3, v => v.toFixed(1))}</dd>` : "") +
     (l3 != null ? `<dt>後半3F</dt><dd><b>${l3.toFixed(1)}</b> ${diffTxt(l3, bl3)}${judgeChip(rv, "後半3F", l3)}${baseList(rv, "後半3F", l3, v => v.toFixed(1))}</dd>` : "") +
     (rv["ペース"] ? `<dt>ペース</dt><dd><span class="chip ${/ハイ|速い/.test(rv["ペース"]) ? "warn" : /スロー/.test(rv["ペース"]) ? "" : "gray"}">${esc(rv["ペース"])}</span>` +
@@ -850,7 +871,7 @@ function renderReview(rid, rows) {
   const p1 = rows.find(r => num(r["平均_順位"]) === 1), p1res = p1 && res.find(r => +r["馬番"] === +p1.umaban);
   const winner = fin.find(r => num(r["着順"]) === 1), wp = winner && pred.get(String(+winner["馬番"]));
   const inTop3 = rows.filter(r => num(r["平均_順位"]) <= 3).filter(r => { const x = res.find(y => +y["馬番"] === +r.umaban); return x && num(x["着順"]) <= 3; }).length;
-  const predEsc = rows.filter(r => styleName(r["脚質(近5走)"]) === "逃").map(r => r["horse_name"] || r["馬名"]).filter(Boolean);
+  const predEsc = rows.filter(r => styleOf(r) === "逃").map(r => r["horse_name"] || r["馬名"]).filter(Boolean);
   const realEsc = fin.filter(r => r["脚質"] === "逃").map(r => r["馬名"]);
   const t1000p = num(r0["前半1000mの予想"]), t1000 = num(rv["前半1000m"]);
   h += `<div><h4>予想との乖離</h4><dl class="rv">` +
@@ -881,7 +902,7 @@ function renderReview(rid, rows) {
       `<td class="n">${pct(upTo(pr, 3))}</td><td class="n">${pct(upTo(pr, 5))}</td>` +
       `<td class="n">${num(pr["4角の番手"]) != null ? Math.round(num(pr["4角の番手"])) : "-"}<span class="dim">→</span>${lastPos(r) ?? "-"}</td>` +
       `<td class="n">${l3p != null ? l3p.toFixed(1) : "-"}<span class="dim">→</span>${l3r != null ? l3r.toFixed(1) : "-"}</td>` +
-      `<td>${esc(styleName(pr["脚質(近5走)"]))}<span class="dim">→</span>${esc(r["脚質"] || "-")}</td></tr>`;
+      `<td>${esc(styleOf(pr))}<span class="dim">→</span>${esc(r["脚質"] || "-")}</td></tr>`;
   }
   h += `</table></div><div class="note">予想の質は、勝ち馬に付けていた勝率(対数損失)と、予想順位と着順の順位相関を、` +
     `検証期間(2019〜2023年)の全レースの中で上から何%かの点(0〜100)にして平均したもの。50 がふつうのレース。` +
@@ -1146,6 +1167,8 @@ function renderRace(rid) {
   // 出走馬
   html += `<div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">` +
     `<h3 style="margin:0">出走馬</h3>` +
+    `<label class="muted" style="font-size:13px" title="相対値・絶対値・理由をたたむ。馬の行を1回押すとそれが出て、2回目で詳細が出る">` +
+    `<input type="checkbox" id="simpleView" ${simpleView() ? "checked" : ""}> 簡易表示</label>` +
     (r0["オッズの時刻"] ? `<span class="chip gray" title="単複オッズの発表時刻(過去のレースは確定オッズ)">${r0["オッズの時刻"] === "確定" ? "確定オッズ" : `オッズ ${esc(r0["オッズの時刻"])} 時点`}</span>` : "") +
     `</div>` +
     `<div class="legend" style="margin-bottom:6px">` +
@@ -1168,11 +1191,11 @@ function renderRace(rid) {
       `<td class="n">${odds != null ? `${fix(odds)}<span class="dim ninki">${ninki.get(String(r.umaban))}人気</span>` : `<span class="dim">—</span>`}</td>` +
       `<td class="n ev" data-uma="${esc(r.umaban)}">${evCell(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]))}</td>` +
       `<td class="n">${placeOdds(r)}</td><td class="n">${evCell(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]))}</td><td>${finBar(r)}</td>` +
-      `<td class="n">${fix(num(r["予想着順"]))}${cdot(r, "予想")}</td><td>${esc(styleName(r["脚質(近5走)"]))}${cdot(r, "脚質")}</td>` +
+      `<td class="n">${fix(num(r["予想着順"]))}${cdot(r, "予想")}</td><td>${esc(styleOf(r))}${cdot(r, "脚質")}</td>` +
       `<td class="n">${passing(r)}${cdot(r, "通過予想")}</td><td class="n">${lastThree(r)}${cdot(r, "上がり予想")}</td>` +
       `<td class="n hide-sm">${w == null ? "" : w + (z == null ? "" : `<span class="dim">(${z > 0 ? "+" : ""}${z})</span>`)}</td>` +
       `<td class="hide-sm">${split ? `<span class="chip warn" title="モデルの順位の幅 ${spread}">割れ</span>` : ""}</td></tr>`;
-    if (why) html += `<tr class="why"><td></td><td colspan="16">${why}</td></tr>`;
+    if (why && (!simpleView() || state.whyOpen?.has(key))) html += `<tr class="why"><td></td><td colspan="16">${why}</td></tr>`;
     if (state.open.has(key)) html += `<tr class="detail"><td colspan="17">${detail(r, ms)}</td></tr>`;
   }
   html += `</table></div><div class="note">勝率・3着内は5モデルの平均。妥当オッズの横の印は実際のオッズとの差(▲▲ 1.5倍以上・▲ 1.2倍以上高い、▼ 0.8倍未満・▼▼ 0.5倍未満に低い。上にのせると比)。期待値 = オッズ ÷ 妥当オッズ(1 を超えると予想の上では得。緑は 1.0 以上、太字は 1.2 以上。複勝は下限のオッズで計算)。単勝オッズの横は人気(オッズの低い順)。「割れ」はモデルの順位の幅が4以上。馬名・予想着順・脚質・通過予想・上がり予想の横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。色は緑 = 高・灰 = 中・橙 = 低。上にのせると0〜100の点と、検証期間の同じ条件での平均のずれ)。馬名の横は勝率・3着内・期待値を含む予想全体の確度。通過予想は前半(最初のコーナー)→ 4コーナーの番手、上がり予想は秒(かっこ内はレースで速い順、緑は3位まで)。根拠は説明用の LightGBM で、▲が評価を上げた項目、▼が下げた項目。数字は点数の差(レースの平均と比べた分)と、勝つ見込みのおおよその倍率(×)。総合・能力・適性・調子・人・展開は、根拠の項目を分類ごとに足したもの(総合は全部の合計)。1行目の「相対値」はこのレースの中の順位から星(点は1位が100・最下位が0)、2行目の「絶対値」は検証期間 2019〜2023年の全出走馬の中の位置(点は上位何%かで、80以上が★5)。横の高・中・低は確度(元になった出走数・調教などのデータの量。総合は能力・適性・調子のうち一番低いもの)で、低いものは薄く出す。</div></div>`;
@@ -1188,7 +1211,19 @@ function renderRace(rid) {
   setupHorseSort(document.getElementById("main"), rid);
   document.querySelectorAll("tr.horse").forEach(tr => tr.onclick = e => {
     if (e.target.closest("input")) return;
-    const k = tr.dataset.key; state.open.has(k) ? state.open.delete(k) : state.open.add(k); renderRace(rid);
+    const k = tr.dataset.key;
+    state.whyOpen = state.whyOpen || new Set();
+    if (simpleView() && tr.classList.contains("has-why")) {
+      // 簡易表示: 1回目で相対値・絶対値・理由、2回目で詳細、3回目でどちらもたたむ
+      if (!state.whyOpen.has(k)) state.whyOpen.add(k);
+      else if (!state.open.has(k)) state.open.add(k);
+      else { state.whyOpen.delete(k); state.open.delete(k); }
+    } else state.open.has(k) ? state.open.delete(k) : state.open.add(k);   // 通常: 1回で詳細を開く・たたむ
+    renderRace(rid);
+  });
+  document.getElementById("simpleView")?.addEventListener("change", e => {
+    try { localStorage.setItem("keiba-viewer:simple", e.target.checked ? "1" : "0"); } catch (err) { state.simple = e.target.checked; }
+    renderRace(rid);
   });
   document.querySelectorAll(".tabs.combo button").forEach(b => b.onclick = () => { state.comboTab = b.dataset.t; renderRace(rid); });
   document.querySelectorAll(".tabs.csort button").forEach(b => b.onclick = () => { state.comboSort = b.dataset.t; renderRace(rid); });
@@ -1255,7 +1290,7 @@ function renderRace(rid) {
 }
 // ---------- 出走馬の表: 列の見出しで並べ替え・枠の色 ----------
 // [見出し, 並べ替えの値, 最初に押したときの向き(1 = 小さい順、-1 = 大きい順), th の class, title]
-const STYLE_ORDER = { "逃": 1, "先行": 2, "差": 3, "追込": 4, "自在": 5 };
+const STYLE_ORDER = { "逃": 1, "先行": 2, "差": 3, "追込": 4, "自在": 5, "不明": 6 };
 function horseCols(rid) {
   const o = r => getOdds(rid, r.umaban, r);
   const ratio = (a, b) => a != null && b ? a / b : null;
@@ -1273,7 +1308,7 @@ function horseCols(rid) {
     ["複勝<br>期待値", r => ratio(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"])), -1, "n", ""],
     ["1〜5着", r => upTo(r, 3), -1, "", "3着以内の確率で並べる"],
     ["予想<br>着順", r => num(r["予想着順"]), 1, "n", ""],
-    ["脚質", r => STYLE_ORDER[styleName(r["脚質(近5走)"])] ?? 9, 1, "", "逃・先行・差・追込・自在の順"],
+    ["脚質", r => STYLE_ORDER[styleOf(r)] ?? 9, 1, "", "逃・先行・差・追込・自在・不明の順"],
     ["通過<br>予想", r => num(r["4角の番手"]), 1, "n", "前半(最初のコーナー)→ 4コーナーの予想の番手。4コーナーの番手で並べる"],
     ["上がり<br>予想", r => num(r["上がり3Fの予想"]), 1, "n", "上がり3F の予想(かっこ内はレースの中で速い順)"],
     ["馬体重", r => num(r["馬体重"]), -1, "n hide-sm", ""],
@@ -1338,6 +1373,12 @@ function evCell(odds, fair) {
   if (odds == null || !fair) return "";
   const ev = odds / fair;
   return `<span class="${ev >= 1 ? "hi" : "dim"}" style="${ev >= 1.2 ? "font-weight:800" : ""}">${ev.toFixed(2)}</span>`;
+}
+function styleOf(r) {
+  // 脚質の予想。新しい CSV は「脚質の予想」(不明・自在を分ける)、古い CSV の「自在」は分からない馬だったので「不明」にする
+  if (r["脚質の予想"]) return r["脚質の予想"];
+  const v = styleName(r["脚質(近5走)"]);
+  return v === "自在" ? "不明" : v;
 }
 function styleName(v) {
   // 古い CSV の1文字の書き方も直す。脚質が決まらない馬は「自在」
@@ -1695,7 +1736,8 @@ function renderPlan(rid) {
   tickets.forEach((x, i) => {
     const o = oddsOf(x), p = probs[i], lower = x.kind === "複勝" || x.kind === "ワイド";
     const backI = amt[i] && o ? `${Math.round(amt[i] * o).toLocaleString()}円` + (lower ? "〜" : "") : `<span class="dim">-</span>`;
-    h += `<tr class="${amt[i] ? "" : "dim"}"><td><input type="checkbox" class="planPick" data-i="${i}"></td>${many ? `<td>${esc(x.kind)}</td>` : ""}<td><b>${esc(x.t.join(x.kind === "馬単" || x.kind === "3連単" ? "→" : "-"))}</b></td>` +
+    const hp = hitPayout(rid, x.kind, x.t);
+    h += `<tr class="${amt[i] ? "" : "dim"}${hp != null ? " hit" : ""}"${hp != null ? ` title="的中(100円あたり ${hp.toLocaleString()}円)"` : ""}><td><input type="checkbox" class="planPick" data-i="${i}"></td>${many ? `<td>${esc(x.kind)}</td>` : ""}<td><b>${esc(x.t.join(x.kind === "馬単" || x.kind === "3連単" ? "→" : "-"))}</b></td>` +
       `<td class="n">${pct(p)}</td><td class="n">${p > 0 ? fix(1 / p) + gapMark(o, 1 / p, x.kind + (lower ? "(下限)" : "")) : ""}</td>` +
       `<td class="n">${o ? fix(o) + (lower ? "〜" : "") : `<span class="dim">オッズなし</span>`}</td><td class="n">${o && p ? evCell(o, 1 / p) : ""}</td>` +
       `<td class="n">${amt[i] ? amt[i].toLocaleString() + "円" : "買わない"}</td><td class="n">${backI}</td></tr>`;
@@ -1858,7 +1900,8 @@ function renderBasket(rid, tri, places, odds, raceRows) {
   for (const r of rows) {
     const lower = r.kind === "複勝" || r.kind === "ワイド";
     const sep = CALC_KINDS[r.kind][1] && r.t.length > 1 ? "→" : "-";
-    h += `<tr class="${r.amount ? "" : "dim"}"><td>${esc(r.kind)}</td><td><b>${esc(r.t.join(sep))}</b></td>` +
+    const hp = hitPayout(rid, r.kind, r.t);
+    h += `<tr class="${r.amount ? "" : "dim"}${hp != null ? " hit" : ""}"${hp != null ? ` title="的中(100円あたり ${hp.toLocaleString()}円)"` : ""}><td>${esc(r.kind)}</td><td><b>${esc(r.t.join(sep))}</b></td>` +
       `<td class="n">${pct(r.p, 2)}</td><td class="n">${r.p > 0 ? fix(1 / r.p) : ""}</td>` +
       `<td class="n">${r.o ? fix(r.o) + (lower ? "〜" : "") : `<span class="dim">オッズなし</span>`}</td><td class="n">${r.o && r.p ? evCell(r.o, 1 / r.p) : ""}</td>` +
       `<td class="n"><input class="odds amt" data-i="${r.i}" type="number" min="0" step="100" value="${r.amount}" style="width:90px"> 円</td>` +

@@ -1732,6 +1732,8 @@ function updateRaceStatus() {
     status.textContent = "レースを選択してください";
   }
   status.classList.add("race-context");
+  const raceReload = document.getElementById("driveReloadRace");
+  if (raceReload) raceReload.disabled = !state.races.has(state.current);
 }
 
 function render(toTop = true) {
@@ -2003,9 +2005,25 @@ async function initializeStartup() {
 }
 initializeStartup();
 document.getElementById("driveReload").onclick = () => {
-  if (window.confirm("あまり更新しすぎないでね❤")) {
+  if (window.confirm("全体のデータをまとめて更新します。よろしいですか？")) {
     // 取得画面のファイル名を明示して、相対URLの解決先に依存しないようにする。
     window.location.assign("./index.html");
+  }
+};
+document.getElementById("driveReloadRace").onclick = () => {
+  const rid = state.current;
+  if (!state.races.has(rid)) return;
+  const date = rid.slice(0, 8);
+  const venue = JYO[rid.slice(8, 10)];
+  const raceNo = rid.slice(14, 16);
+  if (!/^\d{8}$/.test(date) || !venue || !/^\d{2}$/.test(raceNo)) {
+    alert("表示中のレースを特定できませんでした。");
+    return;
+  }
+  const raceFolder = `${venue}_${raceNo}R`;
+  const params = new URLSearchParams({date, raceFolder});
+  if (window.confirm(`${date.slice(0,4)}/${date.slice(4,6)}/${date.slice(6,8)} ${venue} ${+raceNo}R のデータだけを更新しますか？`)) {
+    window.location.assign("./index.html?" + params.toString());
   }
 };
 document.getElementById("bandOpen").onclick = () => {

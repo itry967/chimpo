@@ -126,7 +126,7 @@ async function loadFiles(list, keepView = false) {
     document.getElementById("drop").hidden = true;
     document.getElementById("app").hidden = false;
     if (!state.current) { try { state.current = sessionStorage.getItem("keiba-viewer:current"); } catch (e) {} }   // 再読み込みの前に見ていたレース
-    if (!state.current || (!state.races.has(state.current) && state.current !== "band")) state.current = sortedRaces()[0] || "band";
+    if (!state.races.has(state.current)) state.current = sortedRaces()[0] || null;
     if (keepView && document.activeElement?.matches("input, textarea")) return;   // 入力中は書き換えない(次の回に)
     keepView ? render(false) : render();
   }
@@ -1712,8 +1712,6 @@ function updateRaceStatus() {
     const rid = state.current;
     const date = rid.slice(0, 8);
     status.textContent = `${ymdw(date)}　${JYO[rid.slice(8, 10)] || rid.slice(8, 10)}　${+rid.slice(14, 16)}R`;
-  } else if (state.current === "band") {
-    status.textContent = "自信の区分ごとの回収率";
   } else {
     status.textContent = "レースを選択してください";
   }
@@ -1723,8 +1721,7 @@ function updateRaceStatus() {
 function render(toTop = true) {
   const y = window.scrollY;
   renderNav();
-  if (state.current === "band" && state.band) renderBand();
-  else if (state.races.has(state.current)) renderRace(state.current);
+  if (state.races.has(state.current)) renderRace(state.current);
   renderResult(state.current);
   updateRaceStatus();
   window.scrollTo(0, toTop ? 0 : y);

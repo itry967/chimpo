@@ -472,3 +472,20 @@
   #bandOpen { order: 1; margin-right: auto; }
   header h1 { margin-right: 0; }
 }
+
+
+@media (max-width: 760px) {
+  #bandDialog {
+    width: calc(100vw - 20px);
+    max-width: none;
+    max-height: calc(100dvh - 30px - env(safe-area-inset-top));
+    margin: auto;
+  }
+  #bandDialog .gh { padding: 10px; }
+  #bandDialog .gb {
+    padding: 8px 10px 14px;
+    max-height: calc(100dvh - 90px - env(safe-area-inset-top));
+    overflow: auto;
+  }
+  #bandDialog .tabs { flex-wrap: wrap; }
+}

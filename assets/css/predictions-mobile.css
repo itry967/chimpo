@@ -557,3 +557,73 @@
   #status { order: 10; }
   header .sp { display: none; }
 }
+
+/* 注意点ボタンと注意事項モーダル */
+#cautionOpen {
+  white-space: nowrap;
+}
+#cautionDialog {
+  width: min(560px, calc(100vw - 24px));
+  max-width: none;
+  max-height: calc(100dvh - 40px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .24);
+}
+#cautionDialog::backdrop {
+  background: rgba(0, 0, 0, .5);
+}
+#cautionDialog .gh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+#cautionDialog .gh h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+}
+#cautionDialog .gb {
+  padding: 12px 18px 18px;
+}
+#cautionDialog .caution-list {
+  margin: 0;
+  padding-left: 1.5em;
+  line-height: 1.8;
+}
+#cautionDialog .caution-list li + li {
+  margin-top: 10px;
+}
+
+@media (max-width: 760px) {
+  /* 1段目：回収率 → 指標説明 → 注意点 → ダークモード（右端） */
+  #guideBtn { order: 2; }
+  #cautionOpen { order: 3; }
+  #theme { order: 4; margin-left: auto; }
+
+  /* 2段目：全体更新 → このRの更新（右端） */
+  #driveReload { order: 5; margin-left: auto; }
+  #driveReloadRace { order: 6; margin-left: 0; }
+
+  #cautionDialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 30px - env(safe-area-inset-top));
+    margin: auto;
+  }
+  #cautionDialog .gh { padding: 10px; }
+  #cautionDialog .gb { padding: 10px 14px 16px; }
+}
+
+@media (max-width: 430px) {
+  #cautionOpen {
+    font-size: 10px;
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+}

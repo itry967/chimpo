@@ -37,7 +37,34 @@
     margin-right: auto;
   }
 
-  /* SPではタイトルを左、操作ボタンを右にまとめる */
+  /* SPヘッダー：タイトル直後に回収率、操作ボタンは右側へ */
+  header h1 {
+    order: 0;
+  }
+
+  #bandOpen {
+    order: 1;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  #resOpen {
+    order: 2;
+  }
+
+  #driveReload {
+    order: 3;
+    margin-left: auto;
+  }
+
+  #guideBtn {
+    order: 4;
+  }
+
+  #theme {
+    order: 5;
+  }
+
   header .sp {
     display: none;
   }

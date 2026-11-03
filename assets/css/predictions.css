@@ -62,7 +62,9 @@ button:hover, label.btn:hover { border-color: var(--accent); }
 
 /* PCでは現在表示中のレース表示をヘッダーの左右中央に固定 */
 @media (min-width: 761px) {
+  /* 中央配置の現在レース表示が、右側の操作ボタンへのクリックを妨げないようにする */
   #status.race-context {
+    pointer-events: none;
     position: absolute;
     left: 50%;
     transform: translateX(-50%);

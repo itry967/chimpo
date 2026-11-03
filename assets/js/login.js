@@ -78,7 +78,7 @@ async function handleTokenResponse(response) {
   try {
     accessToken = response.access_token;
     accountEmail = await getAccountEmail(accessToken);
-    status("日付フォルダを確認中…", true);
+    status("日付データを確認中…", true);
     const children = await listChildren(DRIVE_ROOT_ID, accessToken);
     dateFolders = children
       .filter(item => item.mimeType === "application/vnd.google-apps.folder" && /^\d{8}$/.test(item.name))
@@ -290,7 +290,7 @@ async function listSelectedMetadata(accessToken, date, categories, raceFolder = 
         if (isCsv(item) && selectedSet.has(categoryOf(rest))) pushFile(item, datePrefix + rest);
       }
     });
-    status("選択したフォルダを確認中… " + Math.min(raceFolders.length, i + 4) + "/" + raceFolders.length, true);
+    status("選択したデータを確認中… " + Math.min(raceFolders.length, i + 4) + "/" + raceFolders.length, true);
   }
   return [...new Map(metas.map(item => [item.id,item])).values()];
 }
@@ -378,7 +378,7 @@ async function fetchSelectedCsv(accessToken, accountEmail, date, categories, rac
     metas = cachedFiles.filter(item => raceFolder ? pathIsInRaceScope(item.path||"",date,raceFolder) : pathIsInSelectedScope(item.path||"",date,categories));
     scannedScopes = cache.scannedScopes || [];
   } else {
-    status("選択したフォルダを確認中…",true);
+    status("選択したデータを確認中…",true);
     metas = await listSelectedMetadata(accessToken,date,categories,raceFolder);
     // changes.list はユーザー全体の変更履歴なので、変更があれば他の日付の確認済み状態も無効化する。
     scannedScopes = hasDriveChanges ? [] : (cache.scannedScopes || []);

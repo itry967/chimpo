@@ -19,8 +19,8 @@
     モデルへのフィードバックはしない。
   - ローカルのフォルダ選択では従来どおり対象フォルダを読む。Google Drive取得では、親フォルダ直下の YYYYMMDD フォルダを起点に、配下のフォルダ名を限定せずCSVを再帰取得する。
     1つの CSV に複数のレースが入っているもの(昔の形)は、予想 CSV として読まない。
-  - 読み込んだファイル・フォルダ(落としたもの・選んだもの・見張っているフォルダ)は、このブラウザの中(IndexedDB)に覚えておき、
-    再読み込み(F5)のあとに同じ CSV を読み直す(見張りも続ける)。ブラウザが読む許可を聞いてきたら、ボタンを1回押して許可する(Chrome・Edge)。
+  - ローカルのファイル・フォルダの選択状態に加え、Google Driveから取得したCSV本体もこのブラウザの中(IndexedDB)に保存する。
+    再読み込み(F5)では保存済みCSVを読み込み、最新データが必要なときは「Driveから最新CSV」を押して再取得する。
 -->
 <style>
 :root {
@@ -434,18 +434,45 @@ async function consumeDriveTransfer() {
     const store = tx.objectStore("payload");
     const req = store.get("pending");
     let value = null;
-    req.onsuccess = () => { value = req.result || null; store.delete("pending"); };
+    req.onsuccess = () => {
+      if (req.result) {
+        // 今回Driveから取得したデータを、次回のF5用キャッシュにも保存する。
+        value = req.result;
+        store.put(value, "cache");
+        store.delete("pending");
+      } else {
+        // F5などで再表示した場合は、前回保存したCSVを使う。
+        const cached = store.get("cache");
+        cached.onsuccess = () => { value = cached.result || null; };
+        cached.onerror = () => reject(cached.error);
+      }
+    };
     req.onerror = () => reject(req.error);
     tx.oncomplete = () => resolve(value);
     tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
   });
   db.close();
   if (!payload?.files?.length) return false;
   document.getElementById("status").textContent = `CSVを読み込み中… ${payload.files.length}件`;
   const files = payload.files.map(item => [new File([item.blob], item.name, {type:"text/csv"}), item.path]);
   await loadFiles(files);
-  document.getElementById("status").textContent += `・Google Driveから ${files.length} CSV取得`;
+  document.getElementById("status").textContent += `・Google Driveの保存済みCSV ${files.length}件`;
   return true;
+}
+async function clearDriveTransferCache() {
+  if (!window.indexedDB) return;
+  const db = await openDriveTransferDb();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction("payload", "readwrite");
+    const store = tx.objectStore("payload");
+    store.delete("pending");
+    store.delete("cache");
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+  db.close();
 }
 
 // ---------- 画面 ----------
@@ -2177,6 +2204,7 @@ document.getElementById("clear").onclick = () => {
   document.getElementById("app").hidden = true; document.getElementById("drop").hidden = false;
   document.getElementById("status").textContent = "CSV を落としてください";
   forget();
+  clearDriveTransferCache().catch(e => console.warn("Drive CSVキャッシュを削除できませんでした:", e));
   document.getElementById("restore").hidden = true;
 };
 async function initializeStartup() {

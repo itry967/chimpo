@@ -204,14 +204,23 @@ async function getAccountEmail(accessToken) {
   return data.email.toLowerCase();
 }
 
+// 日付フォルダの中のパスがどのカテゴリか。今の形は <場名>_<R2桁>R/<種類>_<年月日>_<場名>_<R2桁>R.csv(予想本体の種類は「予想」)。
+// 日付フォルダ直下のCSV(レース情報.csv・自信の区分ごとの回収率.csv)と予想は「レース単位CSV」。昔の形の <種類>/… も見分ける。
+const RACE_FOLDER = /^.+_\d{2}R$/;
+function categoryOf(rest) {
+  const parts = rest.split("/");
+  if (parts.length === 1) return "レース単位CSV";
+  if (parts.length === 2 && RACE_FOLDER.test(parts[0])) {
+    const kind = parts[1].split("_")[0];
+    return kind === "予想" ? "レース単位CSV" : kind;
+  }
+  return parts[0];
+}
+
 function pathIsInSelectedScope(path, date, categories) {
   const datePrefix = "predictions/" + date + "/";
   if (!path.startsWith(datePrefix)) return false;
-  const rest = path.slice(datePrefix.length);
-  return categories.some(category => {
-    if (category === "レース単位CSV") return !rest.includes("/");
-    return rest.startsWith(category + "/");
-  });
+  return categories.includes(categoryOf(path.slice(datePrefix.length)));
 }
 
 async function listSelectedMetadata(accessToken, date, categories) {
@@ -221,15 +230,30 @@ async function listSelectedMetadata(accessToken, date, categories) {
   const children = await listChildren(dateFolder.id, accessToken);
   const metas = [];
   const selectedSet = new Set(categories);
+  const isCsv = item => item.name?.toLowerCase().endsWith(".csv") && item.mimeType !== "application/vnd.google-apps.shortcut";
+  const pushFile = (item, path) => metas.push({id:item.id,name:item.name,path,modifiedTime:item.modifiedTime||"",size:Number(item.size||0)});
+  const raceFolders = [];
   for (const item of children) {
     if (item.mimeType === "application/vnd.google-apps.folder") {
-      if (selectedSet.has(item.name) && item.name !== "レース単位CSV") {
+      if (RACE_FOLDER.test(item.name)) raceFolders.push(item);              // 今の形: R ごとのフォルダ
+      else if (selectedSet.has(item.name) && item.name !== "レース単位CSV") {   // 昔の形: 種類ごとのフォルダ
         await collectFolder(item, accessToken, metas, new Set(), datePrefix + item.name + "/");
       }
-    } else if (item.name?.toLowerCase().endsWith(".csv") && selectedSet.has("レース単位CSV") &&
-               item.mimeType !== "application/vnd.google-apps.shortcut") {
-      metas.push({id:item.id,name:item.name,path:datePrefix+item.name,modifiedTime:item.modifiedTime||"",size:Number(item.size||0)});
+    } else if (isCsv(item) && selectedSet.has("レース単位CSV")) {
+      pushFile(item, datePrefix + item.name);
     }
+  }
+  // R ごとのフォルダは4つずつ並べて一覧を取り、選んだカテゴリのCSVだけ残す
+  for (let i = 0; i < raceFolders.length; i += 4) {
+    const batch = raceFolders.slice(i, i + 4);
+    const lists = await Promise.all(batch.map(folder => listChildren(folder.id, accessToken)));
+    batch.forEach((folder, j) => {
+      for (const item of lists[j]) {
+        const rest = folder.name + "/" + item.name;
+        if (isCsv(item) && selectedSet.has(categoryOf(rest))) pushFile(item, datePrefix + rest);
+      }
+    });
+    status("選択したフォルダを確認中… " + Math.min(raceFolders.length, i + 4) + "/" + raceFolders.length, true);
   }
   return [...new Map(metas.map(item => [item.id,item])).values()];
 }

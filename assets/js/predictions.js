@@ -95,9 +95,10 @@ async function readFile(file, path) {
   return 0;
 }
 
-// 読むフォルダ: 日付のフォルダと、その中の CSV の置き場だけ(bk などは読まない)
+// 読むフォルダ: 日付のフォルダと、その中の R ごとのフォルダ(場名_R数2桁、例: 東京_06R)だけ(bk などは読まない)。
+// 昔の形の CSV の置き場(オッズ・組み合わせ…)も読む
 const SUBDIRS = new Set(["オッズ", "組み合わせ", "推奨買い目", "結果", "払戻", "回顧"]);
-const wantDir = name => /^\d{8}$/.test(name) || SUBDIRS.has(name);
+const wantDir = name => /^\d{8}$/.test(name) || /^.+_\d{2}R$/.test(name) || SUBDIRS.has(name);
 async function walk(entry, out, path = "", top = true) {
   if (entry.isFile) {
     if (entry.name.toLowerCase().endsWith(".csv")) out.push(await new Promise((res, rej) => entry.file(f => res([f, path + entry.name]), rej)));
@@ -1631,8 +1632,10 @@ function renderBasket(rid, tri, places, odds, raceRows) {
   return h;
 }
 function comboFor(rid) {
-  const name = `${rid.slice(0, 8)}_${JYO[rid.slice(8, 10)] || rid.slice(8, 10)}_${+rid.slice(14, 16)}R.csv`;
-  return state.combos.get(name) ?? [...state.combos].find(([k]) => k.endsWith(name))?.[1];  // 「組み合わせ_…」と名前を変えた分も
+  // 組み合わせの CSV には race_id の列が無いので、ファイル名で探す。今の形は 組み合わせ_年月日_場名_R数2桁R.csv、昔の形は 年月日_場名_R数R.csv
+  const jyo = JYO[rid.slice(8, 10)] || rid.slice(8, 10), r = +rid.slice(14, 16);
+  const now = `組み合わせ_${rid.slice(0, 8)}_${jyo}_${String(r).padStart(2, "0")}R.csv`, old = `${rid.slice(0, 8)}_${jyo}_${r}R.csv`;
+  return state.combos.get(now) ?? state.combos.get(old) ?? [...state.combos].find(([k]) => k.endsWith(old))?.[1];
 }
 function comboProbs(raceRows) {
   // 全部の組の確率(Harville の式の3着までの並びから一度に集める)。券種 → Map(組 → 確率)

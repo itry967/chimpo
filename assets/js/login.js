@@ -316,9 +316,13 @@ async function fetchSelectedCsv(accessToken, accountEmail, date, categories) {
       changePageToken = changes.newStartPageToken || changePageToken;
       hasDriveChanges = changes.hasChanges;
     } catch (error) {
-      if (error.status !== 410) throw error;
-      // トークン期限切れ。新しい起点を取り直して、選択範囲を全件確認する。
-      changePageToken = await getDriveStartPageToken(accessToken);
+      if (error.status === 410) {
+        // トークン期限切れ。新しい起点を取り直して、選択範囲を全件確認する。
+        changePageToken = await getDriveStartPageToken(accessToken);
+      } else {
+        // changes.list が一時的に使えない場合も、従来のフォルダ走査で取得を続ける。
+        console.warn("Drive変更履歴を利用できないため、フォルダ一覧を確認します:",error);
+      }
       hasDriveChanges = true;
     }
   } else {

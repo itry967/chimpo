@@ -360,12 +360,26 @@
     gap: 0;
   }
 
+  /* SPではヘッダーのハンバーガーを使わず、レース一覧側の開閉ボタンを使う */
+  #navToggle {
+    display: none !important;
+  }
+
   nav {
     order: 0;
     flex: 0 0 auto;
     width: 100%;
     max-height: 180px;
     overflow-y: auto;
+  }
+
+  /* レース一覧を開いたときは画面の約4割を確保する */
+  body:not(.mobile-nav-collapsed) nav {
+    height: 40dvh;
+    min-height: 240px;
+    max-height: 360px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   nav .nav-top {

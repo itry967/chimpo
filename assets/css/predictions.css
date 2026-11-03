@@ -41,6 +41,8 @@ button, label.btn { font: inherit; border: 1px solid var(--line); background: va
   border-radius: 6px; padding: 4px 10px; cursor: pointer; }
 button:hover, label.btn:hover { border-color: var(--accent); }
 .muted { color: var(--muted); }
+.weekday-sat { color: #1976d2; font-weight: 700; }
+.weekday-sun { color: #d32f2f; font-weight: 700; }
 
 /* PC: 現在表示中のレースをヘッダー内で見つけやすくする */
 #status.race-context {

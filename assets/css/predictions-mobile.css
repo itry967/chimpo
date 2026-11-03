@@ -543,18 +543,37 @@
 
 /* SPヘッダーの2段配置：1段目は説明系＋テーマ、2段目は更新操作 */
 @media (max-width: 760px) {
-  /* 1段目：タイトル → 回収率 → 指標の説明 → ダークモード（右端） */
+  /* 1段目は現状維持 */
   header h1 { order: 0; margin-right: 0; }
-  #bandOpen { order: 1; margin-left: 0; margin-right: 0; }
-  #guideBtn { order: 2; margin-left: 0; margin-right: 0; }
-  #theme { order: 3; margin-left: auto; }
+  #cautionOpen { order: 1; margin-left: 0; margin-right: 0; }
+  #bandOpen { order: 2; margin-left: 0; margin-right: 0; }
+  #guideBtn { order: 3; margin-left: 0; margin-right: 0; }
+  #theme { order: 4; margin-left: auto; }
 
-  /* 2段目：全体更新 → このRの更新（右端） */
-  #driveReload { order: 4; margin-left: auto; }
-  #driveReloadRace { order: 5; margin-left: 0; }
-
-  /* レース状態は操作ボタンの下に独立して表示 */
-  #status { order: 10; }
+  /* 2段目：左半分に表示中レース、右半分に更新ボタン2つ */
+  #status {
+    order: 5;
+    flex: 0 0 50%;
+    width: 50%;
+    box-sizing: border-box;
+    margin: 2px 0 0;
+  }
+  #driveReload {
+    order: 6;
+    flex: 0 0 25%;
+    width: 25%;
+    min-width: 0;
+    margin: 2px 0 0;
+    box-sizing: border-box;
+  }
+  #driveReloadRace {
+    order: 7;
+    flex: 0 0 25%;
+    width: 25%;
+    min-width: 0;
+    margin: 2px 0 0;
+    box-sizing: border-box;
+  }
   header .sp { display: none; }
 }
 

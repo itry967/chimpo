@@ -30,6 +30,22 @@ button, label.btn { font: inherit; border: 1px solid var(--line); background: va
   border-radius: 6px; padding: 4px 10px; cursor: pointer; }
 button:hover, label.btn:hover { border-color: var(--accent); }
 .muted { color: var(--muted); }
+
+/* PC: 現在表示中のレースをヘッダー内で見つけやすくする */
+#status.race-context {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-left: 5px solid var(--accent);
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: .02em;
+}
 #drop { margin: 24px 16px; border: 2px dashed var(--line); border-radius: 12px; padding: 48px 16px; text-align: center;
   background: var(--panel); }
 #drop.over, body.dragging #drop { border-color: var(--accent); background: var(--accent-soft); }

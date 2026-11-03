@@ -57,12 +57,16 @@
     margin-left: auto;
   }
 
-  #resOpen {
+  #driveReloadRace {
     order: 4;
   }
 
-  #theme {
+  #resOpen {
     order: 5;
+  }
+
+  #theme {
+    order: 6;
   }
 
   header .sp {

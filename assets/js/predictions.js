@@ -170,7 +170,7 @@ async function consumeDriveTransfer() {
   });
   db.close();
   if (!payload?.files?.length) return false;
-  document.getElementById("status").textContent = `CSVを読み込み中… ${payload.files.length}件`;
+  document.getElementById("status").textContent = "データを読み込み中…";
   const files = payload.files.map(item => [new File([item.blob], item.name, {type:"text/csv"}), item.path]);
   await loadFiles(files);
   updateRaceStatus();

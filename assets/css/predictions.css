@@ -230,3 +230,7 @@ table.grid td.gc input { width: 16px; height: 16px; cursor: pointer; }
 #guide th { color: var(--muted); font-weight: normal; white-space: nowrap; }
 #guide .items { display: flex; flex-wrap: wrap; gap: 4px; }
 #guide .items span { background: var(--bg); border-radius: 999px; padding: 0 8px; font-size: 12px; }
+
+/* ヘッダのタイトル横に置く回収率ページへのボタン */
+header h1 { flex: 0 0 auto; }
+#bandOpen { white-space: nowrap; }

@@ -394,7 +394,7 @@
     width: 100%;
   }
 
-  #result,
+  body.has-result #result,
   body.has-result:not(.result-closed) #result,
   body.has-result.result-closed #result {
     display: block;
@@ -424,6 +424,10 @@
   }
 
   body.result-closed #result > :not(.res-top) {
+    display: none !important;
+  }
+
+  body:not(.has-result) #result {
     display: none !important;
   }
 

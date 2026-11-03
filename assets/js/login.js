@@ -258,13 +258,92 @@ async function listSelectedMetadata(accessToken, date, categories) {
   return [...new Map(metas.map(item => [item.id,item])).values()];
 }
 
+async function getDriveStartPageToken(accessToken) {
+  const params = new URLSearchParams({fields:"startPageToken",supportsAllDrives:"true"});
+  const response = await fetch("https://www.googleapis.com/drive/v3/changes/startPageToken?" + params,
+    {headers:{Authorization:"Bearer " + accessToken}});
+  if (!response.ok) {
+    let detail = "";
+    try { detail = (await response.json()).error?.message || ""; } catch (_) {}
+    throw new Error("Driveの変更履歴の起点を取得できません (" + response.status + ") " + detail);
+  }
+  const data = await response.json();
+  if (!data.startPageToken) throw new Error("Driveの変更履歴の起点が返されませんでした。");
+  return data.startPageToken;
+}
+
+async function listDriveChanges(accessToken,startPageToken) {
+  let pageToken = startPageToken;
+  let hasChanges = false;
+  let newStartPageToken = "";
+  do {
+    const params = new URLSearchParams({
+      pageToken,
+      pageSize:"1000",
+      fields:"nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,mimeType,modifiedTime,size,parents,trashed))",
+      supportsAllDrives:"true",
+      includeItemsFromAllDrives:"true"
+    });
+    const response = await fetch("https://www.googleapis.com/drive/v3/changes?" + params,
+      {headers:{Authorization:"Bearer " + accessToken}});
+    if (!response.ok) {
+      let detail = "";
+      try { detail = (await response.json()).error?.message || ""; } catch (_) {}
+      const error = new Error("Driveの変更履歴を取得できません (" + response.status + ") " + detail);
+      error.status = response.status;
+      throw error;
+    }
+    const data = await response.json();
+    if ((data.changes || []).length) hasChanges = true;
+    pageToken = data.nextPageToken || "";
+    if (data.newStartPageToken) newStartPageToken = data.newStartPageToken;
+  } while (pageToken);
+  return {hasChanges,newStartPageToken};
+}
+
 async function fetchSelectedCsv(accessToken, accountEmail, date, categories) {
-  status("選択したフォルダを確認中…",true);
-  const metas = await listSelectedMetadata(accessToken,date,categories);
-  const cachedFiles = await loadDriveCache(accountEmail).catch(error => {
-    console.warn("Drive CSVキャッシュを読み込めませんでした。選択範囲を再取得します:",error);
-    return [];
+  status("Driveの変更履歴を確認中…",true);
+  const cache = await loadDriveCache(accountEmail).catch(error => {
+    console.warn("Drive CSVキャッシュを読み込めません。選択範囲を再取得します:",error);
+    return {files:[],scannedScopes:[],changePageToken:""};
   });
+  const cachedFiles = cache.files || [];
+  let changePageToken = cache.changePageToken || "";
+  let hasDriveChanges = true;
+  if (changePageToken) {
+    try {
+      const changes = await listDriveChanges(accessToken,changePageToken);
+      changePageToken = changes.newStartPageToken || changePageToken;
+      hasDriveChanges = changes.hasChanges;
+    } catch (error) {
+      if (error.status !== 410) throw error;
+      // トークン期限切れ。新しい起点を取り直して、選択範囲を全件確認する。
+      changePageToken = await getDriveStartPageToken(accessToken);
+      hasDriveChanges = true;
+    }
+  } else {
+    // 初回だけ起点を先に記録。走査中に発生した変更は次回の changes.list で拾う。
+    changePageToken = await getDriveStartPageToken(accessToken);
+    hasDriveChanges = true;
+  }
+
+  const scopeKeys = categories.map(category => date + "|" + category);
+  const scopeReady = scopeKeys.every(key => (cache.scannedScopes || []).includes(key));
+  const canUseCache = !hasDriveChanges && scopeReady;
+  let metas;
+  let scannedScopes;
+  if (canUseCache) {
+    status("変更なし。保存済みCSVを使用します…",true);
+    metas = cachedFiles.filter(item => pathIsInSelectedScope(item.path||"",date,categories));
+    scannedScopes = cache.scannedScopes || [];
+  } else {
+    status("選択したフォルダを確認中…",true);
+    metas = await listSelectedMetadata(accessToken,date,categories);
+    // changes.list はユーザー全体の変更履歴なので、変更があれば他の日付の確認済み状態も無効化する。
+    scannedScopes = hasDriveChanges ? [] : (cache.scannedScopes || []);
+    for (const key of scopeKeys) if (!scannedScopes.includes(key)) scannedScopes.push(key);
+  }
+
   const cachedById = new Map(cachedFiles.map(item => [item.id,item]));
   const retained = cachedFiles.filter(item => !pathIsInSelectedScope(item.path||"",date,categories));
   const unchanged = [];
@@ -296,7 +375,7 @@ async function fetchSelectedCsv(accessToken, accountEmail, date, categories) {
   const merged = [...retained,...unchanged,...downloaded];
   const result = [...new Map(merged.map(item => [item.id,item])).values()]
     .sort((a,b) => (a.path||"").localeCompare(b.path||""));
-  await saveDriveCache(accountEmail,result);
+  await saveDriveCache(accountEmail,result,{changePageToken,scannedScopes});
   status("取得データをまとめています…",true);
   return result;
 }
@@ -315,17 +394,18 @@ async function loadDriveCache(accountEmail) {
     return await new Promise((resolve,reject) => {
       const tx=db.transaction("payload","readonly");
       const request=tx.objectStore("payload").get("drive-cache:"+accountEmail);
-      request.onsuccess=() => resolve(request.result?.files||[]);
+      request.onsuccess=() => resolve(request.result || {files:[],scannedScopes:[],changePageToken:""});
       request.onerror=() => reject(request.error);
     });
   } finally { db.close(); }
 }
-async function saveDriveCache(accountEmail,files) {
+async function saveDriveCache(accountEmail,files,extra={}) {
   const db=await openTransferDb();
   try {
     await new Promise((resolve,reject) => {
       const tx=db.transaction("payload","readwrite");
-      tx.objectStore("payload").put({updatedAt:Date.now(),files},"drive-cache:"+accountEmail);
+      tx.objectStore("payload").put({updatedAt:Date.now(),files,
+        changePageToken:extra.changePageToken||"",scannedScopes:extra.scannedScopes||[]},"drive-cache:"+accountEmail);
       tx.oncomplete=resolve;
       tx.onerror=() => reject(tx.error);
       tx.onabort=() => reject(tx.error);

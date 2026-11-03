@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <title>Predictions Viewer</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#101827;color:#f4f6fb}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:22px}
+    main{width:min(100%,520px);background:#1b2638;border:1px solid #344258;border-radius:18px;padding:26px;box-shadow:0 18px 55px #0005}
+    h1{font-size:23px;margin:0 0 8px}p{line-height:1.65;color:#c5cfdd}
+    button{width:100%;border:0;border-radius:10px;padding:14px 18px;font-size:16px;font-weight:700;cursor:pointer;background:#8ab4f8;color:#102039}
+    button:disabled{opacity:.55;cursor:wait}.status{margin-top:16px;padding:12px;border-radius:9px;background:#111b2b;white-space:pre-wrap;overflow-wrap:anywhere;min-height:48px;font-size:14px}
+    .small{font-size:12px;color:#9eacc0}.spinner{display:inline-block;width:14px;height:14px;border:2px solid #ffffff55;border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:7px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Predictions Viewer</h1>
+  <p>Googleアカウントでログインすると、共有されたGoogle DriveフォルダからCSVを取得して予想・分析画面を開きます。</p>
+  <button id="login" disabled>GoogleでログインしてCSVを取得</button>
+  <div id="status" class="status" role="status" aria-live="polite">Google認証の準備中…</div>
+  <p class="small">CSVの取得には、管理者から共有されたGoogleアカウントを使用してください。取得したCSVはこのブラウザ内で処理します。</p>
+</main>
+<script>
+"use strict";
+
+// Google Cloud Consoleで作成した「ウェブアプリケーション」OAuthクライアントIDに置き換える。
+const GOOGLE_CLIENT_ID = "ここにOAuthクライアントID.apps.googleusercontent.com";
+
+// 共有された3つの親フォルダ。①は直下のYYYYMMDDフォルダから取得し、②③は直下から再帰取得。
+const DRIVE_ROOTS = [
+  {id:"10mpZ9x81Q5I1FOyWS3NF9ojLsIDSTMHT", dateFolders:true, label:"① 日付別フォルダ"},
+  {id:"1bupl3pPvzEbOChBFmqedluXRh3tv9gzw", dateFolders:false, label:"② 共有フォルダ"},
+  {id:"1irlFdGP4GMN01sKTprRKKexDPamwik8x", dateFolders:false, label:"③ 共有フォルダ"}
+];
+const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+const statusEl = document.getElementById("status");
+const loginButton = document.getElementById("login");
+let tokenClient = null;
+let busy = false;
+
+function status(message, loading=false) {
+  statusEl.textContent = message;
+  if (loading) statusEl.innerHTML = '<span class="spinner"></span>' + escapeHtml(message);
+}
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function waitForGoogleIdentity() {
+  if (window.google?.accounts?.oauth2) {
+    if (GOOGLE_CLIENT_ID.startsWith("ここに")) {
+      status("OAuthクライアントIDが未設定です。index.html内の GOOGLE_CLIENT_ID を設定してください。");
+      return;
+    }
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: DRIVE_SCOPE,
+      callback: handleTokenResponse,
+      error_callback: error => { busy=false; loginButton.disabled=false; status("Googleログインを完了できませんでした: " + (error?.message || error?.type || "不明なエラー")); }
+    });
+    loginButton.disabled = false;
+    status("準備完了。共有されたGoogleアカウントでログインしてください。");
+  } else {
+    setTimeout(waitForGoogleIdentity, 150);
+  }
+}
+loginButton.addEventListener("click", () => {
+  if (!tokenClient || busy) return;
+  busy = true;
+  loginButton.disabled = true;
+  status("Googleログインを待っています…", true);
+  tokenClient.requestAccessToken({prompt:"select_account"});
+});
+
+async function handleTokenResponse(response) {
+  if (response.error || !response.access_token) {
+    busy=false; loginButton.disabled=false;
+    status("Google認証に失敗しました: " + (response.error_description || response.error || "アクセストークンを取得できませんでした"));
+    return;
+  }
+  try {
+    const files = await fetchAllCsv(response.access_token);
+    if (!files.length) throw new Error("共有フォルダ内にCSVが見つかりませんでした。");
+    status(`CSV ${files.length}件を画面へ渡しています…`, true);
+    await saveTransfer(files);
+    location.href = "./predictions.html";
+  } catch (error) {
+    console.error(error);
+    status("CSV取得に失敗しました。\n" + (error?.message || error) + "\n\n3つのフォルダがこのGoogleアカウントに閲覧者として共有されているか確認してください。");
+    busy=false; loginButton.disabled=false;
+  }
+}
+
+async function listChildren(parentId, accessToken) {
+  const all=[]; let pageToken="";
+  do {
+    const params=new URLSearchParams({
+      q:`'${parentId}' in parents and trashed = false`,
+      pageSize:"1000",
+      fields:"nextPageToken,files(id,name,mimeType)",
+      supportsAllDrives:"true",
+      includeItemsFromAllDrives:"true",
+      corpora:"allDrives"
+    });
+    if(pageToken) params.set("pageToken",pageToken);
+    const response=await fetch(`${DRIVE_API}?${params}`,{headers:{Authorization:`Bearer ${accessToken}`}});
+    if(!response.ok) {
+      let detail=""; try{detail=(await response.json()).error?.message||"";}catch(_){}
+      throw new Error(`Driveのフォルダ一覧を取得できません (${response.status}) ${detail}`);
+    }
+    const data=await response.json();
+    all.push(...(data.files||[])); pageToken=data.nextPageToken||"";
+  } while(pageToken);
+  return all;
+}
+
+async function collectFolder(folder, accessToken, output, visited, prefix, depth=0) {
+  if(visited.has(folder.id)) return;
+  if(depth>20) throw new Error("フォルダ階層が深すぎるため取得を中止しました。");
+  visited.add(folder.id);
+  const children=await listChildren(folder.id,accessToken);
+  for(const item of children) {
+    if(item.mimeType==="application/vnd.google-apps.folder") {
+      await collectFolder(item,accessToken,output,visited,prefix+item.name+"/",depth+1);
+    } else if(item.name?.toLowerCase().endsWith(".csv") && item.mimeType!=="application/vnd.google-apps.shortcut") {
+      output.push({id:item.id,name:item.name,path:prefix+item.name});
+      if(output.length>5000) throw new Error("CSVが5,000件を超えました。取得対象フォルダを確認してください。");
+    }
+  }
+}
+
+async function fetchAllCsv(accessToken) {
+  const metas=[]; const visited=new Set();
+  for(let index=0;index<DRIVE_ROOTS.length;index++) {
+    const root=DRIVE_ROOTS[index];
+    status(`${root.label} のフォルダを確認中…`,true);
+    if(root.dateFolders) {
+      const children=await listChildren(root.id,accessToken);
+      const dates=children.filter(x=>x.mimeType==="application/vnd.google-apps.folder" && /^\d{8}$/.test(x.name)).sort((a,b)=>a.name.localeCompare(b.name));
+      if(!dates.length) throw new Error("①の親フォルダ直下にYYYYMMDD形式のフォルダが見つかりません。");
+      for(const folder of dates) await collectFolder(folder,accessToken,metas,visited,folder.name+"/");
+    } else {
+      await collectFolder({id:root.id,name:root.label},accessToken,metas,visited,root.label+"/");
+    }
+  }
+  const unique=[...new Map(metas.map(x=>[x.id,x])).values()];
+  const loaded=[];
+  for(let i=0;i<unique.length;i+=4) {
+    const batch=unique.slice(i,i+4);
+    const blobs=await Promise.all(batch.map(async meta=>{
+      const url=`${DRIVE_API}/${encodeURIComponent(meta.id)}?alt=media&supportsAllDrives=true`;
+      const response=await fetch(url,{headers:{Authorization:`Bearer ${accessToken}`}});
+      if(!response.ok) throw new Error(`${meta.path} の取得に失敗しました (${response.status})`);
+      return {name:meta.name,path:meta.path,blob:await response.blob()};
+    }));
+    loaded.push(...blobs);
+    status(`CSVを取得中… ${loaded.length}/${unique.length}件`,true);
+  }
+  return loaded;
+}
+
+function openTransferDb() {
+  return new Promise((resolve,reject)=>{
+    const request=indexedDB.open("predictions-drive-transfer",1);
+    request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains("payload"))request.result.createObjectStore("payload");};
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error);
+  });
+}
+async function saveTransfer(files) {
+  const db=await openTransferDb();
+  await new Promise((resolve,reject)=>{
+    const tx=db.transaction("payload","readwrite");
+    tx.objectStore("payload").put({createdAt:Date.now(),files},"pending");
+    tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); tx.onabort=()=>reject(tx.error);
+  });
+  db.close();
+}
+
+waitForGoogleIdentity();
+</script>
+</body>
+</html>

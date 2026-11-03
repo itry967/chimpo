@@ -726,7 +726,6 @@ function renderNav() {
         navQuality(rid, rows) + `</span></a>`;
     }
   }
-  if (state.band) html += `<div class="extra"><a data-rid="band" class="${state.current === "band" ? "on" : ""}" style="padding-left:0">自信の区分ごとの回収率</a></div>`;
   nav.innerHTML = html;
   nav.querySelectorAll("a[data-rid]").forEach(a => a.onclick = () => { if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("mobile-nav-collapsed"); state.current = a.dataset.rid; state.open.clear(); render(); });
   nav.querySelectorAll(".fold-h").forEach(d => d.onclick = () => { toggleFold(d.dataset.fold); renderNav(); });
@@ -1702,6 +1701,8 @@ function renderBand() {
 }
 
 function updateRaceStatus() {
+  const bandOpen = document.getElementById("bandOpen");
+  if (bandOpen) bandOpen.hidden = !state.band;
   const status = document.getElementById("status");
   if (!status) return;
   if (state.races.has(state.current)) {
@@ -1989,6 +1990,12 @@ document.getElementById("driveReload").onclick = () => {
   if (window.confirm("あまり更新しすぎないでね❤")) {
     location.href = "./";
   }
+};
+document.getElementById("bandOpen").onclick = () => {
+  if (!state.band) return;
+  state.current = "band";
+  state.open.clear();
+  render();
 };
 document.getElementById("theme").onclick = () => {
   const root = document.documentElement;

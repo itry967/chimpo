@@ -118,11 +118,9 @@ async function loadFiles(list, keepView = false) {
     const [f, p] = Array.isArray(item) ? item : [item, null];
     if (f.name.toLowerCase().endsWith(".csv")) n += await readFile(f, p);
   }
-  document.getElementById("status").textContent =
-    `${state.races.size} レース` + (state.combos.size ? `・組み合わせ ${state.combos.size}` : "") +
-    (state.odds.size ? `・オッズ ${state.odds.size}` : "・オッズなし") + (state.results.size ? `・結果 ${state.results.size}` : "") +
-    (state.band ? "・区分の回収率あり" : "") +
-    (n ? "" : "(読める CSV がありませんでした)");
+  if (!n && !state.races.size && !state.band) {
+    document.getElementById("status").textContent = "レースデータがありません。";
+  }
   if (state.races.size || state.band) {
     document.getElementById("drop").hidden = true;
     document.getElementById("app").hidden = false;
@@ -175,11 +173,7 @@ async function consumeDriveTransfer() {
   document.getElementById("status").textContent = `CSVを読み込み中… ${payload.files.length}件`;
   const files = payload.files.map(item => [new File([item.blob], item.name, {type:"text/csv"}), item.path]);
   await loadFiles(files);
-  if (!window.matchMedia("(max-width: 760px)").matches) {
-    document.getElementById("status").textContent += `・Google Driveの保存済みCSV ${files.length}件`;
-  } else {
-    updateMobileRaceStatus();
-  }
+  updateRaceStatus();
   return true;
 }
 async function clearDriveTransferCache() {
@@ -1707,13 +1701,9 @@ function renderBand() {
   document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { state.bandTab = b.dataset.m; renderBand(); });
 }
 
-function updateMobileRaceStatus() {
+function updateRaceStatus() {
   const status = document.getElementById("status");
   if (!status) return;
-  if (!window.matchMedia("(max-width: 760px)").matches) {
-    status.classList.remove("race-context");
-    return;
-  }
   if (state.races.has(state.current)) {
     const rid = state.current;
     const date = rid.slice(0, 8);
@@ -1732,7 +1722,7 @@ function render(toTop = true) {
   if (state.current === "band" && state.band) renderBand();
   else if (state.races.has(state.current)) renderRace(state.current);
   renderResult(state.current);
-  updateMobileRaceStatus();
+  updateRaceStatus();
   window.scrollTo(0, toTop ? 0 : y);
   try { sessionStorage.setItem("keiba-viewer:current", state.current ?? ""); } catch (e) {}
 }

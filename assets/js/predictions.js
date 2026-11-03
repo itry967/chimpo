@@ -1678,7 +1678,8 @@ function renderCombos(rid) {
     `期待値 = オッズ × 確率。オッズは オッズ フォルダの CSV(終わったレースは確定オッズ。当日は組み合わせのオッズは取らないので期待値順は使えない)。</div></div>`;
 }
 
-function renderBand() {
+function renderBand(target = document.getElementById("bandBody")) {
+  if (!state.band || !target) return;
   const rows = state.band;
   const cols = Object.keys(rows[0]);
   const ms = [...new Set(rows.map(r => r["モデル"]))];
@@ -1698,9 +1699,8 @@ function renderBand() {
     h += `<td class="n">${esc(r["レース数"])}</td></tr>`;
   }
   h += `</table></div><div class="note">緑は回収率 100% 以上。</div></div>`;
-  document.getElementById("main").innerHTML = h;
-  setupCardFolds(document.getElementById("main"));
-  document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { state.bandTab = b.dataset.m; renderBand(); });
+  target.innerHTML = h;
+  target.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { state.bandTab = b.dataset.m; renderBand(target); });
 }
 
 function updateRaceStatus() {
@@ -1996,10 +1996,13 @@ document.getElementById("driveReload").onclick = () => {
 };
 document.getElementById("bandOpen").onclick = () => {
   if (!state.band) return;
-  state.current = "band";
-  state.open.clear();
-  render();
+  renderBand();
+  document.getElementById("bandDialog").showModal();
 };
+document.getElementById("bandClose").onclick = () => document.getElementById("bandDialog").close();
+document.getElementById("bandDialog").addEventListener("click", e => {
+  if (e.target.id === "bandDialog") e.target.close();
+});
 document.getElementById("theme").onclick = () => {
   const root = document.documentElement;
   const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;

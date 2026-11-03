@@ -1953,8 +1953,15 @@ addEventListener("drop", async e => {
 // 結果の欄の開閉(このブラウザに覚えておく)
 try { if (localStorage.getItem("keiba-viewer:result-closed") === "1") document.body.classList.add("result-closed"); } catch (e) {}
 document.getElementById("resOpen").onclick = () => {
-  document.body.classList.remove("result-closed");
-  try { localStorage.setItem("keiba-viewer:result-closed", "0"); } catch (e) {}
+  // PCではヘッダーの「結果」ボタンで表示・非表示を切り替える。SPでは従来どおり開く。
+  if (window.matchMedia("(max-width: 760px)").matches) {
+    document.body.classList.remove("result-closed");
+  } else {
+    document.body.classList.toggle("result-closed");
+  }
+  try {
+    localStorage.setItem("keiba-viewer:result-closed", document.body.classList.contains("result-closed") ? "1" : "0");
+  } catch (e) {}
 };
 // レース一覧の開閉(このブラウザに覚えておく)
 try { if (localStorage.getItem("keiba-viewer:nav-closed") === "1") document.body.classList.add("nav-closed"); } catch (e) {}

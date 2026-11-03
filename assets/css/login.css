@@ -17,3 +17,5 @@ select{background:#111b2b;color:#f4f6fb;border:1px solid #43536b}
 .category input{width:17px;height:17px;margin:0;accent-color:#8ab4f8}
 @media(max-width:480px){body{padding:12px}main{padding:20px}.categories{grid-template-columns:1fr}}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+.target-scope-note{margin:18px 0 20px;padding:15px 17px;border:1px solid #6da8ff;border-left:5px solid #8ab4f8;border-radius:10px;background:#233b5c;color:#fff;font-size:15px;font-weight:700;line-height:1.65;box-shadow:0 4px 16px #0003}

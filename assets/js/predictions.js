@@ -667,7 +667,7 @@ function renderResult(rid) {
     if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.toggle("result-closed");
     else document.body.classList.add("result-closed");
     try { localStorage.setItem("keiba-viewer:result-closed", document.body.classList.contains("result-closed") ? "1" : "0"); } catch (e) {}
-    resClose.textContent = document.body.classList.contains("result-closed") ? "＋" : "−";
+    resClose.textContent = window.matchMedia("(max-width: 760px)").matches ? (document.body.classList.contains("result-closed") ? "＋" : "−") : "→";
   };
 }
 

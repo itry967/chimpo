@@ -696,7 +696,7 @@ function avgBand(rows) {
 
 function renderNav() {
   const nav = document.getElementById("nav");
-  let html = `<div class="nav-top"><span class="muted">レース一覧</span><button id="navClose" title="レース一覧をたたむ">←</button></div>`,
+  let html = `<div class="nav-top"><span class="muted">レース一覧</span><button id="navClose" title="レース一覧を開閉">${document.body.classList.contains("mobile-nav-collapsed") ? "＋" : "−"}</button></div>`,
     lastDay = "", lastJyo = "";
   // 日付 → 競馬場 → 発走順
   const byDayJyo = {};
@@ -726,7 +726,7 @@ function renderNav() {
   }
   if (state.band) html += `<div class="extra"><a data-rid="band" class="${state.current === "band" ? "on" : ""}" style="padding-left:0">自信の区分ごとの回収率</a></div>`;
   nav.innerHTML = html;
-  nav.querySelectorAll("a[data-rid]").forEach(a => a.onclick = () => { state.current = a.dataset.rid; state.open.clear(); render(); });
+  nav.querySelectorAll("a[data-rid]").forEach(a => a.onclick = () => { if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("mobile-nav-collapsed"); state.current = a.dataset.rid; state.open.clear(); render(); });
   nav.querySelectorAll(".fold-h").forEach(d => d.onclick = () => { toggleFold(d.dataset.fold); renderNav(); });
   document.getElementById("navClose").onclick = () => document.getElementById("navToggle").click();
 }

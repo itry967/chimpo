@@ -54,13 +54,13 @@ async function handleTokenResponse(response) {
   }
   try {
     const files = await fetchAllCsv(response.access_token);
-    if (!files.length) throw new Error("共有フォルダ内にCSVが見つかりませんでした。");
-    status(`CSV ${files.length}件を画面へ渡しています…`, true);
+    if (!files.length) throw new Error("取得対象のデータが見つかりませんでした。");
+    status("データを準備中… 100%", true);
     await saveTransfer(files);
     location.href = "./predictions.html";
   } catch (error) {
     console.error(error);
-    status("CSV取得に失敗しました。\n" + (error?.message || error) + "\n\n3つのフォルダがこのGoogleアカウントに閲覧者として共有されているか確認してください。");
+    status("データの取得に失敗しました。\n" + (error?.message || error) + "\n\n共有設定を確認して、もう一度お試しください。");
     busy=false; loginButton.disabled=false;
   }
 }
@@ -114,7 +114,7 @@ async function getAccountEmail(accessToken) {
 async function fetchAllCsv(accessToken) {
   const accountEmail=await getAccountEmail(accessToken);
   const metas=[]; const visited=new Set();
-  status("predictions フォルダ以下を確認中…",true);
+  status("対象確認中…",true);
   await collectFolder(
     {id:DRIVE_ROOT_ID,name:"predictions"},
     accessToken,
@@ -141,16 +141,18 @@ async function fetchAllCsv(accessToken) {
   }
 
   const downloaded=[];
+  status(`データを取得中… ${toDownload.length ? 0 : 100}%`,true);
   for(let i=0;i<toDownload.length;i+=4) {
     const batch=toDownload.slice(i,i+4);
     const blobs=await Promise.all(batch.map(async meta=>{
       const url=`${DRIVE_API}/${encodeURIComponent(meta.id)}?alt=media&supportsAllDrives=true`;
       const response=await fetch(url,{headers:{Authorization:`Bearer ${accessToken}`}});
-      if(!response.ok) throw new Error(`${meta.path} の取得に失敗しました (${response.status})`);
+      if(!response.ok) throw new Error(`データの取得に失敗しました (${response.status})`);
       return {...meta,blob:await response.blob()};
     }));
     downloaded.push(...blobs);
-    status(`更新CSVを取得中… ${downloaded.length}/${toDownload.length}件（変更なし ${unchanged.length}件）`,true);
+    const percent=Math.min(100,Math.round(downloaded.length/toDownload.length*100));
+    status(`データを取得中… ${percent}%`,true);
   }
 
   const result=[...unchanged,...downloaded].sort((a,b)=>a.path.localeCompare(b.path));
@@ -158,7 +160,7 @@ async function fetchAllCsv(accessToken) {
   await saveDriveCache(accountEmail,result).catch(error=>{
     console.warn("Drive CSVキャッシュを保存できませんでした:",error);
   });
-  status(`CSV一覧を確認しました。新規・更新 ${downloaded.length}件、キャッシュ再利用 ${unchanged.length}件`,true);
+  status("データの準備が完了しました。画面を開いています…",true);
   return result;
 }
 

@@ -689,8 +689,10 @@ function title(rid) {
 }
 function ymdw(d) {
   // "20261101" → "2026/11/01(日)"
-  const w = "日月火水木金土"[new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)).getDay()];
-  return `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}(${w})`;
+  const day = new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)).getDay();
+  const w = "日月火水木金土"[day];
+  const tone = day === 6 ? "weekday-sat" : day === 0 ? "weekday-sun" : "";
+  return `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6, 8)}(<span class="${tone}">${w}</span>)`;
 }
 function hhmm(t) {
   const s = String(t ?? "").replace(/\D/g, "");

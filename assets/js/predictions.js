@@ -662,7 +662,7 @@ function renderResult(rid) {
   }
   box.innerHTML = h + `<div class="note">着順・タイム・人気・単勝オッズ・払戻は DB の結果(表示用)。「予」は予想の順位。</div>`;
   const resClose = document.getElementById("resClose");
-  resClose.textContent = document.body.classList.contains("result-closed") ? "＋" : "−";
+  resClose.textContent = window.matchMedia("(max-width: 760px)").matches ? (document.body.classList.contains("result-closed") ? "＋" : "−") : "→";
   resClose.onclick = () => {
     if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.toggle("result-closed");
     else document.body.classList.add("result-closed");
@@ -700,7 +700,7 @@ function avgBand(rows) {
 
 function renderNav() {
   const nav = document.getElementById("nav");
-  let html = `<div class="nav-top"><span class="muted">レース一覧</span><button id="navClose" title="レース一覧を開閉">${document.body.classList.contains("mobile-nav-collapsed") ? "＋" : "−"}</button></div>`,
+  let html = `<div class="nav-top"><span class="muted">レース一覧</span><button id="navClose" title="レース一覧を開閉">${window.matchMedia("(max-width: 760px)").matches ? (document.body.classList.contains("mobile-nav-collapsed") ? "＋" : "−") : "←"}</button></div>`,
     lastDay = "", lastJyo = "";
   // 日付 → 競馬場 → 発走順
   const byDayJyo = {};

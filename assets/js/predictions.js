@@ -798,6 +798,11 @@ function finBar(r) {
   const top3 = [1, 2, 3].reduce((a, k) => a + (num(r[`${k}着の確率`]) ?? 0), 0);
   return s ? `<div class="fin" title="${tip.join(" / ")}(馬券内 = 3着内 ${pct(top3)})">${s}</div>` : "";
 }
+function placeBar(top2, top3, max) {
+  const w3 = max > 0 && top3 != null ? Math.max(2, top3 / max * 100) : 0;
+  const w2 = max > 0 && top2 != null ? Math.max(0, top2 / max * 100) : 0;
+  return `<div class="bar place-bar" title="2着内 ${pct(top2)} / 3着内 ${pct(top3)}"><i class="place-top3" style="width:${w3}%"></i><i class="place-top2" style="width:${w2}%"></i><span>2着内 ${pct(top2)} / 3着内 ${pct(top3)}</span></div>`;
+}
 function parseReasons(text) {
   const out = []; const re = /(.*?)\(([+-]\d+(?:\.\d+)?)\)(?:・|$)/g; let m;
   while ((m = re.exec(text || "")) && m[0]) out.push([m[1], +m[2]]);
@@ -841,6 +846,7 @@ function renderRace(rid) {
   const ms = models(rows), r0 = rows[0];
   const maxWin = Math.max(...rows.map(r => num(r["平均_勝率"]) || 0));
   const top3 = r => { const v = ms.map(m => num(r[`${m}_3着内`])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
+  const top2 = r => { const v = ms.map(m => num(r[`${m}_2着内`])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
   const maxTop3 = Math.max(...rows.map(r => top3(r) || 0));
   const has = c => c in r0;
 
@@ -918,7 +924,7 @@ function renderRace(rid) {
     const w = num(r["馬体重"]), z = num(r["増減"]);
     const why = catChips(r) + reasonChips(r);
     html += `<tr class="horse${why ? " has-why" : ""}" data-key="${key}"><td class="rank">${esc(r["平均_順位"])}</td><td>${umaBadge(r.umaban, nUma)}</td>` +
-      `<td class="name">${esc(r.horse_name)}${cdot(r, "予想")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}</td><td>${bar(top3(r), maxTop3, "b2")}</td>` +
+      `<td class="name">${esc(r.horse_name)}${cdot(r, "予想")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}</td><td>${placeBar(top2(r), top3(r), maxTop3)}</td>` +
       `<td class="n">${fix(num(r["妥当オッズ_単勝"]))}${gapMark(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]), "単勝")} / ` +
       `${fix(num(r["妥当オッズ_複勝"]))}${gapMark(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]), "複勝(下限)")}</td>` +
       `<td class="n">${odds != null ? `${fix(odds)}<span class="dim ninki">${ninki.get(String(r.umaban))}人気</span>` : `<span class="dim">—</span>`}</td>` +
@@ -1033,7 +1039,7 @@ function horseCols(rid) {
     ["馬番", r => +r.umaban, 1, "", ""],
     ["馬名", r => r.horse_name || "", 1, "", ""],
     ["勝率", r => num(r["平均_勝率"]), -1, "", ""],
-    ["3着内", t3, -1, "", ""],
+    ["2・3着内", t3, -1, "", "3着内の確率で並べる"],
     ["妥当オッズ<br>単/複", r => num(r["妥当オッズ_単勝"]), 1, "n", "単勝の妥当オッズで並べる"],
     ["単勝<br>オッズ", o, 1, "n", ""],
     ["期待値", r => ratio(o(r), num(r["妥当オッズ_単勝"])), -1, "n", ""],

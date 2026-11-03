@@ -539,3 +539,21 @@
   }
   #bandDialog .tabs { flex-wrap: wrap; }
 }
+
+
+/* SPヘッダーの2段配置：1段目は説明系＋テーマ、2段目は更新操作 */
+@media (max-width: 760px) {
+  /* 1段目：タイトル → 回収率 → 指標の説明 → ダークモード（右端） */
+  header h1 { order: 0; margin-right: 0; }
+  #bandOpen { order: 1; margin-left: 0; margin-right: 0; }
+  #guideBtn { order: 2; margin-left: 0; margin-right: 0; }
+  #theme { order: 3; margin-left: auto; }
+
+  /* 2段目：全体更新 → このRの更新（右端） */
+  #driveReload { order: 4; margin-left: auto; }
+  #driveReloadRace { order: 5; margin-left: 0; }
+
+  /* レース状態は操作ボタンの下に独立して表示 */
+  #status { order: 10; }
+  header .sp { display: none; }
+}

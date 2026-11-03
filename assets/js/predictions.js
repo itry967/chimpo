@@ -175,7 +175,11 @@ async function consumeDriveTransfer() {
   document.getElementById("status").textContent = `CSVを読み込み中… ${payload.files.length}件`;
   const files = payload.files.map(item => [new File([item.blob], item.name, {type:"text/csv"}), item.path]);
   await loadFiles(files);
-  document.getElementById("status").textContent += `・Google Driveの保存済みCSV ${files.length}件`;
+  if (!window.matchMedia("(max-width: 760px)").matches) {
+    document.getElementById("status").textContent += `・Google Driveの保存済みCSV ${files.length}件`;
+  } else {
+    updateMobileRaceStatus();
+  }
   return true;
 }
 async function clearDriveTransferCache() {
@@ -1703,12 +1707,32 @@ function renderBand() {
   document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { state.bandTab = b.dataset.m; renderBand(); });
 }
 
+function updateMobileRaceStatus() {
+  const status = document.getElementById("status");
+  if (!status) return;
+  if (!window.matchMedia("(max-width: 760px)").matches) {
+    status.classList.remove("race-context");
+    return;
+  }
+  if (state.races.has(state.current)) {
+    const rid = state.current;
+    const date = rid.slice(0, 8);
+    status.textContent = `${ymdw(date)}　${JYO[rid.slice(8, 10)] || rid.slice(8, 10)}　${+rid.slice(14, 16)}R`;
+  } else if (state.current === "band") {
+    status.textContent = "自信の区分ごとの回収率";
+  } else {
+    status.textContent = "レースを選択してください";
+  }
+  status.classList.add("race-context");
+}
+
 function render(toTop = true) {
   const y = window.scrollY;
   renderNav();
   if (state.current === "band" && state.band) renderBand();
   else if (state.races.has(state.current)) renderRace(state.current);
   renderResult(state.current);
+  updateMobileRaceStatus();
   window.scrollTo(0, toTop ? 0 : y);
   try { sessionStorage.setItem("keiba-viewer:current", state.current ?? ""); } catch (e) {}
 }

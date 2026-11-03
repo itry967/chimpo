@@ -150,7 +150,7 @@ async function fetchAllCsv(accessToken) {
     status(`${root.label} のフォルダを確認中…`,true);
     if(root.dateFolders) {
       const children=await listChildren(root.id,accessToken);
-      const dates=children.filter(x=>x.mimeType==="application/vnd.google-apps.folder" && /^\\d{8}$/.test(x.name)).sort((a,b)=>a.name.localeCompare(b.name));
+      const dates=children.filter(x=>x.mimeType==="application/vnd.google-apps.folder" && /^\d{8}$/.test(x.name)).sort((a,b)=>a.name.localeCompare(b.name));
       if(!dates.length) throw new Error("①の親フォルダ直下にYYYYMMDD形式のフォルダが見つかりません。");
       for(const folder of dates) await collectFolder(folder,accessToken,metas,visited,folder.name+"/");
     } else {

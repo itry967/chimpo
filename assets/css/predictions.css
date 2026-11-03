@@ -293,3 +293,10 @@ header h1 { flex: 0 0 auto; }
 #bandDialog .gb { padding: 10px 16px 16px; overflow: auto; max-height: calc(100vh - 110px); }
 #bandDialog .card { margin-bottom: 10px; }
 #bandDialog .scroll { max-width: 100%; overflow-x: auto; }
+
+
+/* 出走馬の2着内・3着内を重ねて表示 */
+.bar.place-bar { min-width: 150px; }
+.bar.place-bar .place-top3 { background: var(--bar2); }
+.bar.place-bar .place-top2 { background: var(--bar); }
+.bar.place-bar span { font-size: 11px; white-space: nowrap; }

@@ -25,6 +25,17 @@ body { margin: 0; background: var(--bg); color: var(--text);
 header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel);
   border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
 header h1 { font-size: 16px; margin: 0; }
+
+/* ヘッダーの並び：回収率の直後に指標説明を配置 */
+#navToggle { order: 0; }
+header h1 { order: 1; }
+#bandOpen { order: 2; }
+#guideBtn { order: 3; }
+#status { order: 4; }
+header .sp { order: 5; }
+#driveReload { order: 6; }
+#resOpen { order: 7; }
+#theme { order: 8; }
 header .sp { flex: 1; }
 button, label.btn { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text);
   border-radius: 6px; padding: 4px 10px; cursor: pointer; }

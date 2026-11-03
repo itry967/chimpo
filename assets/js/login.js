@@ -26,6 +26,10 @@ let accessToken = null;
 let accountEmail = "";
 let dateFolders = [];
 let busy = false;
+const requestParams = new URLSearchParams(location.search);
+const targetDate = requestParams.get("date") || "";
+const targetRaceFolder = requestParams.get("raceFolder") || "";
+const targetedRaceUpdate = /^\d{8}$/.test(targetDate) && /^.+_\d{2}R$/.test(targetRaceFolder);
 
 function status(message, loading=false) {
   statusEl.textContent = message;
@@ -82,8 +86,23 @@ async function handleTokenResponse(response) {
     if (!dateFolders.length) throw new Error("predictions直下にYYYYMMDD形式の日付フォルダが見つかりません。");
     renderDateFolders();
     selectionPanel.hidden = false;
+    if (targetedRaceUpdate) {
+      const matchingDate = dateFolders.some(folder => folder.name === targetDate);
+      if (!matchingDate) throw new Error("指定された日付フォルダが見つかりません: " + targetDate);
+      dateSelect.value = targetDate;
+      categoryList.querySelectorAll('input[type="checkbox"]').forEach(input => input.checked = true);
+      document.querySelector("#selection h2").hidden = true;
+      document.querySelector('label[for="date"]').hidden = true;
+      dateSelect.hidden = true;
+      document.querySelector(".selection-heading").hidden = true;
+      categoryList.hidden = true;
+      const note = document.getElementById("targetScopeNote");
+      note.hidden = false;
+      note.textContent = targetDate.slice(0,4) + "/" + targetDate.slice(4,6) + "/" + targetDate.slice(6,8) + " の " + targetRaceFolder + " フォルダだけを更新します。";
+      downloadButton.textContent = "このRのデータを取得・更新";
+    }
     loginButton.textContent = "Googleアカウントを変更・再ログイン";
-    status("取得する日付とフォルダを選択してください。");
+    status(targetedRaceUpdate ? "表示中のレースだけを更新します。" : "取得する日付とフォルダを選択してください。");
   } catch (error) {
     console.error(error);
     status("Driveのフォルダ一覧を取得できませんでした。\n" + (error?.message || error) + "\n\n共有設定を確認してください。");
@@ -141,7 +160,7 @@ downloadButton.addEventListener("click", async () => {
   updateDownloadButton();
   loginButton.disabled = true;
   try {
-    const files = await fetchSelectedCsv(accessToken, accountEmail, date, categories);
+    const files = await fetchSelectedCsv(accessToken, accountEmail, date, categories, targetedRaceUpdate ? targetRaceFolder : "");
     if (!files.length) throw new Error("取得済みキャッシュを含め、表示できるCSVがありません。日付・フォルダを確認してください。");
     status("データの準備が完了しました。画面を開いています…", true);
     await saveTransfer(files);
@@ -223,7 +242,12 @@ function pathIsInSelectedScope(path, date, categories) {
   return categories.includes(categoryOf(path.slice(datePrefix.length)));
 }
 
-async function listSelectedMetadata(accessToken, date, categories) {
+function pathIsInRaceScope(path, date, raceFolder) {
+  const prefix = "predictions/" + date + "/";
+  return path.startsWith(prefix) && path.slice(prefix.length).split("/")[0] === raceFolder;
+}
+
+async function listSelectedMetadata(accessToken, date, categories, raceFolder = "") {
   const dateFolder = dateFolders.find(folder => folder.name === date);
   if (!dateFolder) throw new Error("選択した日付フォルダが見つかりません。");
   const datePrefix = "predictions/" + date + "/";
@@ -232,6 +256,17 @@ async function listSelectedMetadata(accessToken, date, categories) {
   const selectedSet = new Set(categories);
   const isCsv = item => item.name?.toLowerCase().endsWith(".csv") && item.mimeType !== "application/vnd.google-apps.shortcut";
   const pushFile = (item, path) => metas.push({id:item.id,name:item.name,path,modifiedTime:item.modifiedTime||"",size:Number(item.size||0)});
+  if (raceFolder) {
+    const folder = children.find(item => item.mimeType === "application/vnd.google-apps.folder" && item.name === raceFolder);
+    if (!folder) throw new Error("指定されたレースフォルダが見つかりません: " + raceFolder);
+    const files = await listChildren(folder.id, accessToken);
+    for (const item of files) {
+      if (isCsv(item) && selectedSet.has(categoryOf(raceFolder + "/" + item.name))) {
+        pushFile(item, datePrefix + raceFolder + "/" + item.name);
+      }
+    }
+    return [...new Map(metas.map(item => [item.id,item])).values()];
+  }
   const raceFolders = [];
   for (const item of children) {
     if (item.mimeType === "application/vnd.google-apps.folder") {
@@ -301,7 +336,7 @@ async function listDriveChanges(accessToken,startPageToken) {
   return {hasChanges,newStartPageToken};
 }
 
-async function fetchSelectedCsv(accessToken, accountEmail, date, categories) {
+async function fetchSelectedCsv(accessToken, accountEmail, date, categories, raceFolder = "") {
   status("Driveの変更履歴を確認中…",true);
   const cache = await loadDriveCache(accountEmail).catch(error => {
     console.warn("Drive CSVキャッシュを読み込めません。選択範囲を再取得します:",error);
@@ -331,25 +366,27 @@ async function fetchSelectedCsv(accessToken, accountEmail, date, categories) {
     hasDriveChanges = true;
   }
 
-  const scopeKeys = categories.map(category => date + "|" + category);
+  const scopeKeys = categories.map(category => raceFolder ? date + "|" + raceFolder + "|" + category : date + "|" + category);
   const scopeReady = scopeKeys.every(key => (cache.scannedScopes || []).includes(key));
   const canUseCache = !hasDriveChanges && scopeReady;
   let metas;
   let scannedScopes;
   if (canUseCache) {
     status("変更なし。保存済みCSVを使用します…",true);
-    metas = cachedFiles.filter(item => pathIsInSelectedScope(item.path||"",date,categories));
+    metas = cachedFiles.filter(item => raceFolder ? pathIsInRaceScope(item.path||"",date,raceFolder) : pathIsInSelectedScope(item.path||"",date,categories));
     scannedScopes = cache.scannedScopes || [];
   } else {
     status("選択したフォルダを確認中…",true);
-    metas = await listSelectedMetadata(accessToken,date,categories);
+    metas = await listSelectedMetadata(accessToken,date,categories,raceFolder);
     // changes.list はユーザー全体の変更履歴なので、変更があれば他の日付の確認済み状態も無効化する。
     scannedScopes = hasDriveChanges ? [] : (cache.scannedScopes || []);
     for (const key of scopeKeys) if (!scannedScopes.includes(key)) scannedScopes.push(key);
   }
 
+  if (raceFolder && !metas.length) throw new Error("指定したレースフォルダにCSVがありません: " + raceFolder);
+
   const cachedById = new Map(cachedFiles.map(item => [item.id,item]));
-  const retained = cachedFiles.filter(item => !pathIsInSelectedScope(item.path||"",date,categories));
+  const retained = cachedFiles.filter(item => !(raceFolder ? pathIsInRaceScope(item.path||"",date,raceFolder) : pathIsInSelectedScope(item.path||"",date,categories)));
   const unchanged = [];
   const toDownload = [];
   for (const meta of metas) {

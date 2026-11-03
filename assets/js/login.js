@@ -109,6 +109,8 @@ async function handleTokenResponse(response) {
   } finally {
     busy=false;
     loginButton.disabled=false;
+    // 初期チェック状態のままでも、認証処理完了後に取得ボタンを有効化する。
+    updateDownloadButton();
   }
 }
 

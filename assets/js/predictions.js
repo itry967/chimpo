@@ -16,7 +16,7 @@ const PACE = [  // 展開の数字: [表示名, 値の列, 目安の列, 値の�
   ["ペース予想", "ペース予想(前に行く3頭の前半の速さ)", "ペース予想の目安",
    v => `前に行く3頭のテン: コースの基準より ${Math.abs(v).toFixed(1)}% ${v >= 0 ? "速い" : "遅い"}`]];
 const state = { races: new Map(), combos: new Map(), plans: new Map(), odds: new Map(), oddsKind: new Map(), calc: {},
-  info: new Map(), results: new Map(), pays: new Map(), review: new Map(),
+  info: new Map(), results: new Map(), pays: new Map(), review: new Map(), fileUpdated: new Map(),
   band: null, current: null, open: new Set() };
 
 // ---------- CSV ----------
@@ -46,11 +46,20 @@ const fix = (v, d = 1) => v == null ? "" : (+v).toFixed(d);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const raceKey = rid => rid;  // race_id(16桁)そのもの
 
-async function readFile(file, path) {
+async function readFile(file, path, modifiedTime) {
   const rows = parseCSV(await file.text());
   if (!rows.length) return 0;
   const cols = Object.keys(rows[0]);
   const name = (path || file.webkitRelativePath || file.name).replace(/\\/g, "/");
+  const raceFolder = name.match(/(?:^|\/)([^/]+_\d{2}R)\/[^/]+$/);
+  const fileRaceId = rows[0]?.race_id;
+  if (raceFolder && fileRaceId) {
+    const stamp = modifiedTime || (file.lastModified ? new Date(file.lastModified).toISOString() : "");
+    if (stamp) {
+      const prev = state.fileUpdated.get(fileRaceId);
+      if (!prev || new Date(stamp) > new Date(prev)) state.fileUpdated.set(fileRaceId, stamp);
+    }
+  }
   if (cols.includes("race_id") && cols.includes("平均_勝率")) {
     const rid = rows[0].race_id;
     if (rows.some(r => r.race_id !== rid)) return 0;   // 複数のレースが入った CSV(昔の形)は読まない
@@ -116,8 +125,8 @@ async function walk(entry, out, path = "", top = true) {
 async function loadFiles(list, keepView = false) {
   let n = 0;
   for (const item of list) {
-    const [f, p] = Array.isArray(item) ? item : [item, null];
-    if (f.name.toLowerCase().endsWith(".csv")) n += await readFile(f, p);
+    const [f, p, modifiedTime] = Array.isArray(item) ? item : [item, null, null];
+    if (f.name.toLowerCase().endsWith(".csv")) n += await readFile(f, p, modifiedTime);
   }
   if (!n && !state.races.size && !state.band) {
     document.getElementById("status").textContent = "レースデータがありません。";
@@ -172,7 +181,7 @@ async function consumeDriveTransfer() {
   db.close();
   if (!payload?.files?.length) return false;
   document.getElementById("status").textContent = "データを読み込み中…";
-  const files = payload.files.map(item => [new File([item.blob], item.name, {type:"text/csv"}), item.path]);
+  const files = payload.files.map(item => [new File([item.blob], item.name, {type:"text/csv"}), item.path, item.modifiedTime]);
   await loadFiles(files);
   updateRaceStatus();
   return true;
@@ -209,10 +218,13 @@ function overview(rid) {
   const i = state.info.get(rid);
   if (!i) return "";
   const course = [i["芝ダ"], i["距離"] ? `${i["距離"]}m` : "", i["回り"] ? `(${i["回り"]})` : ""].join("");
+  const updated = state.fileUpdated.get(rid);
+  const updatedText = updated ? new Intl.DateTimeFormat("ja-JP", {timeZone:"Asia/Tokyo", year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hourCycle:"h23"}).format(new Date(updated)).replace(/年|月/g, "/").replace("日", "") : "";
   return `<div class="overview"><b>${esc(course)}</b><span class="rname">${esc(i["レース名"] || "")}</span>` +
     (i["グレード"] ? `<span class="chip grade">${esc(i["グレード"])}</span>` : "") +
     (i["馬場状態"] ? `<span class="muted">馬場 ${esc(i["馬場状態"])}</span>` : "") +
-    `<span class="chip ${STATUS_TONE[i["レースの状態"]] ?? ""}" title="DB にあるデータから決めた状態">${esc(i["レースの状態"] || "")}</span></div>`;
+    `<span class="chip ${STATUS_TONE[i["レースの状態"]] ?? ""}" title="DB にあるデータから決めた状態">${esc(i["レースの状態"] || "")}</span>` +
+    (updatedText ? `<span class="data-updated">データ更新：${esc(updatedText)}</span>` : "") + `</div>`;
 }
 
 // ---------- レース回顧(結果のあるレースだけ。表示だけで、モデルへのフィードバックはしない) ----------

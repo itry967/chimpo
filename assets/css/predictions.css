@@ -57,6 +57,20 @@ button:hover, label.btn:hover { border-color: var(--accent); }
   line-height: 1.4;
   letter-spacing: .02em;
 }
+
+/* PCでは現在表示中のレース表示をヘッダーの左右中央に固定 */
+@media (min-width: 761px) {
+  #status.race-context {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 40vw;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 #drop { margin: 24px 16px; border: 2px dashed var(--line); border-radius: 12px; padding: 48px 16px; text-align: center;
   background: var(--panel); }
 #drop.over, body.dragging #drop { border-color: var(--accent); background: var(--accent-soft); }

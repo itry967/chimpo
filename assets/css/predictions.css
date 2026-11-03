@@ -112,6 +112,7 @@ table.res th { color: var(--muted); font-weight: normal; }
 table.res tr.in td { background: var(--accent-soft); }
 .overview { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: -4px 0 10px; font-size: 14px; }
 .overview .rname { font-weight: 600; }
+.overview .data-updated { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .review .lapsec { margin-bottom: 10px; }
 .review .rvgrid { align-items: start; }
 .review h4 { margin: 4px 0 6px; font-size: 13px; color: var(--muted); }

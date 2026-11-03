@@ -11,10 +11,21 @@
 <body>
 <main>
   <h1>Predictions Viewer</h1>
-  <p>Googleアカウントでログインすると、データを取得して予想・分析画面を開きます。取得には2〜3分ほどかかる場合があります。</p>
-  <button id="login" disabled>Googleでログインしてデータを取得</button>
+  <p>Googleアカウントでログインし、取得する日付とデータの種類を選択してください。選択した範囲だけを差分取得します。</p>
+  <button id="login" disabled>Googleでログイン</button>
+  <section id="selection" hidden>
+    <h2>取得するデータ</h2>
+    <label class="field-label" for="date">日付</label>
+    <select id="date"></select>
+    <div class="selection-heading">
+      <strong>取得対象</strong>
+      <span><button type="button" id="selectAll" class="text-button">すべて選択</button><button type="button" id="clearAll" class="text-button">すべて解除</button></span>
+    </div>
+    <div id="categories" class="categories"></div>
+    <button id="download" disabled>選択したデータを取得・更新</button>
+  </section>
   <div id="status" class="status" role="status" aria-live="polite">Google認証の準備中…</div>
-  <p class="small">データの取得には、管理者から共有されたGoogleアカウントを使用してください。取得したデータはこのブラウザ内で処理します。</p>
+  <p class="small">データの取得には、管理者から共有されたGoogleアカウントを使用してください。取得したデータはこのブラウザ内で処理します。取得済みの別の日付・フォルダのデータは保持されます。</p>
 </main>
 <script src="./assets/js/login.js"></script>
 </body>

@@ -46,6 +46,9 @@ button:hover, label.btn:hover { border-color: var(--accent); }
 .weekday-sat { color: #1976d2; font-weight: 700; }
 .weekday-sun { color: #d32f2f; font-weight: 700; }
 
+/* PCでは年月日を表示し、月日のみの短縮表示は隠す */
+#status .status-date-short { display: none; }
+
 /* PC: 現在表示中のレースをヘッダー内で見つけやすくする */
 #status.race-context {
   flex: 0 1 auto;

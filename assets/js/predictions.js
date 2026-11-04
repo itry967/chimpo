@@ -1958,6 +1958,11 @@ function openBabaHelp(e) {
   openHelp("keiba-viewer-baba", "馬場傾向予想の項目の説明", "馬場傾向予想の項目の説明", babaHelpHTML());
 }
 document.getElementById("guideClose").onclick = () => document.getElementById("guide").close();
+document.getElementById("updateTimingOpen").onclick = () => document.getElementById("updateTimingDialog").showModal();
+document.getElementById("updateTimingClose").onclick = () => document.getElementById("updateTimingDialog").close();
+document.getElementById("updateTimingDialog").addEventListener("click", e => {
+  if (e.target.id === "updateTimingDialog") e.target.close();
+});
 document.getElementById("guide").addEventListener("click", e => { if (e.target.id === "guide") e.target.close(); });
 
 // ---------- 読み込みの操作 ----------

@@ -1297,23 +1297,31 @@ function horseLapPanel(r0, info, rid, horseKey) {
   const p = predictedLaps(r0, info), rv = state.review.get(rid) || {};
   const actual = String(rv["ラップ"] || "").split(",").filter(Boolean).map(Number);
   const hasActual = state.results.has(rid) && actual.length > 0 && actual.every(Number.isFinite);
-  const showActual = state.actualLapOpen.has(horseKey);
+  const showActual = hasActual && state.actualLapOpen.has(horseKey);
   const lb = lapBase(info);
   const dist = num(info?.["距離"]);
-  const marks = hasActual ? (dist ? lapMarks(dist, actual.length) : actual.map((_, i) => 200 * (i + 1))) : [];
+  const actualMarks = hasActual ? (dist ? lapMarks(dist, actual.length) : actual.map((_, i) => 200 * (i + 1))) : [];
   const comparablePred = p && p.laps.length === actual.length ? p.laps : null;
-  const actualView = hasActual && showActual
-    ? `<div class="horse-actual-lap"><h5>実際のラップ</h5>${lapText(actual, num(rv["前半3F"]), num(rv["後半3F"]))}<div class="scroll horse-lap-chart">${lapChart(actual, comparablePred, marks, lb?.laps, lb)}</div></div>`
-    : "";
-  const predicted = p
-    ? `<div class="horse-lap-head"><h4>レース全体の予想ラップ</h4><span class="chip ${p.conf === "高" ? "up" : p.conf === "低" ? "warn" : "gray"}">確度 ${p.conf}</span></div>` +
-      lapText(p.laps) + lapBaseTabs(info) + `<div class="scroll horse-lap-chart">${predLapChart(p.laps, p.marks, lb?.laps ?? p.avg)}</div>` +
-      `<div class="note">${esc(p.why)}。途中の形は同じコースの過去のラップ傾向を使っています。</div>`
-    : `<h4>レース全体の予想ラップ</h4><p class="muted">予想ラップを計算する材料がありません。</p>`;
+
+  const heading = showActual
+    ? `<div class="horse-lap-head"><h4>レース全体の実際のラップ</h4>${p ? `<span class="chip ${p.conf === "高" ? "up" : p.conf === "低" ? "warn" : "gray"}">予想確度 ${p.conf}</span>` : ""}</div>`
+    : p
+      ? `<div class="horse-lap-head"><h4>レース全体の予想ラップ</h4><span class="chip ${p.conf === "高" ? "up" : p.conf === "低" ? "warn" : "gray"}">確度 ${p.conf}</span></div>`
+      : `<h4>レース全体の予想ラップ</h4>`;
+
+  const lapContent = showActual
+    ? lapText(actual, num(rv["前半3F"]), num(rv["後半3F"])) +
+      `<div class="scroll horse-lap-chart">${lapChart(actual, comparablePred, actualMarks, lb?.laps, lb)}</div>`
+    : p
+      ? lapText(p.laps) + lapBaseTabs(info) +
+        `<div class="scroll horse-lap-chart">${predLapChart(p.laps, p.marks, lb?.laps ?? p.avg)}</div>` +
+        `<div class="note">${esc(p.why)}。途中の形は同じコースの過去のラップ傾向を使っています。</div>`
+      : `<p class="muted">予想ラップを計算する材料がありません。</p>`;
+
   const toggle = hasActual
-    ? `<label class="actual-lap-toggle"><input type="checkbox" class="actual-lap-check" data-horse-key="${esc(horseKey)}" ${showActual ? "checked" : ""}> 実際のラップも表示</label>`
+    ? `<label class="actual-lap-toggle"><input type="checkbox" class="actual-lap-check" data-horse-key="${esc(horseKey)}" ${showActual ? "checked" : ""}> 実際のラップを表示</label>`
     : "";
-  return `<section class="horse-lap-panel">${predicted}${toggle}${actualView}</section>`;
+  return `<section class="horse-lap-panel">${heading}${toggle}${lapContent}</section>`;
 }
 
 function detail(r, ms, raceRow, info, rid) {

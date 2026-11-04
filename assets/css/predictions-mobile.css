@@ -648,3 +648,10 @@
     padding-left: 4px;
   }
 }
+
+
+/* SPでは表示中レースの日付を月日だけにする */
+@media (max-width: 760px) {
+  #status .status-date-full { display: none; }
+  #status .status-date-short { display: inline; }
+}

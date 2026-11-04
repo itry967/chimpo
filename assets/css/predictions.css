@@ -304,3 +304,16 @@ header h1 { flex: 0 0 auto; }
 .bar.place-bar .place-top3 { background: var(--bar2); }
 .bar.place-bar .place-top2 { background: var(--bar); }
 .bar.place-bar span { font-size: 11px; white-space: nowrap; }
+
+/* 馬ごとの詳細: 左に個別予想、右にレース全体のラップ予想 */
+.horse-detail-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr); gap: 18px; align-items: start; }
+.horse-detail-data { min-width: 0; }
+.horse-detail-data > .grid2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.horse-lap-panel { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.horse-lap-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.horse-lap-head h4 { margin: 0; font-size: 14px; }
+.horse-lap-chart { margin-top: 6px; }
+.horse-lap-panel .laptext { font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .horse-detail-layout { grid-template-columns: minmax(0, 1fr); }
+}

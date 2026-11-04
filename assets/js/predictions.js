@@ -1294,7 +1294,7 @@ function horseLapPanel(r0, info) {
 }
 
 function detail(r, ms, raceRow, info) {
-  let t = `<div class="horse-detail-layout"><div class="horse-detail-data"><div class="grid2"><div class="scroll"><table>`<tr><th>モデル</th><th class="n">順位</th><th class="n">勝率</th><th class="n">2着内</th><th class="n">3着内</th></tr>`;
+  let t = `<div class="horse-detail-layout"><div class="horse-detail-data"><div class="grid2"><div class="scroll"><table><tr><th>モデル</th><th class="n">順位</th><th class="n">勝率</th><th class="n">2着内</th><th class="n">3着内</th></tr>`;
   for (const m of ms) t += `<tr><td>${esc(m)}</td><td class="n">${esc(r[`${m}_順位`])}</td><td class="n">${pct(num(r[`${m}_勝率`]))}</td>` +
     `<td class="n">${pct(num(r[`${m}_2着内`]))}</td><td class="n">${pct(num(r[`${m}_3着内`]))}</td></tr>`;
   t += `</table></div><dl class="kv">`;

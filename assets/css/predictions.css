@@ -307,7 +307,7 @@ header h1 { flex: 0 0 auto; }
 
 
 /* データ更新タイミングのモーダル */
-#updateTimingOpen { white-space: nowrap; }
+#updateTimingOpen { order: 4.5; white-space: nowrap; }
 #updateTimingDialog {
   width: min(640px, calc(100vw - 32px));
   max-width: none;

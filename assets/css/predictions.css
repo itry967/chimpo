@@ -26,17 +26,18 @@ header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; back
   border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
 header h1 { font-size: 16px; margin: 0; }
 
-/* ヘッダーの並び：回収率の直後に指標説明を配置 */
+/* ヘッダーの並び：タイトルの直後に注意点を配置 */
 #navToggle { order: 0; }
 header h1 { order: 1; }
-#bandOpen { order: 2; }
-#guideBtn { order: 3; }
-#status { order: 4; }
-header .sp { order: 5; }
-#driveReload { order: 6; }
-#driveReloadRace { order: 7; }
-#resOpen { order: 8; }
-#theme { order: 9; }
+#cautionOpen { order: 2; }
+#bandOpen { order: 3; }
+#guideBtn { order: 4; }
+#status { order: 5; }
+header .sp { order: 6; }
+#driveReload { order: 7; }
+#driveReloadRace { order: 8; }
+#resOpen { order: 9; }
+#theme { order: 10; }
 header .sp { flex: 1; }
 button, label.btn { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text);
   border-radius: 6px; padding: 4px 10px; cursor: pointer; }

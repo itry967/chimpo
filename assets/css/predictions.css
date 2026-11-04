@@ -304,3 +304,51 @@ header h1 { flex: 0 0 auto; }
 .bar.place-bar .place-top3 { background: var(--bar2); }
 .bar.place-bar .place-top2 { background: var(--bar); }
 .bar.place-bar span { font-size: 11px; white-space: nowrap; }
+
+
+/* データ更新タイミングのモーダル */
+#updateTimingOpen { white-space: nowrap; }
+#updateTimingDialog {
+  width: min(640px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100vh - 48px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .24);
+}
+#updateTimingDialog::backdrop { background: rgba(0, 0, 0, .5); }
+#updateTimingDialog .gh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+}
+#updateTimingDialog .gh h2 { flex: 1; margin: 0; font-size: 16px; }
+#updateTimingDialog .gb {
+  padding: 12px 18px 18px;
+  overflow: auto;
+  max-height: calc(100vh - 110px);
+  line-height: 1.7;
+}
+#updateTimingDialog h3 { margin: 0 0 8px; font-size: 15px; }
+#updateTimingDialog h4 { margin: 0 0 3px; font-size: 13px; }
+#updateTimingDialog p { margin: 3px 0; }
+#updateTimingDialog ul { margin: 3px 0 0; padding-left: 1.5em; }
+#updateTimingDialog .timing-section + .timing-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+#updateTimingDialog .timing-item {
+  padding: 9px 0 9px 12px;
+  border-left: 3px solid var(--accent);
+}
+#updateTimingDialog .timing-item + .timing-item { margin-top: 5px; }
+#updateTimingDialog .timing-note { color: var(--muted); font-size: 12px; }

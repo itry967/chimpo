@@ -317,3 +317,9 @@ header h1 { flex: 0 0 auto; }
 @media (max-width: 900px) {
   .horse-detail-layout { grid-template-columns: minmax(0, 1fr); }
 }
+
+.actual-lap-toggle { display: flex; align-items: center; gap: 7px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 13px; cursor: pointer; }
+.actual-lap-toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
+.horse-actual-lap { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.horse-actual-lap h5 { margin: 0 0 5px; font-size: 13px; }
+.horse-actual-lap .laptext { font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }

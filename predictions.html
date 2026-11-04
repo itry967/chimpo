@@ -41,6 +41,7 @@
   <button id="driveReloadRace" title="表示中のレースのデータだけを更新" disabled>このRのデータを更新</button>
   <button id="resOpen" title="結果の欄を開く">結果</button>
   <button id="guideBtn" title="総合・能力・適性・調子・人・展開が何を評価しているかの一覧">指標の説明</button>
+  <button id="updateTimingOpen" title="データの更新タイミングを表示">データ更新タイミング</button>
   <button id="theme" title="明るさを切り替える">◐</button>
 </header>
 <div id="drop" hidden>
@@ -62,6 +63,43 @@
       <li>この予想などは絶対ではありません。</li>
       <li>天候の急変・急遽の乗り替わり等による予想変更などは対応できない可能性があります。</li>
     </ul>
+  </div>
+</dialog>
+<dialog id="updateTimingDialog" aria-labelledby="updateTimingTitle">
+  <div class="gh"><h2 id="updateTimingTitle">データ更新タイミング</h2><button id="updateTimingClose">閉じる</button></div>
+  <div class="gb">
+    <section class="timing-section">
+      <h3>レース前日</h3>
+      <p>枠順が出てから1時間程度を目安に、枠順決定後のデータで開催日のレースデータを登録</p>
+    </section>
+    <section class="timing-section">
+      <h3>レース当日</h3>
+      <div class="timing-item">
+        <h4>各レース50分前（目安）</h4>
+        <p>馬体重等を含むデータを更新</p>
+        <p class="timing-note">これも含みます</p>
+        <ul>
+          <li>競馬場クッション値</li>
+          <li>当日までの天候情報</li>
+        </ul>
+      </div>
+      <div class="timing-item">
+        <h4>各レース20分前・10分前</h4>
+        <p>オッズ・推奨買い目を更新</p>
+      </div>
+      <div class="timing-item">
+        <h4>各レース15分前</h4>
+        <p>当日の馬場傾向を取り込んでデータを更新</p>
+      </div>
+      <div class="timing-item">
+        <h4>各レース確定後</h4>
+        <p>結果およびレース回顧を更新</p>
+      </div>
+      <div class="timing-item">
+        <h4>最終レース20分後</h4>
+        <p>最終確認用の更新</p>
+      </div>
+    </section>
   </div>
 </dialog>
 <script>

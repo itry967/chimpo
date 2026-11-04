@@ -1733,7 +1733,8 @@ function updateRaceStatus() {
   if (state.races.has(state.current)) {
     const rid = state.current;
     const date = rid.slice(0, 8);
-    const fullDate = ymdw(date), shortDate = fullDate.replace(/^\\d{4}\\//, "");
+    const fullDate = ymdw(date);
+    const shortDate = fullDate.replace(/^\d{4}\//, "");
     status.innerHTML = `<span class="status-date-full">${fullDate}</span><span class="status-date-short">${shortDate}</span>　${JYO[rid.slice(8, 10)] || rid.slice(8, 10)}　${+rid.slice(14, 16)}R`;
   } else {
     status.textContent = "レースを選択してください";

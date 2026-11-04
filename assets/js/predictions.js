@@ -1296,7 +1296,7 @@ function kpi(v, l) { return `<div class="kpi"><div class="v">${v}</div><div clas
 function horseLapPanel(r0, info, rid, horseKey) {
   const p = predictedLaps(r0, info), rv = state.review.get(rid) || {};
   const actual = String(rv["ラップ"] || "").split(",").filter(Boolean).map(Number);
-  const hasActual = actual.length > 0 && actual.every(Number.isFinite);
+  const hasActual = state.results.has(rid) && actual.length > 0 && actual.every(Number.isFinite);
   const showActual = state.actualLapOpen.has(horseKey);
   const lb = lapBase(info);
   const dist = num(info?.["距離"]);

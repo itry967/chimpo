@@ -17,7 +17,7 @@ const PACE = [  // 展開の数字: [表示名, 値の列, 目安の列, 値の�
    v => `前に行く3頭のテン: コースの基準より ${Math.abs(v).toFixed(1)}% ${v >= 0 ? "速い" : "遅い"}`]];
 const state = { races: new Map(), combos: new Map(), plans: new Map(), odds: new Map(), oddsKind: new Map(), calc: {},
   info: new Map(), results: new Map(), pays: new Map(), review: new Map(), fileUpdated: new Map(),
-  band: null, current: null, open: new Set(), actualLapOpen: new Set() };
+  band: null, current: null, open: new Set() };
 
 // ---------- CSV ----------
 function parseCSV(text) {
@@ -936,7 +936,7 @@ function renderRace(rid) {
       `<td class="n hide-sm">${w == null ? "" : w + (z == null ? "" : `<span class="dim">(${z > 0 ? "+" : ""}${z})</span>`)}</td>` +
       `<td class="hide-sm">${split ? `<span class="chip warn" title="モデルの順位の幅 ${spread}">割れ</span>` : ""}</td></tr>`;
     if (why && (!simpleView() || state.whyOpen?.has(key))) html += `<tr class="why"><td></td><td colspan="16">${why}</td></tr>`;
-    if (state.open.has(key)) html += `<tr class="detail"><td colspan="17">${detail(r, ms, r0, state.info.get(rid), rid)}</td></tr>`;
+    if (state.open.has(key)) html += `<tr class="detail"><td colspan="17">${detail(r, ms)}</td></tr>`;
   }
   html += `</table></div><div class="note">勝率・3着内は5モデルの平均。妥当オッズの横の印は実際のオッズとの差(▲▲ 1.5倍以上・▲ 1.2倍以上高い、▼ 0.8倍未満・▼▼ 0.5倍未満に低い。上にのせると比)。期待値 = オッズ ÷ 妥当オッズ(1 を超えると予想の上では得。緑は 1.0 以上、太字は 1.2 以上。複勝は下限のオッズで計算)。単勝オッズの横は人気(オッズの低い順)。「割れ」はモデルの順位の幅が4以上。馬名・予想着順・脚質・通過予想・上がり予想の横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。色は緑 = 高・灰 = 中・橙 = 低。上にのせると0〜100の点と、検証期間の同じ条件での平均のずれ)。馬名の横は勝率・3着内・期待値を含む予想全体の確度。通過予想は前半(最初のコーナー)→ 4コーナーの番手、上がり予想は秒(かっこ内はレースで速い順、緑は3位まで)。根拠は説明用の LightGBM で、▲が評価を上げた項目、▼が下げた項目。数字は点数の差(レースの平均と比べた分)と、勝つ見込みのおおよその倍率(×)。総合・能力・適性・調子・人・展開は、根拠の項目を分類ごとに足したもの(総合は全部の合計)。1行目の「相対値」はこのレースの中の順位から星(点は1位が100・最下位が0)、2行目の「絶対値」は検証期間 2019〜2023年の全出走馬の中の位置(点は上位何%かで、80以上が★5)。横の高・中・低は確度(元になった出走数・調教などのデータの量。総合は能力・適性・調子のうち一番低いもの)で、低いものは薄く出す。</div></div>`;
 
@@ -948,15 +948,6 @@ function renderRace(rid) {
   setupCardFolds(document.getElementById("main"));
   setupHelpButtons(document.getElementById("main"));
   setupLapBase(document.getElementById("main"));
-  document.querySelectorAll(".actual-lap-check").forEach(input => {
-    input.onclick = e => e.stopPropagation();
-    input.onchange = () => {
-      const key = input.dataset.horseKey;
-      if (input.checked) state.actualLapOpen.add(key);
-      else state.actualLapOpen.delete(key);
-      renderRace(rid);
-    };
-  });
   setupHorseSort(document.getElementById("main"), rid);
   document.querySelectorAll("tr.horse").forEach(tr => tr.onclick = e => {
     if (e.target.closest("input")) return;
@@ -1293,39 +1284,8 @@ function mixMeter(rows) {
 }
 function kpi(v, l) { return `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`; }
 
-function horseLapPanel(r0, info, rid, horseKey) {
-  const p = predictedLaps(r0, info), rv = state.review.get(rid) || {};
-  const actual = String(rv["ラップ"] || "").split(",").filter(Boolean).map(Number);
-  const hasActual = state.results.has(rid) && actual.length > 0 && actual.every(Number.isFinite);
-  const showActual = hasActual && state.actualLapOpen.has(horseKey);
-  const lb = lapBase(info);
-  const dist = num(info?.["距離"]);
-  const actualMarks = hasActual ? (dist ? lapMarks(dist, actual.length) : actual.map((_, i) => 200 * (i + 1))) : [];
-  const comparablePred = p && p.laps.length === actual.length ? p.laps : null;
-
-  const heading = showActual
-    ? `<div class="horse-lap-head"><h4>レース全体の実際のラップ</h4>${p ? `<span class="chip ${p.conf === "高" ? "up" : p.conf === "低" ? "warn" : "gray"}">予想確度 ${p.conf}</span>` : ""}</div>`
-    : p
-      ? `<div class="horse-lap-head"><h4>レース全体の予想ラップ</h4><span class="chip ${p.conf === "高" ? "up" : p.conf === "低" ? "warn" : "gray"}">確度 ${p.conf}</span></div>`
-      : `<h4>レース全体の予想ラップ</h4>`;
-
-  const lapContent = showActual
-    ? lapText(actual, num(rv["前半3F"]), num(rv["後半3F"])) +
-      `<div class="scroll horse-lap-chart">${lapChart(actual, comparablePred, actualMarks, lb?.laps, lb)}</div>`
-    : p
-      ? lapText(p.laps) + lapBaseTabs(info) +
-        `<div class="scroll horse-lap-chart">${predLapChart(p.laps, p.marks, lb?.laps ?? p.avg)}</div>` +
-        `<div class="note">${esc(p.why)}。途中の形は同じコースの過去のラップ傾向を使っています。</div>`
-      : `<p class="muted">予想ラップを計算する材料がありません。</p>`;
-
-  const toggle = hasActual
-    ? `<label class="actual-lap-toggle"><input type="checkbox" class="actual-lap-check" data-horse-key="${esc(horseKey)}" ${showActual ? "checked" : ""}> 実際のラップを表示</label>`
-    : "";
-  return `<section class="horse-lap-panel">${heading}${toggle}${lapContent}</section>`;
-}
-
-function detail(r, ms, raceRow, info, rid) {
-  let t = `<div class="horse-detail-layout"><div class="horse-detail-data"><div class="grid2"><div class="scroll"><table><tr><th>モデル</th><th class="n">順位</th><th class="n">勝率</th><th class="n">2着内</th><th class="n">3着内</th></tr>`;
+function detail(r, ms) {
+  let t = `<div class="grid2"><div class="scroll"><table><tr><th>モデル</th><th class="n">順位</th><th class="n">勝率</th><th class="n">2着内</th><th class="n">3着内</th></tr>`;
   for (const m of ms) t += `<tr><td>${esc(m)}</td><td class="n">${esc(r[`${m}_順位`])}</td><td class="n">${pct(num(r[`${m}_勝率`]))}</td>` +
     `<td class="n">${pct(num(r[`${m}_2着内`]))}</td><td class="n">${pct(num(r[`${m}_3着内`]))}</td></tr>`;
   t += `</table></div><dl class="kv">`;
@@ -1342,7 +1302,7 @@ function detail(r, ms, raceRow, info, rid) {
   if (r["根拠_上げた"]) t += `<dt>根拠(上げた)</dt><dd>${reasonText(r["根拠_上げた"])}${cdot(r, "予想")}</dd>`;
   if (r["根拠_下げた"]) t += `<dt>根拠(下げた)</dt><dd>${reasonText(r["根拠_下げた"])}${cdot(r, "予想")}</dd>`;
   return t + `</dl><div class="note">根拠のかっこ内は、その項目でこの馬の点数が同じレースの平均より上がった・下がった分(説明用の LightGBM の点数)。` +
-    `点数の差 d は、勝つ見込みを約 e<sup>d</sup> 倍にする(+0.5 で約1.6倍、+0.2 で約1.2倍、−0.1 で約0.9倍)。</div></div></div>` + horseLapPanel(raceRow, info, rid, `${rid}_${r.umaban}`) + `</div>`;
+    `点数の差 d は、勝つ見込みを約 e<sup>d</sup> 倍にする(+0.5 で約1.6倍、+0.2 で約1.2倍、−0.1 で約0.9倍)。</div></div>`;
 }
 
 // ---------- 推奨買い目と、入れた予算での資金配分 ----------

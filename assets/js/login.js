@@ -166,7 +166,12 @@ downloadButton.addEventListener("click", async () => {
     if (!files.length) throw new Error("取得済みキャッシュを含め、表示できるCSVがありません。日付・フォルダを確認してください。");
     status("データの準備が完了しました。画面を開いています…", true);
     await saveTransfer(files);
-    location.href = "./predictions.html";
+    if (window.parent !== window && new URLSearchParams(location.search).get("embedded") === "1") {
+      status("取得が完了しました。ビューアに反映しています…", true);
+      window.parent.postMessage({type:"drive-update-complete"}, location.origin);
+    } else {
+      location.href = "./predictions.html";
+    }
   } catch (error) {
     console.error(error);
     status("データの取得に失敗しました。\n" + (error?.message || error) + "\n\n共有設定と取得対象を確認してください。");

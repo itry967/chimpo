@@ -2071,7 +2071,7 @@ document.getElementById("driveReloadRace").onclick = () => {
   if (window.confirm(date.slice(0,4) + "/" + date.slice(4,6) + "/" + date.slice(6,8) + " " + venue + " " + (+raceNo) + "R のデータだけを更新しますか？")) {
     openDriveUpdate(params);
   }
-});
+};
 document.getElementById("bandOpen").onclick = () => {
   if (!state.band) return;
   renderBand();

@@ -1734,7 +1734,7 @@ function updateRaceStatus() {
   if (state.dayPage) {
     const date = state.dayPage;
     const fullDate = ymdw(date);
-    const shortDate = fullDate.replace(/^\\d{4}\\//, "");
+    const shortDate = fullDate.replace(/^\d{4}\//, "");
     status.innerHTML = `<span class="status-date-full">${fullDate}</span><span class="status-date-short">${shortDate}</span>　日別ページ`;
   } else if (state.races.has(state.current)) {
     const rid = state.current;

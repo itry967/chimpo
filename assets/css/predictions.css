@@ -352,3 +352,36 @@ header h1 { flex: 0 0 auto; }
 }
 #updateTimingDialog .timing-item + .timing-item { margin-top: 5px; }
 #updateTimingDialog .timing-note { color: var(--muted); font-size: 12px; }
+
+/* ビューア内のDrive更新モーダル */
+#driveUpdateDialog {
+  width: min(760px, calc(100vw - 32px));
+  max-width: none;
+  height: min(820px, calc(100vh - 48px));
+  max-height: calc(100vh - 48px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .24);
+}
+#driveUpdateDialog::backdrop { background: rgba(0, 0, 0, .55); }
+#driveUpdateDialog .gh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+#driveUpdateDialog .gh h2 { flex: 1; margin: 0; font-size: 15px; }
+#driveUpdateFrame {
+  display: block;
+  width: 100%;
+  height: calc(100% - 48px);
+  border: 0;
+  background: #f6f7f9;
+}

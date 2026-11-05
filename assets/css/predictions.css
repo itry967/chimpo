@@ -94,6 +94,9 @@ body.nav-closed nav { visibility: hidden; border: 0; }
 nav { border-right: 1px solid var(--line); background: var(--panel); overflow-y: auto; max-height: calc(100vh - 50px);
   position: sticky; top: 50px; }
 nav .day { padding: 8px 12px 4px; font-weight: 600; color: var(--muted); font-size: 12px; }
+nav a.day-link { display: block; padding: 8px 12px 4px; font-weight: 600; color: var(--muted); font-size: 12px; border-left: 0; }
+nav a.day-link:hover { color: var(--text); }
+nav .day-link-mark { float: right; opacity: .65; }
 nav .jyo { padding: 6px 12px 2px; font-weight: 600; font-size: 13px; }
 nav a { display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 20px; color: inherit; text-decoration: none;
   cursor: pointer; border-left: 3px solid transparent; }

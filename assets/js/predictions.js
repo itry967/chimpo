@@ -726,12 +726,11 @@ function renderNav() {
   }
   for (const k of Object.keys(byDayJyo).sort()) {
     const day = k.slice(0, 8), jyo = k.slice(8);
-    const dayShut = folded(`day:${day}`), jyoShut = folded(`jyo:${k}`);
+    const jyoShut = folded(`jyo:${k}`);
     if (day !== lastDay) {
-      html += `<div class="day fold-h" data-fold="day:${day}">${dayShut ? "▸" : "▾"} ${ymdw(day)}</div>`;
+      html += `<a class="day day-link" href="./days/${day}.html" title="${day}の日別ページを開く">${ymdw(day)} <span class="day-link-mark">↗</span></a>`;
       lastDay = day;
     }
-    if (dayShut) continue;
     html += `<div class="jyo fold-h" data-fold="jyo:${k}">${jyoShut ? "▸" : "▾"} ${JYO[jyo] || jyo}</div>`;
     if (jyoShut) continue;
     byDayJyo[k].sort((a, b) => a.slice(14).localeCompare(b.slice(14)));

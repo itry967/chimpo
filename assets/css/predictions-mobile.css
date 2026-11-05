@@ -680,3 +680,15 @@
     padding-left: 3px;
   }
 }
+
+@media (max-width: 760px) {
+  #driveUpdateDialog {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 24px - env(safe-area-inset-top));
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top));
+    margin: auto;
+    border-radius: 10px;
+  }
+  #driveUpdateDialog .gh { height: 44px; padding: 7px 10px; }
+  #driveUpdateFrame { height: calc(100% - 44px); }
+}

@@ -17,7 +17,7 @@ const PACE = [  // 展開の数字: [表示名, 値の列, 目安の列, 値の�
    v => `前に行く3頭のテン: コースの基準より ${Math.abs(v).toFixed(1)}% ${v >= 0 ? "速い" : "遅い"}`]];
 const state = { races: new Map(), combos: new Map(), plans: new Map(), odds: new Map(), oddsKind: new Map(), calc: {},
   info: new Map(), results: new Map(), pays: new Map(), review: new Map(), fileUpdated: new Map(),
-  band: null, current: null, open: new Set() };
+  band: null, current: null, dayPage: null, open: new Set() };
 
 // ---------- CSV ----------
 function parseCSV(text) {
@@ -728,7 +728,7 @@ function renderNav() {
     const day = k.slice(0, 8), jyo = k.slice(8);
     const jyoShut = folded(`jyo:${k}`);
     if (day !== lastDay) {
-      html += `<a class="day day-link" href="./days/${day}.html" title="${day}の日別ページを開く">${ymdw(day)} <span class="day-link-mark">↗</span></a>`;
+      html += `<a class="day day-link ${state.dayPage === day ? "on" : ""}" data-day="${day}" title="${day}の日別ページを表示">${ymdw(day)}</a>`;
       lastDay = day;
     }
     html += `<div class="jyo fold-h" data-fold="jyo:${k}">${jyoShut ? "▸" : "▾"} ${JYO[jyo] || jyo}</div>`;
@@ -744,7 +744,8 @@ function renderNav() {
     }
   }
   nav.innerHTML = html;
-  nav.querySelectorAll("a[data-rid]").forEach(a => a.onclick = () => { if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("mobile-nav-collapsed"); state.current = a.dataset.rid; state.open.clear(); render(); });
+  nav.querySelectorAll("a[data-day]").forEach(a => a.onclick = () => { if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("mobile-nav-collapsed"); state.dayPage = a.dataset.day; state.open.clear(); render(); });
+  nav.querySelectorAll("a[data-rid]").forEach(a => a.onclick = () => { if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("mobile-nav-collapsed"); state.dayPage = null; state.current = a.dataset.rid; state.open.clear(); render(); });
   nav.querySelectorAll(".fold-h").forEach(d => d.onclick = () => { toggleFold(d.dataset.fold); renderNav(); });
   document.getElementById("navClose").onclick = () => document.getElementById("navToggle").click();
 }
@@ -1730,7 +1731,12 @@ function updateRaceStatus() {
   if (bandOpen) bandOpen.hidden = !state.band;
   const status = document.getElementById("status");
   if (!status) return;
-  if (state.races.has(state.current)) {
+  if (state.dayPage) {
+    const date = state.dayPage;
+    const fullDate = ymdw(date);
+    const shortDate = fullDate.replace(/^\\d{4}\\//, "");
+    status.innerHTML = `<span class="status-date-full">${fullDate}</span><span class="status-date-short">${shortDate}</span>　日別ページ`;
+  } else if (state.races.has(state.current)) {
     const rid = state.current;
     const date = rid.slice(0, 8);
     const fullDate = ymdw(date);
@@ -1741,14 +1747,33 @@ function updateRaceStatus() {
   }
   status.classList.add("race-context");
   const raceReload = document.getElementById("driveReloadRace");
-  if (raceReload) raceReload.disabled = !state.races.has(state.current);
+  if (raceReload) raceReload.disabled = !!state.dayPage || !state.races.has(state.current);
 }
 
+function renderDayPage(date) {
+  const main = document.getElementById("main");
+  const frame = document.createElement("iframe");
+  frame.className = "day-page-frame";
+  frame.title = date + " の日別ページ";
+  frame.src = `./days/${date}.html?embedded=1`;
+  frame.style.height = "700px";
+  main.replaceChildren(frame);
+  document.body.classList.add("day-page-active");
+}
+window.addEventListener("message", event => {
+  if (event.origin !== location.origin || event.data?.type !== "day-page-height") return;
+  const frame = document.querySelector("#main .day-page-frame");
+  if (frame && event.source === frame.contentWindow && Number.isFinite(event.data.height)) {
+    frame.style.height = Math.max(320, Math.min(event.data.height, 12000)) + "px";
+  }
+});
 function render(toTop = true) {
   const y = window.scrollY;
   renderNav();
-  if (state.races.has(state.current)) renderRace(state.current);
-  renderResult(state.current);
+  document.body.classList.toggle("day-page-active", !!state.dayPage);
+  if (state.dayPage) renderDayPage(state.dayPage);
+  else if (state.races.has(state.current)) renderRace(state.current);
+  renderResult(state.dayPage ? null : state.current);
   updateRaceStatus();
   window.scrollTo(0, toTop ? 0 : y);
   try { sessionStorage.setItem("keiba-viewer:current", state.current ?? ""); } catch (e) {}

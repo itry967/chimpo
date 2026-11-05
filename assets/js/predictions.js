@@ -1756,7 +1756,7 @@ function renderDayPage(date) {
   frame.className = "day-page-frame";
   frame.title = date + " の日別ページ";
   frame.src = `./days/${date}.html?embedded=1`;
-  frame.style.height = "700px";
+  frame.style.height = "220px";
   main.replaceChildren(frame);
   document.body.classList.add("day-page-active");
 }
@@ -1764,7 +1764,7 @@ window.addEventListener("message", event => {
   if (event.origin !== location.origin || event.data?.type !== "day-page-height") return;
   const frame = document.querySelector("#main .day-page-frame");
   if (frame && event.source === frame.contentWindow && Number.isFinite(event.data.height)) {
-    frame.style.height = Math.max(320, Math.min(event.data.height, 12000)) + "px";
+    frame.style.height = Math.max(160, Math.min(event.data.height, 12000)) + "px";
   }
 });
 function render(toTop = true) {

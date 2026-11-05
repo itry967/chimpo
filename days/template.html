@@ -36,6 +36,12 @@
         : "日付未設定";
       document.getElementById("dayDate").textContent = label;
       if (date) document.title = label + " | 予想ビューア";
+      if (window.parent !== window) {
+        const sendHeight = () => window.parent.postMessage({type: "day-page-height", height: document.documentElement.scrollHeight}, location.origin);
+        new ResizeObserver(sendHeight).observe(document.documentElement);
+        window.addEventListener("load", sendHeight);
+        sendHeight();
+      }
     })();
   </script>
 </body>

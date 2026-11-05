@@ -2062,7 +2062,7 @@ document.getElementById("driveReloadRace").onclick = () => {
   const date = rid.slice(0, 8);
   const venue = JYO[rid.slice(8, 10)];
   const raceNo = rid.slice(14, 16);
-  if (!/^\\d{8}$/.test(date) || !venue || !/^\\d{2}$/.test(raceNo)) {
+  if (!/^\d{8}$/.test(date) || !venue || !/^\d{2}$/.test(raceNo)) {
     alert("表示中のレースを特定できませんでした。");
     return;
   }

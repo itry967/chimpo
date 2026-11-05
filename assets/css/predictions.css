@@ -394,7 +394,7 @@ header h1 { flex: 0 0 auto; }
 #main .day-page-frame {
   display: block;
   width: 100%;
-  min-height: 320px;
+  min-height: 0;
   border: 0;
   background: var(--panel);
 }

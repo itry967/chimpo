@@ -388,3 +388,16 @@ header h1 { flex: 0 0 auto; }
   border: 0;
   background: #f6f7f9;
 }
+
+
+/* 日別ページをメインのレース詳細領域に埋め込む */
+#main .day-page-frame {
+  display: block;
+  width: 100%;
+  min-height: 320px;
+  border: 0;
+  background: var(--panel);
+}
+nav a.day-link { cursor: pointer; }
+nav a.day-link.on { background: var(--accent-soft); color: var(--text); font-weight: 700; }
+body.day-page-active #result { display: none !important; }

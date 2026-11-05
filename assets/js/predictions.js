@@ -152,7 +152,7 @@ function openDriveTransferDb() {
     req.onerror = () => reject(req.error);
   });
 }
-async function consumeDriveTransfer() {
+async function consumeDriveTransfer(keepView = false) {
   if (!window.indexedDB) return false;
   const db = await openDriveTransferDb();
   const payload = await new Promise((resolve, reject) => {
@@ -182,7 +182,7 @@ async function consumeDriveTransfer() {
   if (!payload?.files?.length) return false;
   document.getElementById("status").textContent = "データを読み込み中…";
   const files = payload.files.map(item => [new File([item.blob], item.name, {type:"text/csv"}), item.path, item.modifiedTime]);
-  await loadFiles(files);
+  await loadFiles(files, keepView);
   updateRaceStatus();
   return true;
 }
@@ -2018,11 +2018,43 @@ async function initializeStartup() {
   }
 }
 initializeStartup();
-document.getElementById("driveReload").onclick = () => {
-  if (window.confirm("全体のデータをまとめて更新します。よろしいですか？")) {
-    // 取得画面のファイル名を明示して、相対URLの解決先に依存しないようにする。
-    window.location.assign("./index.html");
+const driveUpdateDialog = document.getElementById("driveUpdateDialog");
+const driveUpdateFrame = document.getElementById("driveUpdateFrame");
+function openDriveUpdate(params = new URLSearchParams()) {
+  params.set("embedded", "1");
+  driveUpdateFrame.src = "./index.html?" + params.toString();
+  driveUpdateDialog.showModal();
+}
+document.getElementById("driveUpdateClose").onclick = () => driveUpdateDialog.close();
+driveUpdateDialog.addEventListener("click", event => {
+  if (event.target === driveUpdateDialog) driveUpdateDialog.close();
+});
+driveUpdateDialog.addEventListener("close", () => { driveUpdateFrame.src = "about:blank"; });
+window.addEventListener("message", async event => {
+  if (event.origin !== location.origin || event.source !== driveUpdateFrame.contentWindow ||
+      event.data?.type !== "drive-update-complete") return;
+  const keys = ["races", "combos", "plans", "odds", "oddsKind", "info", "results", "pays", "review", "fileUpdated"];
+  const previous = Object.fromEntries(keys.map(key => [key, new Map(state[key])]));
+  const previousBand = state.band;
+  const previousCurrent = state.current;
+  for (const key of keys) state[key].clear();
+  state.band = null;
+  state.current = previousCurrent;
+  try {
+    const loaded = await consumeDriveTransfer(true);
+    if (!loaded) throw new Error("取得データを受け取れませんでした。");
+    driveUpdateDialog.close();
+  } catch (error) {
+    for (const key of keys) state[key] = previous[key];
+    state.band = previousBand;
+    state.current = previousCurrent;
+    render(false);
+    updateRaceStatus();
+    document.getElementById("status").textContent = "更新データを反映できませんでした: " + (error?.message || error);
   }
+});
+document.getElementById("driveReload").onclick = () => {
+  if (window.confirm("全体のデータをまとめて更新します。よろしいですか？")) openDriveUpdate();
 };
 document.getElementById("driveReloadRace").onclick = () => {
   const rid = state.current;
@@ -2030,16 +2062,16 @@ document.getElementById("driveReloadRace").onclick = () => {
   const date = rid.slice(0, 8);
   const venue = JYO[rid.slice(8, 10)];
   const raceNo = rid.slice(14, 16);
-  if (!/^\d{8}$/.test(date) || !venue || !/^\d{2}$/.test(raceNo)) {
+  if (!/^\\d{8}$/.test(date) || !venue || !/^\\d{2}$/.test(raceNo)) {
     alert("表示中のレースを特定できませんでした。");
     return;
   }
-  const raceFolder = `${venue}_${raceNo}R`;
+  const raceFolder = venue + "_" + raceNo + "R";
   const params = new URLSearchParams({date, raceFolder});
-  if (window.confirm(`${date.slice(0,4)}/${date.slice(4,6)}/${date.slice(6,8)} ${venue} ${+raceNo}R のデータだけを更新しますか？`)) {
-    window.location.assign("./index.html?" + params.toString());
+  if (window.confirm(date.slice(0,4) + "/" + date.slice(4,6) + "/" + date.slice(6,8) + " " + venue + " " + (+raceNo) + "R のデータだけを更新しますか？")) {
+    openDriveUpdate(params);
   }
-};
+});
 document.getElementById("bandOpen").onclick = () => {
   if (!state.band) return;
   renderBand();

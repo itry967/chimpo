@@ -51,11 +51,11 @@ async function readFile(file, path, modifiedTime) {
   if (!rows.length) return 0;
   const cols = Object.keys(rows[0]);
   const name = (path || file.webkitRelativePath || file.name).replace(/\\/g, "/");
-  const raceFolder = name.match(/(?:^|\/)([^/]+_\d{2}R)\/[^/]+$/);
+  const raceFolder = name.match(/(?:^|\/)([^/]+_\d{2}R)\/[^/]*_(\d{8})_[^/]+$/);
   if (raceFolder) {
     const stamp = modifiedTime || (file.lastModified ? new Date(file.lastModified).toISOString() : "");
     if (stamp) {
-      const folderKey = raceFolder[1];
+      const folderKey = raceFolder[2] + "_" + raceFolder[1];   // 日付も入れる(同じ場・R が別の日にもあるため)
       const prev = state.fileUpdated.get(folderKey);
       if (!prev || new Date(stamp) > new Date(prev)) state.fileUpdated.set(folderKey, stamp);
     }
@@ -220,7 +220,7 @@ function overview(rid) {
   const stage = state.races.get(rid)?.[0]?.["予想の段階"];   // 枠順確定の版か、馬体重を入れた版か
   const course = [i["芝ダ"], i["距離"] ? `${i["距離"]}m` : "", i["回り"] ? `(${i["回り"]})` : ""].join("");
   const venueName = JYO[rid.slice(8, 10)];
-  const folderKey = venueName ? `${venueName}_${rid.slice(14, 16)}R` : "";
+  const folderKey = venueName ? `${rid.slice(0, 8)}_${venueName}_${rid.slice(14, 16)}R` : "";
   const updated = state.fileUpdated.get(folderKey);
   const updatedText = updated ? new Intl.DateTimeFormat("ja-JP", {timeZone:"Asia/Tokyo", year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hourCycle:"h23"}).format(new Date(updated)).replace(/年|月/g, "/").replace("日", "") : "";
   return `<div class="overview"><b>${esc(course)}</b><span class="rname">${esc(i["レース名"] || "")}</span>` +

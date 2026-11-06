@@ -350,7 +350,7 @@ async function listDriveChanges(accessToken,startPageToken) {
 }
 
 async function fetchSelectedCsv(accessToken, accountEmail, date, categories, raceFolder = "") {
-  status("Driveの変更履歴を確認中…",true);
+  status("データ変更履歴を確認中…",true);
   const cache = await loadDriveCache(accountEmail).catch(error => {
     console.warn("Drive CSVキャッシュを読み込めません。選択範囲を再取得します:",error);
     return {files:[],scannedScopes:[],changePageToken:""};

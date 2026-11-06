@@ -351,24 +351,26 @@ function lapLine(opts) {
   return `<svg class="laps" viewBox="0 0 ${width} ${H}" width="${width}" height="${H}" role="img" aria-label="ラップ推移">${g}</svg>`;
 }
 // 「いつも」の線に使う基準(全体・クラス・馬場・馬場&クラス)。選んだものはこのブラウザに覚えておく。
-// 選んでいないとき・選んだものが3レース未満のときは、馬場&クラス → クラス → 馬場 → 全体 の順に10レース以上あるものを使う
+// 選んでいないとき・選んだものが0レースのときは、馬場&クラス → クラス → 馬場 → 全体 の順に10レース以上あるものを使う。
+// 1レースから選べるが、5レース未満は少ないので注意の文を出す
 function lapBase(info) {
   if (!info) return null;
   const n = k => num(info[`ラップの形_${k}_数`]) ?? 0;
   let k = null;
   try { k = localStorage.getItem("keiba-viewer:lap-base"); } catch (e) { k = state.lapBase; }
-  if (!k || n(k) < 3 || !info[`ラップの形_${k}`]) k = ["馬場クラス", "クラス", "馬場", "全体"].find(x => n(x) >= 10) || null;
+  if (!k || n(k) < 1 || !info[`ラップの形_${k}`]) k = ["馬場クラス", "クラス", "馬場", "全体"].find(x => n(x) >= 10) || null;
   if (!k) return null;
   return { k, laps: String(info[`ラップの形_${k}`]).split(",").filter(Boolean).map(Number), n: n(k) };
 }
 function lapBaseTabs(info) {
   if (!info || !info["ラップの形_全体"]) return "";
-  const cur = lapBase(info)?.k;
+  const base = lapBase(info), cur = base?.k;
   return `<div class="tabs lapbase" style="margin:4px 0">` + BASE_KINDS.map(([k, l]) => {
     const label = k === "全体" ? "全体" : l;
     const n = num(info[`ラップの形_${k}_数`]) ?? 0;
-    return `<button data-k="${k}" class="${k === cur ? "on" : ""}" ${n < 3 ? "disabled" : ""} title="${label}: 同じコースの過去3年 ${n} レースの平均ラップ">${label} ${n}</button>`;
-  }).join("") + `<span class="muted" style="font-size:12px;margin-left:6px">灰色の線(いつも)に使う基準</span></div>`;
+    return `<button data-k="${k}" class="${k === cur ? "on" : ""}" ${n < 1 || !info[`ラップの形_${k}`] ? "disabled" : ""} title="${label}: 同じコースの過去3年 ${n} レースの平均ラップ">${label} ${n}</button>`;
+  }).join("") + `<span class="muted" style="font-size:12px;margin-left:6px">灰色の線(いつも)に使う基準</span></div>` +
+    (base && base.n < 5 ? `<div class="muted" style="font-size:12px;margin:0 0 4px">基準が ${base.n} レースしかないので、平均は少ないレースの展開に左右されます。参考程度に見てください。</div>` : "");
 }
 function setupLapBase(root) {
   root.querySelectorAll(".lapbase button").forEach(b => b.onclick = e => {

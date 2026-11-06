@@ -718,29 +718,33 @@ function renderNav() {
   const nav = document.getElementById("nav");
   let html = `<div class="nav-top"><span class="muted">レース一覧</span><button id="navClose" title="レース一覧を開閉">${window.matchMedia("(max-width: 760px)").matches ? (document.body.classList.contains("mobile-nav-collapsed") ? "＋" : "−") : "←"}</button></div>`,
     lastDay = "", lastJyo = "";
-  // 日付 → 競馬場 → 発走順
+  // 日付は新しい順、同じ日付内の競馬場・発走順は従来どおり
   const byDayJyo = {};
   for (const rid of sortedRaces()) {
     const k = rid.slice(0, 8) + rid.slice(8, 10);
     (byDayJyo[k] = byDayJyo[k] || []).push(rid);
   }
-  for (const k of Object.keys(byDayJyo).sort()) {
-    const day = k.slice(0, 8), jyo = k.slice(8);
-    const jyoShut = folded(`jyo:${k}`);
-    if (day !== lastDay) {
-      html += `<a class="day day-link ${state.dayPage === day ? "on" : ""}" data-day="${day}" title="${day}の日別ページを表示">${ymdw(day)}</a>`;
-      lastDay = day;
-    }
-    html += `<div class="jyo fold-h" data-fold="jyo:${k}">${jyoShut ? "▸" : "▾"} ${JYO[jyo] || jyo}</div>`;
-    if (jyoShut) continue;
-    byDayJyo[k].sort((a, b) => a.slice(14).localeCompare(b.slice(14)));
-    for (const rid of byDayJyo[k]) {
+  const days = [...new Set(Object.keys(byDayJyo).map(k => k.slice(0, 8)))].sort((a, b) => b.localeCompare(a));
+  for (const day of days) {
+    const dayKeys = Object.keys(byDayJyo).filter(k => k.slice(0, 8) === day).sort();
+    for (const k of dayKeys) {
+      const jyo = k.slice(8);
+      const jyoShut = folded(`jyo:${k}`);
+      if (day !== lastDay) {
+        html += `<a class="day day-link ${state.dayPage === day ? "on" : ""}" data-day="${day}" title="${day}の日別ページを表示">${ymdw(day)}</a>`;
+        lastDay = day;
+      }
+      html += `<div class="jyo fold-h" data-fold="jyo:${k}">${jyoShut ? "▸" : "▾"} ${JYO[jyo] || jyo}</div>`;
+      if (jyoShut) continue;
+      byDayJyo[k].sort((a, b) => a.slice(14).localeCompare(b.slice(14)));
+      for (const rid of byDayJyo[k]) {
       const rows = state.races.get(rid), r = rows[0], c = confLevel(rows), x = num(r["混戦の段階"]);
       html += `<a data-rid="${rid}" class="${state.current === rid ? "on" : ""}"><span class="r">${+rid.slice(14, 16)}R</span>` +
         `<span class="t">${hhmm(r.hasso_time)}</span><span class="tag">` +
         (c ? `<span class="chip ${c.lv >= 7 ? "up" : c.lv <= 3 ? "gray" : ""}" title="自信 ${c.lv}/10(${CONF_WORDS[c.lv]})">自信${c.lv}</span>` : "") +
         (x ? ` <span class="chip ${x >= 7 ? "warn" : "gray"}" title="混戦 ${x}/10(${MIX_WORDS[x]})">混戦${x}</span>` : "") +
         navQuality(rid, rows) + `</span></a>`;
+      }
     }
   }
   nav.innerHTML = html;

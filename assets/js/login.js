@@ -24,6 +24,7 @@ const clearAllButton = document.getElementById("clearAll");
 let tokenClient = null;
 let accessToken = null;
 let accountEmail = "";
+let accountSelectionRequested = false;
 let dateFolders = [];
 let busy = false;
 const requestParams = new URLSearchParams(location.search);
@@ -47,6 +48,8 @@ function waitForGoogleIdentity() {
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: DRIVE_SCOPE,
+      // 初回だけ同意を求め、2回目以降はアカウント選択を表示しない。
+      prompt: "",
       callback: handleTokenResponse,
       error_callback: error => {
         busy=false;
@@ -65,7 +68,9 @@ loginButton.addEventListener("click", () => {
   busy = true;
   loginButton.disabled = true;
   status("Googleログインを待っています…", true);
-  tokenClient.requestAccessToken({prompt:"select_account"});
+  // 通常の取得では既存のGoogleセッションを利用する。アカウント変更時だけ選択画面を出す。
+  if (accountSelectionRequested) tokenClient.requestAccessToken({prompt:"select_account"});
+  else tokenClient.requestAccessToken();
 });
 
 async function handleTokenResponse(response) {
@@ -101,6 +106,7 @@ async function handleTokenResponse(response) {
       note.textContent = targetDate.slice(0,4) + "/" + targetDate.slice(4,6) + "/" + targetDate.slice(6,8) + " の " + targetRaceFolder + " のデータだけを更新します。";
       downloadButton.textContent = "このRのデータを取得・更新";
     }
+    accountSelectionRequested = true;
     loginButton.textContent = "Googleアカウントを変更・再ログイン";
     status(targetedRaceUpdate ? "表示中のレースだけを更新します。" : "取得する日付とフォルダを選択してください。");
   } catch (error) {

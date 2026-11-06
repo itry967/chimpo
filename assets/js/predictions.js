@@ -217,6 +217,7 @@ const STATUS_TONE = { "結果確定後": "gray", "馬体重発表後": "up", "�
 function overview(rid) {
   const i = state.info.get(rid);
   if (!i) return "";
+  const stage = state.races.get(rid)?.[0]?.["予想の段階"];   // 枠順確定の版か、馬体重を入れた版か
   const course = [i["芝ダ"], i["距離"] ? `${i["距離"]}m` : "", i["回り"] ? `(${i["回り"]})` : ""].join("");
   const venueName = JYO[rid.slice(8, 10)];
   const folderKey = venueName ? `${venueName}_${rid.slice(14, 16)}R` : "";
@@ -225,6 +226,7 @@ function overview(rid) {
   return `<div class="overview"><b>${esc(course)}</b><span class="rname">${esc(i["レース名"] || "")}</span>` +
     (i["グレード"] ? `<span class="chip grade">${esc(i["グレード"])}</span>` : "") +
     (i["馬場状態"] ? `<span class="muted">馬場 ${esc(i["馬場状態"])}</span>` : "") +
+    (stage ? `<span class="chip ${stage === "馬体重あり" ? "up" : "warn"}" title="予想 CSV の段階。枠順確定の版は馬体重・当日の馬場の計測値を入れる前の予想で、馬体重が出ると作り直す">予想: ${esc(stage)}</span>` : "") +
     `<span class="chip ${STATUS_TONE[i["レースの状態"]] ?? ""}" title="DB にあるデータから決めた状態">${esc(i["レースの状態"] || "")}</span>` +
     (updatedText ? `<span class="data-updated">データ更新：${esc(updatedText)}</span>` : "") + `</div>`;
 }
@@ -420,6 +422,40 @@ function lapGap(laps, pred, marks) {
     `<span class="muted">(いちばんずれたのは ${from}〜${marks[k]}m の ${dk > 0 ? "+" : ""}${dk.toFixed(1)}秒。` +
     `平均のずれが 0.2秒以内なら「ほぼ予想どおり」、0.4秒を超えると「大きく」)</span></dd>`;
 }
+// ---------- 枠順確定 → 馬体重の変化 ----------
+// raceday が馬体重の版を作るときに、枠順確定の時点の値を 枠順時_順位・枠順時_勝率・枠順時_自信の段階・枠順時_混戦の段階 の列で持ち越す
+const hasPre = rows => rows.some(r => num(r["枠順時_順位"]) != null);
+function changeView() {
+  // 出走馬の表の変化とレース一覧の印を出すか(このブラウザに覚えておく)
+  try { return localStorage.getItem("keiba-viewer:change") === "1"; } catch (e) { return !!state.change; }
+}
+const honmei = (rows, col) => rows.find(r => num(r[col]) === 1);
+const honmeiChanged = rows => { const a = honmei(rows, "枠順時_順位"), b = honmei(rows, "平均_順位"); return !!(a && b && +a.umaban !== +b.umaban); };
+const rankMove = r => { const a = num(r["枠順時_順位"]), b = num(r["平均_順位"]); return a == null || b == null ? null : a - b; };   // プラスは順位が上がった
+const moveMark = d => d == null || d === 0 ? "" : `<span class="chg ${d > 0 ? "up" : "down"}">${d > 0 ? "↑" : "↓"}${Math.abs(d)}</span>`;
+function winMove(r) {
+  const a = num(r["枠順時_勝率"]), b = num(r["平均_勝率"]);
+  if (a == null || b == null) return "";
+  const d = (b - a) * 100;
+  return Math.abs(d) < 0.05 ? "" : `<span class="chg ${d > 0 ? "up" : "down"}">${d > 0 ? "+" : ""}${d.toFixed(1)}%</span>`;
+}
+function changeCard(rows) {
+  if (!hasPre(rows)) return "";
+  const a = honmei(rows, "枠順時_順位"), b = honmei(rows, "平均_順位");
+  const who = r => r ? `${esc(r.umaban)}番 ${esc(r.horse_name || "")}` : "-";
+  const weight = r => { const w = num(r["馬体重"]), z = num(r["増減"]); return w == null ? "" : `(馬体重 ${w}${z == null ? "" : ` ${z > 0 ? "+" : ""}${z}`})`; };
+  const moved = rows.map(r => [r, rankMove(r)]).filter(([, d]) => d);
+  const top = (list) => list.slice(0, 3).map(([r, d]) => `${moveMark(d)} ${who(r)}${weight(r)}`).join("<br>") || "なし";
+  const stage = (col, now) => { const x = num(rows[0][col]), y = num(rows[0][now]); return x == null || y == null ? "-" : x === y ? `${y}(変わらず)` : `${x} → <b>${y}</b>`; };
+  return `<div class="card"><h3>枠順確定 → 馬体重の変化</h3><dl class="kv">` +
+    `<dt>本命</dt><dd>${a && b && +a.umaban === +b.umaban ? `変わらず(${who(b)})` : `${who(a)} → <b>${who(b)}</b> <span class="chip warn">本命変更</span>`}</dd>` +
+    `<dt>上がった馬</dt><dd>${top(moved.filter(([, d]) => d > 0).sort((x, y) => y[1] - x[1]))}</dd>` +
+    `<dt>下がった馬</dt><dd>${top(moved.filter(([, d]) => d < 0).sort((x, y) => x[1] - y[1]))}</dd>` +
+    `<dt>自信の段階</dt><dd>${stage("枠順時_自信の段階", "自信の段階")}</dd>` +
+    `<dt>混戦の段階</dt><dd>${stage("枠順時_混戦の段階", "混戦の段階")}</dd></dl>` +
+    `<div class="note">変化の理由は馬体重だけではない。馬体重の版には、前日の天候・当日のクッション値と含水率・当日の馬場傾向も入っている。</div></div>`;
+}
+
 function simpleView() {
   // 出走馬の簡易表示(このブラウザに覚えておく)
   try { return localStorage.getItem("keiba-viewer:simple") === "1"; } catch (e) { return !!state.simple; }
@@ -743,6 +779,7 @@ function renderNav() {
         `<span class="t">${hhmm(r.hasso_time)}</span><span class="tag">` +
         (c ? `<span class="chip ${c.lv >= 7 ? "up" : c.lv <= 3 ? "gray" : ""}" title="自信 ${c.lv}/10(${CONF_WORDS[c.lv]})">自信${c.lv}</span>` : "") +
         (x ? ` <span class="chip ${x >= 7 ? "warn" : "gray"}" title="混戦 ${x}/10(${MIX_WORDS[x]})">混戦${x}</span>` : "") +
+        (changeView() && honmeiChanged(rows) ? ` <span class="chip warn" title="枠順確定の時点と馬体重の版で本命が変わった">本命変更</span>` : "") +
         navQuality(rid, rows) + `</span></a>`;
       }
     }
@@ -908,11 +945,14 @@ function renderRace(rid) {
     (info || bias ? "" : `<span class="muted">列がありません</span>`) + `</div>`;
   html += `<div class="grid2">${babaCard}${tenkaiCard}</div>`;   // 左に馬場、右に展開
 
+  html += changeCard(rows);
   // 出走馬
   html += `<div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">` +
     `<h3 style="margin:0">出走馬</h3>` +
     `<label class="muted" style="font-size:13px" title="相対値・絶対値・理由をたたむ。馬の行を1回押すとそれが出て、2回目で詳細が出る">` +
     `<input type="checkbox" id="simpleView" ${simpleView() ? "checked" : ""}> 簡易表示</label>` +
+    (hasPre(rows) ? `<label class="muted" style="font-size:13px" title="予想順位と勝率の横に枠順確定の時点からの変化を出す。レース一覧に、本命が変わったレースの印を出す">` +
+      `<input type="checkbox" id="changeView" ${changeView() ? "checked" : ""}> 枠順からの変化</label>` : "") +
     (r0["オッズの時刻"] ? `<span class="chip gray" title="単複オッズの発表時刻(過去のレースは確定オッズ)">${r0["オッズの時刻"] === "確定" ? "確定オッズ" : `オッズ ${esc(r0["オッズの時刻"])} 時点`}</span>` : "") +
     `</div>` +
     `<div class="legend" style="margin-bottom:6px">` +
@@ -928,8 +968,8 @@ function renderRace(rid) {
     const split = spread != null && spread >= 4;
     const w = num(r["馬体重"]), z = num(r["増減"]);
     const why = catChips(r) + reasonChips(r);
-    html += `<tr class="horse${why ? " has-why" : ""}" data-key="${key}"><td class="rank">${esc(r["平均_順位"])}</td><td>${umaBadge(r.umaban, nUma)}</td>` +
-      `<td class="name">${esc(r.horse_name)}${cdot(r, "予想")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}</td><td>${placeBar(top2(r), top3(r), maxTop3)}</td>` +
+    html += `<tr class="horse${why ? " has-why" : ""}" data-key="${key}"><td class="rank">${esc(r["平均_順位"])}${changeView() ? moveMark(rankMove(r)) : ""}</td><td>${umaBadge(r.umaban, nUma)}</td>` +
+      `<td class="name">${esc(r.horse_name)}${cdot(r, "予想")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}${changeView() ? winMove(r) : ""}</td><td>${placeBar(top2(r), top3(r), maxTop3)}</td>` +
       `<td class="n">${fix(num(r["妥当オッズ_単勝"]))}${gapMark(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]), "単勝")} / ` +
       `${fix(num(r["妥当オッズ_複勝"]))}${gapMark(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]), "複勝(下限)")}</td>` +
       `<td class="n">${odds != null ? `${fix(odds)}<span class="dim ninki">${ninki.get(String(r.umaban))}人気</span>` : `<span class="dim">—</span>`}</td>` +
@@ -963,6 +1003,11 @@ function renderRace(rid) {
       else if (!state.open.has(k)) state.open.add(k);
       else { state.whyOpen.delete(k); state.open.delete(k); }
     } else state.open.has(k) ? state.open.delete(k) : state.open.add(k);   // 通常: 1回で詳細を開く・たたむ
+    renderRace(rid);
+  });
+  document.getElementById("changeView")?.addEventListener("change", e => {
+    try { localStorage.setItem("keiba-viewer:change", e.target.checked ? "1" : "0"); } catch (err) { state.change = e.target.checked; }
+    renderNav();
     renderRace(rid);
   });
   document.getElementById("simpleView")?.addEventListener("change", e => {

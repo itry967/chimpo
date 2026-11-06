@@ -114,6 +114,7 @@ body.has-result:not(.result-closed) #app { grid-template-columns: 250px minmax(v
 body.has-result.nav-closed:not(.result-closed) #app { grid-template-columns: 0 minmax(var(--main-min), 1fr) 420px; }
 body.has-result:not(.result-closed) #result { display: block; border-left: 1px solid var(--line); background: var(--panel);
   overflow-y: auto; max-height: calc(100vh - 50px); position: sticky; top: 50px; padding: 8px 10px; font-size: 12px; }
+.chg { font-size: 11px; margin-left: 3px; font-weight: normal; white-space: nowrap; } .chg.up { color: var(--up); } .chg.down { color: var(--down); }
 #resOpen { display: none; }
 body.has-result #resOpen { display: inline-block; }
 .res-top { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }

@@ -2092,10 +2092,82 @@ async function initializeStartup() {
     await restore();
   }
 }
-initializeStartup();
+initializeStartup().finally(checkDriveUpdate);
 const driveUpdateDialog = document.getElementById("driveUpdateDialog");
 const driveUpdateFrame = document.getElementById("driveUpdateFrame");
+const driveAskDialog = document.getElementById("driveAskDialog");
+const driveDoneDialog = document.getElementById("driveDoneDialog");
+const driveToastEl = document.getElementById("driveToast");
+let driveBgFrame = null;     // 画面に出さない確認・取得用のフレーム
+let driveAskMode = false;    // ポップアップの「はい」から取得している
+let driveAsked = null;       // ポップアップで聞いている更新
+let driveToastTimer = null;
+
+function showDriveToast(text, {button = "", onButton = null, hideAfter = 0} = {}) {
+  clearTimeout(driveToastTimer);
+  driveToastEl.replaceChildren(document.createTextNode(text));
+  if (button) {
+    const action = document.createElement("button");
+    action.textContent = button;
+    action.onclick = onButton;
+    driveToastEl.append(action);
+  }
+  driveToastEl.hidden = false;
+  if (hideAfter) driveToastTimer = setTimeout(() => { driveToastEl.hidden = true; }, hideAfter);
+}
+function stopBackgroundFrame() {
+  driveBgFrame?.remove();
+  driveBgFrame = null;
+}
+function startBackgroundFrame(params) {
+  stopBackgroundFrame();
+  params.set("embedded", "1");
+  driveBgFrame = document.createElement("iframe");
+  driveBgFrame.hidden = true;
+  driveBgFrame.title = "データの更新の確認";
+  driveBgFrame.src = "./index.html?" + params.toString();
+  document.body.append(driveBgFrame);
+}
+// リロードのたびに、裏で更新の有無を確かめる
+function checkDriveUpdate() {
+  startBackgroundFrame(new URLSearchParams({check:"1"}));
+}
+function handleDriveCheck(check) {
+  if (check.result === "login") {
+    if (state.races.size) showDriveToast("更新の確認には再ログインが必要です", {button:"再ログイン", onButton:() => openDriveUpdate()});
+    return;
+  }
+  if (check.result !== "update") return;
+  const params = new URLSearchParams({auto:"1", date:check.date, categories:check.categories.join(",")});
+  if (check.raceDay) {
+    showDriveToast("データを自動更新中…");
+    startBackgroundFrame(params);
+    return;
+  }
+  driveAsked = {check, params};
+  driveAskDialog.showModal();
+}
+document.getElementById("driveAskYes").onclick = () => {
+  const asked = driveAsked;
+  driveAskDialog.close();
+  if (!asked) return;
+  openDriveUpdate(asked.params);
+  driveAskMode = true;
+};
+document.getElementById("driveAskNo").onclick = () => driveAskDialog.close();
+driveAskDialog.addEventListener("close", () => {
+  // 「いいえ」: 次に新しい更新が来るまで聞かない
+  if (driveAsked && !driveAskMode && !driveUpdateDialog.open) {
+    try { localStorage.setItem(driveAsked.check.dismissKey, driveAsked.check.dismissToken); } catch (e) {}
+  }
+  driveAsked = null;
+});
+document.getElementById("driveDoneOk").onclick = () => driveDoneDialog.close();
+driveDoneDialog.addEventListener("close", () => applyDriveUpdate());
+
 function openDriveUpdate(params = new URLSearchParams()) {
+  stopBackgroundFrame();
+  driveToastEl.hidden = true;
   params.set("embedded", "1");
   driveUpdateFrame.src = "./index.html?" + params.toString();
   driveUpdateDialog.showModal();
@@ -2104,10 +2176,34 @@ document.getElementById("driveUpdateClose").onclick = () => driveUpdateDialog.cl
 driveUpdateDialog.addEventListener("click", event => {
   if (event.target === driveUpdateDialog) driveUpdateDialog.close();
 });
-driveUpdateDialog.addEventListener("close", () => { driveUpdateFrame.src = "about:blank"; });
+driveUpdateDialog.addEventListener("close", () => { driveAskMode = false; driveUpdateFrame.src = "about:blank"; });
 window.addEventListener("message", async event => {
-  if (event.origin !== location.origin || event.source !== driveUpdateFrame.contentWindow ||
-      event.data?.type !== "drive-update-complete") return;
+  if (event.origin !== location.origin) return;
+  const fromDialog = event.source === driveUpdateFrame.contentWindow;
+  const fromBackground = !!driveBgFrame && event.source === driveBgFrame.contentWindow;
+  if (!fromDialog && !fromBackground) return;
+  const type = event.data?.type;
+  if (type === "drive-check-result" && fromBackground) {
+    stopBackgroundFrame();
+    handleDriveCheck(event.data);
+  } else if (type === "drive-update-failed" && fromBackground) {
+    stopBackgroundFrame();
+    showDriveToast("自動更新できませんでした。前のデータを表示しています", {hideAfter:8000});
+  } else if (type === "drive-update-complete") {
+    if (fromDialog && driveAskMode) {
+      driveUpdateDialog.close();
+      driveDoneDialog.showModal();      // OK を押してから画面を描き直す
+      return;
+    }
+    if (fromBackground) stopBackgroundFrame();
+    const applied = await applyDriveUpdate();
+    if (fromBackground && applied) {
+      const now = new Date();
+      showDriveToast(`${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")} に更新しました`, {hideAfter:5000});
+    }
+  }
+});
+async function applyDriveUpdate() {
   const keys = ["races", "combos", "plans", "odds", "oddsKind", "info", "results", "pays", "review", "fileUpdated"];
   const previous = Object.fromEntries(keys.map(key => [key, new Map(state[key])]));
   const previousBand = state.band;
@@ -2119,6 +2215,7 @@ window.addEventListener("message", async event => {
     const loaded = await consumeDriveTransfer(true);
     if (!loaded) throw new Error("取得データを受け取れませんでした。");
     driveUpdateDialog.close();
+    return true;
   } catch (error) {
     for (const key of keys) state[key] = previous[key];
     state.band = previousBand;
@@ -2126,8 +2223,9 @@ window.addEventListener("message", async event => {
     render(false);
     updateRaceStatus();
     document.getElementById("status").textContent = "更新データを反映できませんでした: " + (error?.message || error);
+    return false;
   }
-});
+}
 document.getElementById("driveReload").onclick = () => {
   if (window.confirm("全体のデータをまとめて更新します。よろしいですか？")) openDriveUpdate();
 };

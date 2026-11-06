@@ -47,6 +47,15 @@
 <div id="drop" hidden>
   <p id="restore" hidden style="margin:16px 0 0"><button class="btn"></button></p>
 </div>
+<dialog id="driveAskDialog" class="drive-confirm" aria-labelledby="driveAskTitle">
+  <p id="driveAskTitle">データの更新があります。更新しますか？</p>
+  <div class="drive-confirm-actions"><button id="driveAskYes">はい</button><button id="driveAskNo">いいえ</button></div>
+</dialog>
+<dialog id="driveDoneDialog" class="drive-confirm" aria-labelledby="driveDoneTitle">
+  <p id="driveDoneTitle">更新が終わりました</p>
+  <div class="drive-confirm-actions"><button id="driveDoneOk">OK</button></div>
+</dialog>
+<div id="driveToast" role="status" aria-live="polite" hidden></div>
 <dialog id="guide" aria-labelledby="guideTitle">
   <div class="gh"><h2 id="guideTitle">指標の説明(総合・能力・適性・調子・人・展開)</h2><button id="guideClose">閉じる</button></div>
   <div class="gb" id="guideBody"></div>

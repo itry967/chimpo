@@ -111,7 +111,7 @@ async function handleTokenResponse(response) {
     status(targetedRaceUpdate ? "表示中のレースだけを更新します。" : "取得する日付とフォルダを選択してください。");
   } catch (error) {
     console.error(error);
-    status("Driveのフォルダ一覧を取得できませんでした。\n" + (error?.message || error) + "\n\n共有設定を確認してください。");
+    status("データ一覧情報を取得できませんでした。\n" + (error?.message || error) + "\n\n共有設定を確認してください。");
   } finally {
     busy=false;
     loginButton.disabled=false;
@@ -204,7 +204,7 @@ async function listChildren(parentId, accessToken) {
     if(!response.ok) {
       let detail="";
       try{detail=(await response.json()).error?.message||"";}catch(_){}
-      throw new Error("Driveのフォルダ一覧を取得できません (" + response.status + ") " + detail);
+      throw new Error("データ一覧情報を取得できません (" + response.status + ") " + detail);
     }
     const data=await response.json();
     all.push(...(data.files||[]));
@@ -313,10 +313,10 @@ async function getDriveStartPageToken(accessToken) {
   if (!response.ok) {
     let detail = "";
     try { detail = (await response.json()).error?.message || ""; } catch (_) {}
-    throw new Error("Driveの変更履歴の起点を取得できません (" + response.status + ") " + detail);
+    throw new Error("変更履歴の起点を取得できません (" + response.status + ") " + detail);
   }
   const data = await response.json();
-  if (!data.startPageToken) throw new Error("Driveの変更履歴の起点が返されませんでした。");
+  if (!data.startPageToken) throw new Error("変更履歴の起点が返されませんでした。");
   return data.startPageToken;
 }
 
@@ -337,7 +337,7 @@ async function listDriveChanges(accessToken,startPageToken) {
     if (!response.ok) {
       let detail = "";
       try { detail = (await response.json()).error?.message || ""; } catch (_) {}
-      const error = new Error("Driveの変更履歴を取得できません (" + response.status + ") " + detail);
+      const error = new Error("変更履歴を取得できません (" + response.status + ") " + detail);
       error.status = response.status;
       throw error;
     }

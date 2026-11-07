@@ -203,8 +203,9 @@ async function clearDriveTransferCache() {
 
 
 // ---------- 画面 ----------
+const PRE = "枠順時_";     // 枠順確定の時点の値を持ち越した列の頭。モデルの列として数えない
 function models(rows) {
-  return Object.keys(rows[0]).filter(c => c.endsWith("_勝率") && !c.startsWith("平均")).map(c => c.slice(0, -3));
+  return Object.keys(rows[0]).filter(c => c.endsWith("_勝率") && !c.startsWith("平均") && !c.startsWith(PRE)).map(c => c.slice(0, -3));
 }
 function sortedRaces() {
   return [...state.races.keys()].sort((a, b) => {
@@ -427,6 +428,39 @@ function lapGap(laps, pred, marks) {
 // ---------- 枠順確定 → 馬体重の変化 ----------
 // raceday が馬体重の版を作るときに、枠順確定の時点の値を 枠順時_順位・枠順時_勝率・枠順時_自信の段階・枠順時_混戦の段階 の列で持ち越す
 const hasPre = rows => rows.some(r => num(r["枠順時_順位"]) != null);
+const preCol = c => c === "平均_順位" ? "枠順時_順位" : c === "平均_勝率" ? "枠順時_勝率" : PRE + c;
+const curCol = c => c === "枠順時_順位" ? "平均_順位" : c === "枠順時_勝率" ? "平均_勝率" : c.slice(PRE.length);
+const decimals = v => (String(v).split(".")[1] || "").length;
+function valueMove(b, a, digits = 1, lower = false) {
+  if (a == null || b == null) return "";
+  const d = b - a;
+  if (Math.abs(d) < 0.5 * 10 ** -digits) return "";
+  return `<span class="chg ${(d > 0) !== lower ? "up" : "down"}">${d > 0 ? "+" : ""}${d.toFixed(digits)}</span>`;
+}
+// 数字の変化の印。lower は小さいほど良い列(オッズ・着順・タイム)。枠順時_ の列が無ければ何も出さない
+function colMove(r, col, digits = 1, lower = false) {
+  return changeView() ? valueMove(num(r[col]), num(r[preCol(col)]), digits, lower) : "";
+}
+// 馬の詳細の中の、枠順確定の時点と値が違う項目の一覧
+function preDiffList(r) {
+  const rows = Object.keys(r).filter(c => c.startsWith(PRE) && curCol(c) in r && r[c] !== "" && r[curCol(c)] !== "" && r[c] !== r[curCol(c)]).map(c => {
+    const a = r[c], b = r[curCol(c)], x = num(a), y = num(b);
+    if (x != null && x === y) return "";
+    const d = x != null && y != null ? Math.max(decimals(a), decimals(b)) : null;
+    return `<tr><td>${esc(curCol(c))}</td><td class="n">${esc(a)}</td><td class="n">${esc(b)}</td><td class="n">${d == null ? "" : `${y > x ? "+" : ""}${(y - x).toFixed(d)}`}</td></tr>`;
+  }).filter(Boolean);
+  return rows.length ? `<details style="margin-top:8px"><summary>枠順確定からの変化(${rows.length} 項目)</summary><div class="scroll"><table>` +
+    `<tr><th>項目</th><th class="n">枠順確定</th><th class="n">今</th><th class="n">差</th></tr>${rows.join("")}</table></div></details>` : "";
+}
+// レースで同じ値の列のうち、枠順確定の時点と変わったもの(自信・混戦の段階は別に出す)
+function preRaceRows(rows) {
+  const first = rows[0];
+  const same = c => rows.every(r => r[c] === first[c]);
+  return Object.keys(first).filter(c => c.startsWith(PRE) && curCol(c) in first && !["枠順時_自信の段階", "枠順時_混戦の段階"].includes(c) &&
+      same(c) && same(curCol(c)) && first[c] !== "" && first[curCol(c)] !== "" && first[c] !== first[curCol(c)] &&
+      !(num(first[c]) != null && num(first[c]) === num(first[curCol(c)])))
+    .map(c => `<dt>${esc(curCol(c))}</dt><dd>${esc(first[c])} → <b>${esc(first[curCol(c)])}</b></dd>`).join("");
+}
 function changeView() {
   // 出走馬の表の変化とレース一覧の印を出すか(このブラウザに覚えておく)
   try { return localStorage.getItem("keiba-viewer:change") === "1"; } catch (e) { return !!state.change; }
@@ -454,7 +488,7 @@ function changeCard(rows) {
     `<dt>順位が上がった馬</dt><dd>${top(moved.filter(([, d]) => d > 0).sort((x, y) => y[1] - x[1]))}</dd>` +
     `<dt>順位が下がった馬</dt><dd>${top(moved.filter(([, d]) => d < 0).sort((x, y) => x[1] - y[1]))}</dd>` +
     `<dt>自信の段階</dt><dd>${stage("枠順時_自信の段階", "自信の段階")}</dd>` +
-    `<dt>混戦の段階</dt><dd>${stage("枠順時_混戦の段階", "混戦の段階")}</dd></dl>` +
+    `<dt>混戦の段階</dt><dd>${stage("枠順時_混戦の段階", "混戦の段階")}</dd>${preRaceRows(rows)}</dl>` +
     `<div class="note">予想順位を、枠順確定の時点と馬体重を入れた今で比べたもの(↑2 は2つ上がった、↓1 は1つ下がった)。かっこ内は馬体重と前走からの増減。変化の理由は馬体重だけではない。馬体重の版には、前日の天候・当日のクッション値と含水率・当日の馬場傾向も入っている。</div></div>`;
 }
 
@@ -971,14 +1005,14 @@ function renderRace(rid) {
     const w = num(r["馬体重"]), z = num(r["増減"]);
     const why = catChips(r) + reasonChips(r);
     html += `<tr class="horse${why ? " has-why" : ""}" data-key="${key}"><td class="rank">${esc(r["平均_順位"])}${changeView() ? moveMark(rankMove(r)) : ""}</td><td>${umaBadge(r.umaban, nUma)}</td>` +
-      `<td class="name">${esc(r.horse_name)}${cdot(r, "予想")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}${changeView() ? winMove(r) : ""}</td><td>${placeBar(top2(r), top3(r), maxTop3)}</td>` +
-      `<td class="n">${fix(num(r["妥当オッズ_単勝"]))}${gapMark(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]), "単勝")} / ` +
-      `${fix(num(r["妥当オッズ_複勝"]))}${gapMark(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]), "複勝(下限)")}</td>` +
+      `<td class="name">${esc(r.horse_name)}${cdot(r, "予想")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}${changeView() ? winMove(r) : ""}</td><td>${placeBar(top2(r), top3(r), maxTop3)}${preTops(r, ms)}</td>` +
+      `<td class="n">${fix(num(r["妥当オッズ_単勝"]))}${gapMark(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]), "単勝")}${colMove(r, "妥当オッズ_単勝", 1, true)} / ` +
+      `${fix(num(r["妥当オッズ_複勝"]))}${gapMark(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]), "複勝(下限)")}${colMove(r, "妥当オッズ_複勝", 1, true)}</td>` +
       `<td class="n">${odds != null ? `${fix(odds)}<span class="dim ninki">${ninki.get(String(r.umaban))}人気</span>` : `<span class="dim">—</span>`}</td>` +
-      `<td class="n ev" data-uma="${esc(r.umaban)}">${evCell(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]))}</td>` +
-      `<td class="n">${placeOdds(r)}</td><td class="n">${evCell(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]))}</td><td>${finBar(r)}</td>` +
-      `<td class="n">${fix(num(r["予想着順"]))}${cdot(r, "予想")}</td><td>${esc(styleOf(r))}${cdot(r, "脚質")}</td>` +
-      `<td class="n">${passing(r)}${cdot(r, "通過予想")}</td><td class="n">${lastThree(r)}${cdot(r, "上がり予想")}</td>` +
+      `<td class="n ev" data-uma="${esc(r.umaban)}">${evCell(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]))}${evMove(getOdds(rid, r.umaban, r), r, "妥当オッズ_単勝")}</td>` +
+      `<td class="n">${placeOdds(r)}</td><td class="n">${evCell(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]))}${evMove(num(r["複勝オッズ_下限"]), r, "妥当オッズ_複勝")}</td><td>${finBar(r)}</td>` +
+      `<td class="n">${fix(num(r["予想着順"]))}${colMove(r, "予想着順", 1, true)}${cdot(r, "予想")}</td><td>${esc(styleOf(r))}${cdot(r, "脚質")}</td>` +
+      `<td class="n">${passing(r)}${colMove(r, "前半の番手", 0, true)}${colMove(r, "4角の番手", 0, true)}${cdot(r, "通過予想")}</td><td class="n">${lastThree(r)}${colMove(r, "上がり3Fの予想", 1, true)}${cdot(r, "上がり予想")}</td>` +
       `<td class="n hide-sm">${w == null ? "" : w + (z == null ? "" : `<span class="dim">(${z > 0 ? "+" : ""}${z})</span>`)}</td>` +
       `<td class="hide-sm">${split ? `<span class="chip warn" title="モデルの順位の幅 ${spread}">割れ</span>` : ""}</td></tr>`;
     if (why && (!simpleView() || state.whyOpen?.has(key))) html += `<tr class="why"><td></td><td colspan="16">${why}</td></tr>`;
@@ -1105,7 +1139,7 @@ function horseCols(rid) {
     ["馬体重", r => num(r["馬体重"]), -1, "n hide-sm", ""],
   ];
 }
-const MODELS_OF = r => Object.keys(r).filter(c => c.endsWith("_3着内") && !c.startsWith("平均")).map(c => c.slice(0, -4));
+const MODELS_OF = r => Object.keys(r).filter(c => c.endsWith("_3着内") && !c.startsWith("平均") && !c.startsWith(PRE)).map(c => c.slice(0, -4));
 function horseHead(rid) {
   const cur = state.horseSort || { i: 0, dir: 1 };
   return horseCols(rid).map(([label, , , cls, tip], i) =>
@@ -1159,6 +1193,22 @@ function ninkiOf(rid, rows) {
   // 単勝オッズの低い順の人気(同じオッズは同じ人気)。馬番 → 人気
   const xs = rows.map(r => [String(r.umaban), getOdds(rid, r.umaban, r)]).filter(([, o]) => o != null);
   return new Map(xs.map(([u, o]) => [u, 1 + xs.filter(([, p]) => p < o).length]));
+}
+// 期待値の変化: 今のオッズのまま、妥当オッズだけ枠順確定の時点の値にしたときとの差
+function evMove(odds, r, col) {
+  const a = num(r[preCol(col)]), b = num(r[col]);
+  return !changeView() || odds == null || !a || !b ? "" : valueMove(odds / b, odds / a, 2);
+}
+// 2着内・3着内(モデルの平均)の変化
+function preTops(r, ms) {
+  if (!changeView()) return "";
+  const mean = cols => { const v = cols.map(c => num(r[c])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const one = name => {
+    const a = mean(ms.map(m => `${PRE}${m}_${name}`)), b = mean(ms.map(m => `${m}_${name}`));
+    if (a == null || b == null || Math.abs(b - a) < 0.0005) return "";
+    return `<span class="chg ${b > a ? "up" : "down"}">${name} ${b > a ? "+" : ""}${((b - a) * 100).toFixed(1)}%</span>`;
+  };
+  return one("2着内") + one("3着内");
 }
 function evCell(odds, fair) {
   if (odds == null || !fair) return "";
@@ -1352,7 +1402,7 @@ function detail(r, ms) {
   }
   if (r["根拠_上げた"]) t += `<dt>根拠(上げた)</dt><dd>${reasonText(r["根拠_上げた"])}${cdot(r, "予想")}</dd>`;
   if (r["根拠_下げた"]) t += `<dt>根拠(下げた)</dt><dd>${reasonText(r["根拠_下げた"])}${cdot(r, "予想")}</dd>`;
-  return t + `</dl><div class="note">根拠のかっこ内は、その項目でこの馬の点数が同じレースの平均より上がった・下がった分(説明用の LightGBM の点数)。` +
+  return t + `</dl>${changeView() ? preDiffList(r) : ""}<div class="note">根拠のかっこ内は、その項目でこの馬の点数が同じレースの平均より上がった・下がった分(説明用の LightGBM の点数)。` +
     `点数の差 d は、勝つ見込みを約 e<sup>d</sup> 倍にする(+0.5 で約1.6倍、+0.2 で約1.2倍、−0.1 で約0.9倍)。</div></div>`;
 }
 

@@ -301,6 +301,9 @@ header h1 { flex: 0 0 auto; }
 #bandDialog .gb { padding: 10px 16px 16px; overflow: auto; max-height: calc(100vh - 110px); }
 #bandDialog .card { margin-bottom: 10px; }
 #bandDialog .scroll { max-width: 100%; overflow-x: auto; }
+/* モデルの得意・苦手(回収率のモーダルの下) */
+.strength-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-top: 8px; }
+.strength-col h3 { margin: 0 0 4px; font-size: 13px; }
 
 
 /* 出走馬の2着内・3着内を重ねて表示 */

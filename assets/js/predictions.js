@@ -17,7 +17,7 @@ const PACE = [  // 展開の数字: [表示名, 値の列, 目安の列, 値の�
    v => `前に行く3頭のテン: コースの基準より ${Math.abs(v).toFixed(1)}% ${v >= 0 ? "速い" : "遅い"}`]];
 const state = { races: new Map(), combos: new Map(), plans: new Map(), odds: new Map(), oddsKind: new Map(), calc: {},
   info: new Map(), results: new Map(), pays: new Map(), review: new Map(), fileUpdated: new Map(),
-  band: null, current: null, dayPage: null, open: new Set() };
+  band: null, strength: null, current: null, dayPage: null, open: new Set() };
 
 // ---------- CSV ----------
 function parseCSV(text) {
@@ -100,6 +100,10 @@ async function readFile(file, path, modifiedTime) {
   // 自信の区分ごとの回収率.csv。昔の形の「自信_モデル別.csv」(レースごとの行で race_id があり、回収率の列が無い)は読まない
   if (cols.includes("自信の区分") && cols.includes("モデル") && !cols.includes("race_id") && cols.some(c => c.endsWith("_回収率"))) {
     state.band = rows; return 1;
+  }
+  // モデルの得意・苦手.csv(検証期間の予想を条件で分けた表。回収率のモーダルに出す)
+  if (cols.includes("種類") && cols.includes("他の4本との差") && cols.includes("モデル")) {
+    state.strength = rows; return 1;
   }
   return 0;
 }
@@ -462,8 +466,52 @@ function preRaceRows(rows) {
     .map(c => `<dt>${esc(curCol(c))}</dt><dd>${esc(first[c])} → <b>${esc(first[curCol(c)])}</b></dd>`).join("");
 }
 function changeView() {
-  // 出走馬の表の変化とレース一覧の印を出すか(このブラウザに覚えておく)
+  // 出走馬の表の変化とレース一覧の印を出すか(このブラウザに覚えておく)。得意モデルだけの表示のあいだは出さない
+  if (state.favActive) return false;
   try { return localStorage.getItem("keiba-viewer:change") === "1"; } catch (e) { return !!state.change; }
+}
+function favView() {
+  // 得意モデルのみの予想を表示するか(このブラウザに覚えておく)
+  try { return localStorage.getItem("keiba-viewer:fav") === "1"; } catch (e) { return !!state.fav; }
+}
+// そのレースが得意条件に当たるモデル(予想 CSV の「得意モデル」。当日予想のモデルにあるものだけ)
+function favModels(rows) {
+  const ms = new Set(models(rows));
+  return String(rows[0]?.["得意モデル"] || "").split("・").filter(m => ms.has(m));
+}
+// 得意モデルだけの平均で、予想の項目(勝率・順位・2着内・3着内・妥当オッズ・順位の幅・1〜5着の確率・予想着順)を出し直した行。
+// 作り方は予想 CSV と同じ(勝率はモデルの平均をレースの中で合計1にし、1〜5着は勝率の比で1着から順に決める抽選)
+function favRows(rows, fav) {
+  const mean = (r, suf) => { const v = fav.map(m => num(r[`${m}${suf}`])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
+  const raw = rows.map(r => mean(r, "_勝率") || 0);
+  const total = raw.reduce((a, b) => a + b, 0) || 1;
+  const p = raw.map(v => v / total);
+  const order = p.map((v, i) => i).sort((a, b) => p[b] - p[a]);
+  const rank = new Array(p.length);
+  order.forEach((i, k) => { rank[i] = k + 1; });
+  const fin = finishDist(p);
+  return rows.map((r, i) => {
+    const ranks = fav.map(m => num(r[`${m}_順位`])).filter(x => x != null);
+    const top3 = mean(r, "_3着内");
+    const o = { ...r, "平均_勝率": p[i], "平均_順位": rank[i], "妥当オッズ_単勝": p[i] > 0 ? Math.round(10 / p[i]) / 10 : null,
+      "妥当オッズ_複勝": top3 ? Math.round(10 / top3) / 10 : null, "順位の幅": ranks.length ? Math.max(...ranks) - Math.min(...ranks) : null,
+      "予想着順": fin.mean[i] };
+    for (let k = 1; k <= 5; k++) o[`${k}着の確率`] = fin.pos[k - 1][i];
+    return o;
+  });
+}
+// 勝率 p から、1〜5着の確率と平均の着順(勝率の比で1着から順に決める抽選を n 回。乱数は毎回同じ)
+function finishDist(p, n = 4000) {
+  let seed = 12345;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return (seed + 0.5) / 2147483648; };
+  const pos = [0, 1, 2, 3, 4].map(() => new Array(p.length).fill(0)), sum = new Array(p.length).fill(0);
+  const logp = p.map(v => Math.log(Math.max(v, 1e-12)));
+  for (let t = 0; t < n; t++) {
+    const keys = logp.map(v => v - Math.log(-Math.log(rnd())));      // Gumbel を足して大きい順 = 勝率の比で順に決める
+    const order = keys.map((v, i) => i).sort((a, b) => keys[b] - keys[a]);
+    order.forEach((i, k) => { sum[i] += k + 1; if (k < 5) pos[k][i]++; });
+  }
+  return { pos: pos.map(a => a.map(v => v / n)), mean: sum.map(v => v / n) };
 }
 const honmei = (rows, col) => rows.find(r => num(r[col]) === 1);
 const honmeiChanged = rows => { const a = honmei(rows, "枠順時_順位"), b = honmei(rows, "平均_順位"); return !!(a && b && +a.umaban !== +b.umaban); };
@@ -920,8 +968,17 @@ function reasonChips(r) {
 }
 
 function renderRace(rid) {
-  const rows = [...state.races.get(rid)].sort((a, b) => num(a["平均_順位"]) - num(b["平均_順位"]));
-  const ms = models(rows), r0 = rows[0];
+  const base = [...state.races.get(rid)];
+  const fav = favModels(base);
+  state.favActive = fav.length > 0 && favView();
+  const rows = (state.favActive ? favRows(base, fav) : base).sort((a, b) => num(a["平均_順位"]) - num(b["平均_順位"]));
+  const ms = state.favActive ? fav : models(rows), r0 = rows[0];
+  // 得意モデルのみの予想を表示するチェック(展開予想と出走馬の欄の両方に出す。どちらで切り替えても同じ)
+  const favBox = !fav.length ? "" :
+    `<label class="muted fav-box" style="font-size:13px" title="このレースの条件が得意なモデル: ${esc(r0["得意な条件"] || fav.join("・"))}">` +
+    `<input type="checkbox" class="favView" ${state.favActive ? "checked" : ""}> 得意モデルのみの予想を表示</label>`;
+  const favNote = state.favActive ? `<div class="note fav-note">得意モデル(${esc(fav.join("・"))})だけの平均で出しています` +
+    `(${esc(r0["得意な条件"] || "")})。推奨買い目・組み合わせ・自信の段階・混戦の段階・確度は5モデルの平均のまま。</div>` : "";
   const maxWin = Math.max(...rows.map(r => num(r["平均_勝率"]) || 0));
   const top3 = r => { const v = ms.map(m => num(r[`${m}_3着内`])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
   const top2 = r => { const v = ms.map(m => num(r[`${m}_2着内`])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
@@ -970,7 +1027,8 @@ function renderRace(rid) {
       (word ? ` <span class="chip ${biasTone(word)}">${esc(word)}</span>` : "") + confChip(src, label) +
       (why || cw ? `<div class="note" style="margin:0">${esc(why)}${why && cw ? "。" : ""}${cw ? "確度の根拠: " + esc(cw) : ""}</div>` : "") + `</div></div>`;
   }).join("");
-  const tenkaiCard = `<div class="card"><h3>展開予想</h3>${pace || `<span class="muted">列がありません</span>`}` +
+  const tenkaiCard = `<div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">展開予想</h3>${favBox}</div>${favNote}` +
+    `${pace || `<span class="muted">列がありません</span>`}` +
     (pace ? `<div class="note">目安(札)は検証期間(2019〜2023年)の同じ芝ダのレースと比べたもの。ペース予想の数字はコースの基準タイムとの差で、ふつうのレースでも前に行く馬は基準より少し速い(平均は下の行のとおり)ので、札はそれと比べた速さ。逃げ・先行馬が多くペースが速いと差しが届きやすく、少なく遅いと前が残りやすい。</div>` : "") +
     `</div>`;
   const babaCard = `<div class="card"><h3>馬場傾向予想<button class="help" data-help="baba" title="馬場傾向予想の各項目の説明(別ウインドウ)">？</button></h3>` +
@@ -984,7 +1042,7 @@ function renderRace(rid) {
   html += changeCard(rows);
   // 出走馬
   html += `<div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">` +
-    `<h3 style="margin:0">出走馬</h3>` +
+    `<h3 style="margin:0">出走馬</h3>` + favBox +
     `<label class="muted" style="font-size:13px" title="相対値・絶対値・理由をたたむ。馬の行を1回押すとそれが出て、2回目で詳細が出る">` +
     `<input type="checkbox" id="simpleView" ${simpleView() ? "checked" : ""}> 簡易表示</label>` +
     (hasPre(rows) ? `<label class="muted" style="font-size:13px" title="予想順位と勝率の横に枠順確定の時点からの変化を出す。レース一覧に、本命が変わったレースの印を出す">` +
@@ -1018,13 +1076,14 @@ function renderRace(rid) {
     if (why && (!simpleView() || state.whyOpen?.has(key))) html += `<tr class="why"><td></td><td colspan="16">${why}</td></tr>`;
     if (state.open.has(key)) html += `<tr class="detail"><td colspan="17">${detail(r, ms)}</td></tr>`;
   }
-  html += `</table></div><div class="note">勝率・3着内は5モデルの平均。妥当オッズの横の印は実際のオッズとの差(▲▲ 1.5倍以上・▲ 1.2倍以上高い、▼ 0.8倍未満・▼▼ 0.5倍未満に低い。上にのせると比)。期待値 = オッズ ÷ 妥当オッズ(1 を超えると予想の上では得。緑は 1.0 以上、太字は 1.2 以上。複勝は下限のオッズで計算)。単勝オッズの横は人気(オッズの低い順)。「割れ」はモデルの順位の幅が4以上。馬名・予想着順・脚質・通過予想・上がり予想の横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。色は緑 = 高・灰 = 中・橙 = 低。上にのせると0〜100の点と、検証期間の同じ条件での平均のずれ)。馬名の横は勝率・3着内・期待値を含む予想全体の確度。通過予想は前半(最初のコーナー)→ 4コーナーの番手、上がり予想は秒(かっこ内はレースで速い順、緑は3位まで)。根拠は説明用の LightGBM で、▲が評価を上げた項目、▼が下げた項目。数字は点数の差(レースの平均と比べた分)と、勝つ見込みのおおよその倍率(×)。総合・能力・適性・調子・人・展開は、根拠の項目を分類ごとに足したもの(総合は全部の合計)。1行目の「相対値」はこのレースの中の順位から星(点は1位が100・最下位が0)、2行目の「絶対値」は検証期間 2019〜2023年の全出走馬の中の位置(点は上位何%かで、80以上が★5)。横の高・中・低は確度(元になった出走数・調教などのデータの量。総合は能力・適性・調子のうち一番低いもの)で、低いものは薄く出す。</div></div>`;
+  html += `</table></div>${favNote}<div class="note">勝率・3着内は5モデルの平均。妥当オッズの横の印は実際のオッズとの差(▲▲ 1.5倍以上・▲ 1.2倍以上高い、▼ 0.8倍未満・▼▼ 0.5倍未満に低い。上にのせると比)。期待値 = オッズ ÷ 妥当オッズ(1 を超えると予想の上では得。緑は 1.0 以上、太字は 1.2 以上。複勝は下限のオッズで計算)。単勝オッズの横は人気(オッズの低い順)。「割れ」はモデルの順位の幅が4以上。馬名・予想着順・脚質・通過予想・上がり予想の横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。色は緑 = 高・灰 = 中・橙 = 低。上にのせると0〜100の点と、検証期間の同じ条件での平均のずれ)。馬名の横は勝率・3着内・期待値を含む予想全体の確度。通過予想は前半(最初のコーナー)→ 4コーナーの番手、上がり予想は秒(かっこ内はレースで速い順、緑は3位まで)。根拠は説明用の LightGBM で、▲が評価を上げた項目、▼が下げた項目。数字は点数の差(レースの平均と比べた分)と、勝つ見込みのおおよその倍率(×)。総合・能力・適性・調子・人・展開は、根拠の項目を分類ごとに足したもの(総合は全部の合計)。1行目の「相対値」はこのレースの中の順位から星(点は1位が100・最下位が0)、2行目の「絶対値」は検証期間 2019〜2023年の全出走馬の中の位置(点は上位何%かで、80以上が★5)。横の高・中・低は確度(元になった出走数・調教などのデータの量。総合は能力・適性・調子のうち一番低いもの)で、低いものは薄く出す。</div></div>`;
 
   html += renderPlan(rid);
   html += renderCalc(rid);
   html += renderCombos(rid);
   html += modelCard;
   document.getElementById("main").innerHTML = html;
+  state.favActive = false;   // 変化の印を止めるのは出走馬の表を作るあいだだけ(レース一覧の印は止めない)
   setupCardFolds(document.getElementById("main"));
   setupHelpButtons(document.getElementById("main"));
   setupLapBase(document.getElementById("main"));
@@ -1046,6 +1105,10 @@ function renderRace(rid) {
     renderNav();
     renderRace(rid);
   });
+  document.querySelectorAll(".favView").forEach(box => box.addEventListener("change", e => {
+    try { localStorage.setItem("keiba-viewer:fav", e.target.checked ? "1" : "0"); } catch (err) { state.fav = e.target.checked; }
+    renderRace(rid);
+  }));
   document.getElementById("simpleView")?.addEventListener("change", e => {
     try { localStorage.setItem("keiba-viewer:simple", e.target.checked ? "1" : "0"); } catch (err) { state.simple = e.target.checked; }
     renderRace(rid);
@@ -1823,8 +1886,40 @@ function renderBand(target = document.getElementById("bandBody")) {
     h += `<td class="n">${esc(r["レース数"])}</td></tr>`;
   }
   h += `</table></div><div class="note">緑は回収率 100% 以上。</div></div>`;
+  h += strengthCards(tab);
   target.innerHTML = h;
   target.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { state.bandTab = b.dataset.m; renderBand(target); });
+}
+
+// モデルの得意・苦手(モデルの得意・苦手.csv): 選んだモデルの、他の4本より得意・苦手な条件と、5本に共通する得意・苦手
+function strengthCards(model) {
+  const rows = state.strength;
+  if (!rows) return "";
+  const of = kind => rows.filter(r => r["モデル"] === model && r["種類"] === kind);
+  const all = of("全体")[0];
+  const sign = v => v === "" || v == null ? "" : (num(v) > 0 ? "+" : "") + fix(num(v));
+  const table = (title, list, tone) => !list.length ? "" :
+    `<div class="strength-col"><h3><span class="chip ${tone}">${title}</span></h3><div class="scroll"><table>` +
+    `<tr><th>条件</th><th class="n">他の4本との差</th><th class="n">1番人気との差</th><th class="n">単勝の回収率</th><th class="n">レース数</th></tr>` +
+    list.map(r => `<tr><td><b>${esc(r["条件"])}</b></td><td class="n">${sign(r["他の4本との差"])}</td>` +
+      `<td class="n">${sign(r["1番人気との差"])}</td><td class="n">${fix(num(r["単勝の回収率"]))}%</td><td class="n">${esc(r["レース数"])}</td></tr>`).join("") +
+    `</table></div></div>`;
+  let h = "";
+  if (all) {
+    h += `<div class="card"><h2>${esc(model)} の得意・苦手な条件</h2><div class="muted">検証期間(2019〜2023年)の予想を条件ごとに分け、` +
+      `勝ち馬の対数損失(小さいほど良い)を他の4本の平均と比べた。全体の対数損失 ${esc(all["対数損失"])}、` +
+      `${esc(all["区分の数"])} 区分のうち5本の中で1位が ${esc(all["1位の区分"])}、5位が ${esc(all["5位の区分"])}。</div>` +
+      `<div class="strength-grid">${table("得意", of("得意"), "up")}${table("苦手", of("苦手"), "warn")}</div>` +
+      `<div class="note">他の4本との差 = 対数損失の差 × 1000(マイナスなら他より良い)。1番人気との差 = 予想1位の勝率 − 1番人気の勝率(ポイント。比べ物としてだけ使う)。` +
+      `400レース以上の区分だけ。5本の差は小さく、数百レースの区分の差は偶然の幅に入ることがある。</div></div>`;
+  }
+  const common = kind => rows.filter(r => r["モデル"] === "5本共通" && r["種類"] === kind)
+    .map(r => `${esc(r["条件"])}(${sign(r["1番人気との差"])})`).join("、");
+  if (common("共通の苦手")) {
+    h += `<div class="card"><h2>5本に共通する得意・苦手</h2><div class="muted">予想1位の勝率 − 1番人気の勝率(5本の平均、ポイント)。</div>` +
+      `<p><span class="chip up">得意</span> ${common("共通の得意")}</p><p><span class="chip warn">苦手</span> ${common("共通の苦手")}</p></div>`;
+  }
+  return h;
 }
 
 function updateRaceStatus() {
@@ -2259,7 +2354,7 @@ async function applyDriveUpdate() {
   const previousBand = state.band;
   const previousCurrent = state.current;
   for (const key of keys) state[key].clear();
-  state.band = null;
+  state.band = null; state.strength = null;
   state.current = previousCurrent;
   try {
     const loaded = await consumeDriveTransfer(true);

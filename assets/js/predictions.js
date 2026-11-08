@@ -17,7 +17,14 @@ const PACE = [  // 展開の数字: [表示名, 値の列, 目安の列, 値の�
    v => `前に行く3頭のテン: コースの基準より ${Math.abs(v).toFixed(1)}% ${v >= 0 ? "速い" : "遅い"}`]];
 const state = { races: new Map(), combos: new Map(), plans: new Map(), odds: new Map(), oddsKind: new Map(), calc: {},
   info: new Map(), results: new Map(), pays: new Map(), review: new Map(), fileUpdated: new Map(),
-  band: null, strength: null, current: null, dayPage: null, open: new Set() };
+  band: null, strength: null, current: null, dayPage: null, open: new Set(),
+  loaded: new Map() };   // Drive から読んだ CSV: パス → 更新日時|サイズ(次の更新で変わったものだけ読むため)
+
+// 読んだデータを空にする(見ているレースと開いている行はそのまま)
+function clearData() {
+  for (const k of ["races", "combos", "plans", "odds", "oddsKind", "info", "results", "pays", "review", "fileUpdated", "loaded"]) state[k].clear();
+  state.band = null; state.strength = null;
+}
 
 // ---------- CSV ----------
 function parseCSV(text) {
@@ -185,8 +192,24 @@ async function consumeDriveTransfer(keepView = false) {
   db.close();
   if (!payload?.files?.length) return false;
   document.getElementById("status").textContent = "データを読み込み中…";
-  const files = payload.files.map(item => [new File([item.blob], item.name, {type:"text/csv"}), item.path, item.modifiedTime]);
+  // 取得データは Drive の保存分すべて(変わらなかった分も入る)。表示中の更新(keepView)なら、前回読んだものと比べて
+  // 新しく増えた・中身が変わった CSV だけを読む(CSV 1つが表の1か所を丸ごと持つので、読み直せば置き換わる)。
+  // 前回あった CSV が消えていたら、消えた分を表から外すために全部を読み直す。
+  const pathOf = item => item.path || item.name;
+  const sigOf = item => (item.modifiedTime || "") + "|" + (item.size ?? item.blob?.size ?? "");
+  const now = new Map(payload.files.map(item => [pathOf(item), sigOf(item)]));
+  let items = payload.files;
+  if (keepView && state.loaded.size) {
+    const removed = [...state.loaded.keys()].some(k => !now.has(k));
+    if (removed) clearData();
+    else items = payload.files.filter(item => state.loaded.get(pathOf(item)) !== sigOf(item));
+  } else {
+    clearData();
+  }
+  state.lastLoad = { read: items.length, total: payload.files.length };
+  const files = items.map(item => [new File([item.blob], item.name, {type:"text/csv"}), item.path, item.modifiedTime]);
   await loadFiles(files, keepView);
+  state.loaded = now;
   updateRaceStatus();
   return true;
 }
@@ -2350,13 +2373,11 @@ window.addEventListener("message", async event => {
   }
 });
 async function applyDriveUpdate() {
-  const keys = ["races", "combos", "plans", "odds", "oddsKind", "info", "results", "pays", "review", "fileUpdated"];
+  // 失敗したら元に戻せるように控えておく(表は消さない。変わった CSV だけを読み直すため。consumeDriveTransfer を見る)
+  const keys = ["races", "combos", "plans", "odds", "oddsKind", "info", "results", "pays", "review", "fileUpdated", "loaded"];
   const previous = Object.fromEntries(keys.map(key => [key, new Map(state[key])]));
-  const previousBand = state.band;
+  const previousBand = state.band, previousStrength = state.strength;
   const previousCurrent = state.current;
-  for (const key of keys) state[key].clear();
-  state.band = null; state.strength = null;
-  state.current = previousCurrent;
   try {
     const loaded = await consumeDriveTransfer(true);
     if (!loaded) throw new Error("取得データを受け取れませんでした。");
@@ -2364,7 +2385,7 @@ async function applyDriveUpdate() {
     return true;
   } catch (error) {
     for (const key of keys) state[key] = previous[key];
-    state.band = previousBand;
+    state.band = previousBand; state.strength = previousStrength;
     state.current = previousCurrent;
     render(false);
     updateRaceStatus();

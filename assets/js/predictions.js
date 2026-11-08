@@ -1472,20 +1472,33 @@ function mixMeter(rows) {
 }
 function kpi(v, l) { return `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`; }
 
+// 確率の列の変化(枠順確定の時点からのポイント差。+0.4% など)
+function pctMove(r, col) {
+  if (!changeView()) return "";
+  const a = num(r[preCol(col)]), b = num(r[col]);
+  if (a == null || b == null) return "";
+  const d = (b - a) * 100;
+  return Math.abs(d) < 0.05 ? "" : `<span class="chg ${d > 0 ? "up" : "down"}">${d > 0 ? "+" : ""}${d.toFixed(1)}%</span>`;
+}
 function detail(r, ms) {
+  const rankMv = m => { const a = num(r[preCol(`${m}_順位`)]), b = num(r[`${m}_順位`]); return changeView() && a != null && b != null ? moveMark(a - b) : ""; };   // ↑ は順位が上がった
   let t = `<div class="grid2"><div class="scroll"><table><tr><th>モデル</th><th class="n">順位</th><th class="n">勝率</th><th class="n">2着内</th><th class="n">3着内</th></tr>`;
-  for (const m of ms) t += `<tr><td>${esc(m)}</td><td class="n">${esc(r[`${m}_順位`])}</td><td class="n">${pct(num(r[`${m}_勝率`]))}</td>` +
-    `<td class="n">${pct(num(r[`${m}_2着内`]))}</td><td class="n">${pct(num(r[`${m}_3着内`]))}</td></tr>`;
+  for (const m of ms) t += `<tr><td>${esc(m)}</td><td class="n">${esc(r[`${m}_順位`])}${rankMv(m)}</td>` +
+    `<td class="n">${pct(num(r[`${m}_勝率`]))}${pctMove(r, `${m}_勝率`)}</td>` +
+    `<td class="n">${pct(num(r[`${m}_2着内`]))}${pctMove(r, `${m}_2着内`)}</td><td class="n">${pct(num(r[`${m}_3着内`]))}${pctMove(r, `${m}_3着内`)}</td></tr>`;
   t += `</table></div><dl class="kv">`;
   // 項目 → どの確度を付けるか(勝率のばらつき・順位の幅は、それ自体が予想の確度の目安)
-  t += `<dt>妥当オッズ(単勝)</dt><dd>${fix(num(r["妥当オッズ_単勝"]))}<span class="dim">(5モデルで ${fairRange(r, ms, "勝率")})</span>${cdot(r, "予想")}</dd>`;
-  t += `<dt>妥当オッズ(複勝)</dt><dd>${fix(num(r["妥当オッズ_複勝"]))}<span class="dim">(5モデルで ${fairRange(r, ms, "3着内")})</span>${cdot(r, "予想")}</dd>`;
+  t += `<dt>妥当オッズ(単勝)</dt><dd>${fix(num(r["妥当オッズ_単勝"]))}${colMove(r, "妥当オッズ_単勝", 1, true)}<span class="dim">(5モデルで ${fairRange(r, ms, "勝率")})</span>${cdot(r, "予想")}</dd>`;
+  t += `<dt>妥当オッズ(複勝)</dt><dd>${fix(num(r["妥当オッズ_複勝"]))}${colMove(r, "妥当オッズ_複勝", 1, true)}<span class="dim">(5モデルで ${fairRange(r, ms, "3着内")})</span>${cdot(r, "予想")}</dd>`;
   const extra = [["1着の確率", "予想"], ["2着の確率", "予想"], ["3着の確率", "予想"], ["4着の確率", "予想"], ["5着の確率", "予想"],
     ["勝率のばらつき", "目安"], ["順位の幅", "目安"], ["位置取り(近5走、0=前・1=後ろ)", "脚質"], ["前に行く順位", "脚質"],
     ["前半の速さの順位", "前半の速さ"]];
   for (const [c, k] of extra) if (c in r && r[c] !== "") {
     const mark = k === "目安" ? ` <span class="dim" title="5モデルの意見の割れ具合。小さいほど予想の確度が高い">(確度の目安)</span>` : cdot(r, k);
-    t += `<dt>${esc(c)}</dt><dd>${c.endsWith("確率") ? pct(num(r[c])) : esc(r[c])}${mark}</dd>`;
+    // 変化: 確率はポイント差、ばらつき・順位の幅・順位は小さいほど緑、位置取りは数字の増減
+    const mv = c.endsWith("確率") ? pctMove(r, c) : c === "勝率のばらつき" ? colMove(r, c, 4, true)
+      : c.endsWith("順位") || c === "順位の幅" ? colMove(r, c, 1, true) : colMove(r, c, 3);
+    t += `<dt>${esc(c)}</dt><dd>${c.endsWith("確率") ? pct(num(r[c])) : esc(r[c])}${mv}${mark}</dd>`;
   }
   if (r["根拠_上げた"]) t += `<dt>根拠(上げた)</dt><dd>${reasonText(r["根拠_上げた"])}${cdot(r, "予想")}</dd>`;
   if (r["根拠_下げた"]) t += `<dt>根拠(下げた)</dt><dd>${reasonText(r["根拠_下げた"])}${cdot(r, "予想")}</dd>`;

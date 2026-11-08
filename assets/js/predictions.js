@@ -529,7 +529,8 @@ function changeCard(rows) {
   const who = r => r ? `${esc(r.umaban)}番 ${esc(r.horse_name || "")}` : "-";
   const weight = r => { const w = num(r["馬体重"]), z = num(r["増減"]); return w == null ? "" : `(馬体重 ${w}${z == null ? "" : ` ${z > 0 ? "+" : ""}${z}`})`; };
   const moved = rows.map(r => [r, rankMove(r)]).filter(([, d]) => d);
-  const top = (list) => list.slice(0, 3).map(([r, d]) => `${moveMark(d)} ${who(r)}${weight(r)}`).join("<br>") || "なし";
+  const ranks = r => `(${num(r["枠順時_順位"])}位 → <b>${num(r["平均_順位"])}位</b>)`;   // 枠順確定の時点 → 今の予想順位
+  const top = (list) => list.slice(0, 3).map(([r, d]) => `${moveMark(d)} ${who(r)} ${ranks(r)}${weight(r)}`).join("<br>") || "なし";
   const stage = (col, now) => { const x = num(rows[0][col]), y = num(rows[0][now]); return x == null || y == null ? "-" : x === y ? `${y}(変わらず)` : `${x} → <b>${y}</b>`; };
   return `<div class="card"><h3>枠順確定 → 馬体重の変化</h3><dl class="kv">` +
     `<dt>本命</dt><dd>${a && b && +a.umaban === +b.umaban ? `変わらず(${who(b)})` : `${who(a)} → <b>${who(b)}</b> <span class="chip warn">本命変更</span>`}</dd>` +
@@ -537,7 +538,7 @@ function changeCard(rows) {
     `<dt>順位が下がった馬</dt><dd>${top(moved.filter(([, d]) => d < 0).sort((x, y) => x[1] - y[1]))}</dd>` +
     `<dt>自信の段階</dt><dd>${stage("枠順時_自信の段階", "自信の段階")}</dd>` +
     `<dt>混戦の段階</dt><dd>${stage("枠順時_混戦の段階", "混戦の段階")}</dd>${preRaceRows(rows)}</dl>` +
-    `<div class="note">予想順位を、枠順確定の時点と馬体重を入れた今で比べたもの(↑2 は2つ上がった、↓1 は1つ下がった)。かっこ内は馬体重と前走からの増減。変化の理由は馬体重だけではない。馬体重の版には、前日の天候・当日のクッション値と含水率・当日の馬場傾向も入っている。</div></div>`;
+    `<div class="note">予想順位を、枠順確定の時点と馬体重を入れた今で比べたもの(↑2 は2つ上がった、↓1 は1つ下がった)。かっこ内は枠順確定の時点 → 今の予想順位と、馬体重と前走からの増減。変化の理由は馬体重だけではない。馬体重の版には、前日の天候・当日のクッション値と含水率・当日の馬場傾向も入っている。</div></div>`;
 }
 
 function simpleView() {
@@ -1039,7 +1040,7 @@ function renderRace(rid) {
     (info || bias ? "" : `<span class="muted">列がありません</span>`) + `</div>`;
   html += `<div class="grid2">${babaCard}${tenkaiCard}</div>`;   // 左に馬場、右に展開
 
-  html += changeCard(rows);
+  html += changeCard(base);   // 得意モデルだけの表示のときも、枠順確定との比較は5モデルの平均どうしで
   // 出走馬
   html += `<div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">` +
     `<h3 style="margin:0">出走馬</h3>` + favBox +

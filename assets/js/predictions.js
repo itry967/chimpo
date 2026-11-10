@@ -1688,7 +1688,7 @@ function renderPlan(rid) {
   });
   h += `</table></div><div class="calc" style="margin-top:8px"><button id="planSendAll">↓ 全部を買い目候補に送る</button>` +
     `<button id="planSendPick">↓ 選んだものを買い目候補に送る</button>` +
-    `<span class="note" style="margin:0">送ると、下の「買い目を入れて計算」の「買い目候補」に今の金額で足す(0円の買い目は100円で送る)。</span></div>` +
+    `<span class="note" style="margin:0">送ると、下の「買い目候補」の欄に今の金額で足す(0円の買い目は100円で送る)。</span></div>` +
     (kindNote ? `<div style="margin-top:6px">${kindNote}</div>` : "") +
     (budget && spent < budget ? `<div class="note">残り ${(budget - spent).toLocaleString()}円は使わない(100円単位にそろえた余り)。</div>` : "") +
     (budget && amt.some(a => !a) ? `<div class="note">予算が点数に足りないので、確率の低い買い目は買わない。</div>` : "") +
@@ -1789,8 +1789,9 @@ function renderCalc(rid) {
   h += `<div class="calc" style="margin-top:8px">` +
     `<button id="calcAdd" ${tickets.length ? "" : "disabled"}>↓ 全部を買い目候補に移す</button>` +
     `<button id="calcAddPick" ${tickets.length ? "" : "disabled"}>↓ 選んだものを買い目候補に移す</button>` +
-    `<span class="note" style="margin:0">移すと、下の「買い目候補」に足す(同じ買い目は金額を足し合わせる)。フォーメーションのチェックはそのまま残る。</span></div>`;
-  return h + renderBasket(rid, tri, places, odds, raceRows) + `</div>`;
+    `<span class="note" style="margin:0">移すと、下の「買い目候補」の欄に足す(同じ買い目は金額を足し合わせる)。フォーメーションのチェックはそのまま残る。</span></div>`;
+  // 買い目候補は「買い目を入れて計算」とは別の欄(自分の見出しでたためる)
+  return h + `</div><div class="card basket-card">` + renderBasket(rid, tri, places, odds, raceRows) + `</div>`;
 }
 
 // ---------- 買い目候補(券種・フォーメーションをまたいで組み合わせる) ----------
@@ -1854,8 +1855,9 @@ function ticketValue(rid, kind, t, triCache) {
 }
 function renderBasket(rid, tri, places, odds, raceRows) {
   const b = basketOf(rid);
-  let h = `<h3 style="margin-top:16px">買い目候補</h3>`;
-  if (!b.length) return h + `<div class="muted">上で馬を選んで「買い目に足す」を押すと、ここに溜まります。券種やフォーメーションを変えて何回でも足せます。</div>`;
+  let h = `<h3>買い目候補</h3>`;
+  if (!b.length) return h + `<div class="muted">上の「推奨買い目と資金配分」や「買い目を入れて計算」から送ると、ここに溜まります。券種やフォーメーションを変えて何回でも足せます。` +
+    `溜めた買い目は「→ 購入した馬券に送る」で日別ページの「購入した馬券」に送れます。</div>`;
   let cost = 0, back = 0, priced = 0;
   const rows = b.map((x, i) => {
     const p = tri.reduce((s, y) => s + (hits(x.kind, x.t, y, places) ? y[3] : 0), 0);
@@ -2104,16 +2106,16 @@ function renderDayPage(date) {
     const { p, o } = ticketValue(x.rid, x.kind, x.t, tc);
     const settled = state.pays.has(x.rid), hp = settled ? hitPayout(x.rid, x.kind, x.t) : null;
     const back = settled ? (hp || 0) * x.amount / 100 : null;
-    cost += x.amount; allRaces.add(x.rid);
+    cost += x.amount; if (x.amount > 0) allRaces.add(x.rid);
     if (p != null && o) { evBack += p * o * x.amount; evCost += x.amount; }
-    if (settled) { setCost += x.amount; setBack += back; setRaces.add(x.rid); }
+    if (settled && x.amount > 0) { setCost += x.amount; setBack += back; setRaces.add(x.rid); }
     return { ...x, i, p, o, settled, back };
   }).sort((a, b) => a.rid.localeCompare(b.rid) || a.i - b.i);
   h += `<div class="card"><h3>購入した馬券</h3>`;
-  if (!bought.length) h += `<div class="muted">まだありません。個別レースページの「買い目を入れて計算」→「買い目候補」で「→ 購入した馬券に送る」を押すと、ここに出ます。</div>`;
+  if (!bought.length) h += `<div class="muted">まだありません。個別レースページの「買い目候補」の欄で「→ 購入した馬券に送る」を押すと、ここに出ます。</div>`;
   else {
     h += `<div class="kpis" style="margin:0 0 8px">` +
-      kpi(`${cost.toLocaleString()}円`, `総投資金額(${bought.length}点・${allRaces.size}レース)`) +
+      kpi(`${cost.toLocaleString()}円`, `総投資金額(${bought.filter(x => x.amount > 0).length}点・${allRaces.size}レース${bought.some(x => !(x.amount > 0)) ? "。0円の馬券は数えない" : ""})`) +
       kpi(evCost ? `${Math.round(evBack).toLocaleString()}円` : "-", `払戻の期待値${evCost < cost ? `(オッズのある ${evCost.toLocaleString()}円分)` : ""}`) +
       kpi(evCost ? `<span class="${evBack / evCost >= 1 ? "hi" : ""}">${fix(evBack / evCost * 100)}%</span>` : "-", "回収率の期待値(予想の上で)") +
       kpi(setCost ? `<span class="${setBack >= setCost ? "hi" : ""}">${fix(setBack / setCost * 100)}%</span>` : "-",
@@ -2122,16 +2124,16 @@ function renderDayPage(date) {
       `<th class="n">オッズ</th><th class="n">期待値</th><th class="n">払戻の期待値</th><th class="n">結果</th><th></th></tr>`;
     for (const r of rows) {
       const lower = r.kind === "複勝" || r.kind === "ワイド", sep = CALC_KINDS[r.kind]?.[1] && r.t.length > 1 ? "→" : "-";
-      h += `<tr class="${r.settled && r.back ? "hit" : ""}"><td>${raceLink(r.rid)}</td><td>${esc(r.kind)}</td><td><b>${esc(r.t.join(sep))}</b></td>` +
-        `<td class="n">${r.amount.toLocaleString()}円</td><td class="n">${r.p != null ? pct(r.p, 2) : "-"}</td>` +
+      h += `<tr class="${r.amount ? "" : "dim"}${r.settled && r.back ? " hit" : ""}"><td>${raceLink(r.rid)}</td><td>${esc(r.kind)}</td><td><b>${esc(r.t.join(sep))}</b></td>` +
+        `<td class="n"><input class="odds boughtAmt" data-i="${r.i}" type="number" min="0" step="100" value="${r.amount}" style="width:90px"> 円</td><td class="n">${r.p != null ? pct(r.p, 2) : "-"}</td>` +
         `<td class="n">${r.o ? fix(r.o) + (lower ? "〜" : "") : `<span class="dim">オッズなし</span>`}</td><td class="n">${r.o && r.p ? evCell(r.o, 1 / r.p) : ""}</td>` +
         `<td class="n">${r.o && r.p != null ? Math.round(r.p * r.o * r.amount).toLocaleString() + "円" : "-"}</td>` +
-        `<td class="n">${!r.settled ? `<span class="dim">結果待ち</span>` : r.back ? `<b class="hi">${Math.round(r.back).toLocaleString()}円</b>` : `<span class="dim">はずれ</span>`}</td>` +
+        `<td class="n">${!r.amount ? `<span class="dim">買わない</span>` : !r.settled ? `<span class="dim">結果待ち</span>` : r.back ? `<b class="hi">${Math.round(r.back).toLocaleString()}円</b>` : `<span class="dim">はずれ</span>`}</td>` +
         `<td><button class="boughtDel" data-i="${r.i}" title="この馬券を一覧から消す">×</button></td></tr>`;
     }
     h += `</table></div><div class="calc" style="margin-top:8px"><button id="boughtClear">この日の購入した馬券を全部消す</button></div>`;
   }
-  h += `<div class="note">購入した馬券はこのブラウザに覚えておく(日付ごと)。実際の購入とはつながっていない(送ったものを買ったものとして数える)。` +
+  h += `<div class="note">金額は馬券ごとに変えられる(100円単位に丸める。0円は「買わない」で表には残り、集計には入れない)。購入した馬券はこのブラウザに覚えておく(日付ごと)。実際の購入とはつながっていない(送ったものを買ったものとして数える)。` +
     `期待値 = オッズ × 確率(確率は補正つきの Harville の式、オッズは オッズ フォルダの CSV。複勝・ワイドは下限のオッズ)。回収率は結果(払戻の CSV)が出たレースの分だけで出す。</div></div>`;
 
   const main = document.getElementById("main");
@@ -2139,6 +2141,12 @@ function renderDayPage(date) {
   document.body.classList.add("day-page-active");
   main.querySelectorAll(".dayTabs button").forEach(b => b.onclick = () => { state[b.parentElement.dataset.k] = b.dataset.j; renderDayPage(date); });
   main.querySelectorAll("a.dayRace").forEach(a => a.onclick = e => { e.preventDefault(); state.dayPage = null; state.current = a.dataset.rid; state.open.clear(); render(); });
+  main.querySelectorAll("input.boughtAmt").forEach(x => x.onchange = () => {
+    const b = boughtOf(date)[+x.dataset.i];
+    if (!b) return;
+    b.amount = roundYen(x.value); saveBought(date);
+    const y = window.scrollY; renderDayPage(date); window.scrollTo(0, y);
+  });
   main.querySelectorAll("button.boughtDel").forEach(b => b.onclick = () => { boughtOf(date).splice(+b.dataset.i, 1); saveBought(date); renderDayPage(date); });
   document.getElementById("boughtClear")?.addEventListener("click", () => {
     if (!confirm("この日の購入した馬券を全部消します。よろしいですか?")) return;

@@ -753,7 +753,7 @@ function renderReview(rid, rows) {
     paceGap(r0, rv, t1000, t1000p) + winGap(state.info.get(rid), win) + lapGap(laps, predLaps, pl?.marks || []) + settleGap(rows, top3, n) +
     (r0["ペース予想の目安"] && rv["ペース"] ? `<dt>ペース</dt><dd>予想 ${esc(String(r0["ペース予想の目安"]).split("(")[0])} → 実際 <b>${esc(rv["ペース"])}</b></dd>` : "") +
     `<dt>逃げ</dt><dd>予想 ${esc(predEsc.join("・") || "なし")} → 実際 <b>${esc(realEsc.join("・") || "-")}</b></dd>`;
-  const tickets = [["溜めた買い目", basketOf(rid)], ["推奨買い目(今の予算)", state.planTickets?.[rid] || []]];
+  const tickets = [["買い目候補", basketOf(rid)], ["推奨買い目(今の予算)", state.planTickets?.[rid] || []]];
   for (const [label, t] of tickets) {
     const x = reviewHits(rid, t);
     if (x.n) h += `<dt>${label}</dt><dd>${x.n}点・${x.cost.toLocaleString()}円 → <b class="${x.back >= x.cost ? "hi" : ""}">${Math.round(x.back).toLocaleString()}円</b>` +
@@ -1195,6 +1195,8 @@ function renderRace(rid) {
     x.onchange = () => { basketOf(rid)[x.dataset.i].amount = roundYen(x.value); saveBasket(rid); renderRace(rid); };
   });
   document.querySelectorAll("button.del").forEach(x => x.onclick = () => { basketOf(rid).splice(+x.dataset.i, 1); saveBasket(rid); renderRace(rid); });
+  document.getElementById("basketBuy")?.addEventListener("click", () => { sendToBought(rid, basketOf(rid)); renderRace(rid); });
+  document.querySelectorAll("a.toDay").forEach(a => a.onclick = e => { e.preventDefault(); state.dayPage = a.dataset.day; state.open.clear(); render(); });
   document.getElementById("basketZero")?.addEventListener("click", () => { basketOf(rid).forEach(x => x.amount = 0); saveBasket(rid); renderRace(rid); });
   document.getElementById("basketClear")?.addEventListener("click", () => { state.basket[rid] = []; saveBasket(rid); renderRace(rid); });
   const cu = document.getElementById("calcUnit");
@@ -1684,9 +1686,9 @@ function renderPlan(rid) {
       `<td class="n">${o ? fix(o) + (lower ? "〜" : "") : `<span class="dim">オッズなし</span>`}</td><td class="n">${o && p ? evCell(o, 1 / p) : ""}</td>` +
       `<td class="n">${amt[i] ? amt[i].toLocaleString() + "円" : "買わない"}</td><td class="n">${backI}</td></tr>`;
   });
-  h += `</table></div><div class="calc" style="margin-top:8px"><button id="planSendAll">↓ 全部を溜めた分に送る</button>` +
-    `<button id="planSendPick">↓ 選んだものを溜めた分に送る</button>` +
-    `<span class="note" style="margin:0">送ると、下の「買い目を入れて計算」の「買い目(溜めた分)」に今の金額で足す(0円の買い目は100円で送る)。</span></div>` +
+  h += `</table></div><div class="calc" style="margin-top:8px"><button id="planSendAll">↓ 全部を買い目候補に送る</button>` +
+    `<button id="planSendPick">↓ 選んだものを買い目候補に送る</button>` +
+    `<span class="note" style="margin:0">送ると、下の「買い目を入れて計算」の「買い目候補」に今の金額で足す(0円の買い目は100円で送る)。</span></div>` +
     (kindNote ? `<div style="margin-top:6px">${kindNote}</div>` : "") +
     (budget && spent < budget ? `<div class="note">残り ${(budget - spent).toLocaleString()}円は使わない(100円単位にそろえた余り)。</div>` : "") +
     (budget && amt.some(a => !a) ? `<div class="note">予算が点数に足りないので、確率の低い買い目は買わない。</div>` : "") +
@@ -1754,7 +1756,7 @@ function renderCalc(rid) {
   h += `</table></div><div class="note">${n === 1 ? "買う馬にチェック。" : ordered ? "着順ごとに馬にチェック(1着の行が1着、2着の行が2着…)。" :
     "1頭目・2頭目…の行に馬をチェック。順番は問わず、同じ組は1点にまとめる。"}` +
     `ボックスは1行目の馬を全部の行に入れる。流しは1行目に軸、2行目以降に相手をチェック。馬番にのせると馬名。</div>`;
-  // 今の選び方の組(溜めた分に移す前の下見)
+  // 今の選び方の組(買い目候補に移す前の下見)
   h += `<h3 style="margin-top:14px">選んでいる馬券</h3>`;
   if (!tickets.length) {
     h += `<div class="muted">馬を選ぶと、ここに選んでいる馬券が出ます。</div>`;
@@ -1785,13 +1787,13 @@ function renderCalc(rid) {
       `</table></div>`;
   }
   h += `<div class="calc" style="margin-top:8px">` +
-    `<button id="calcAdd" ${tickets.length ? "" : "disabled"}>↓ 全部を溜めた分に移す</button>` +
-    `<button id="calcAddPick" ${tickets.length ? "" : "disabled"}>↓ 選んだものを溜めた分に移す</button>` +
-    `<span class="note" style="margin:0">移すと、下の「買い目(溜めた分)」に足す(同じ買い目は金額を足し合わせる)。フォーメーションのチェックはそのまま残る。</span></div>`;
+    `<button id="calcAdd" ${tickets.length ? "" : "disabled"}>↓ 全部を買い目候補に移す</button>` +
+    `<button id="calcAddPick" ${tickets.length ? "" : "disabled"}>↓ 選んだものを買い目候補に移す</button>` +
+    `<span class="note" style="margin:0">移すと、下の「買い目候補」に足す(同じ買い目は金額を足し合わせる)。フォーメーションのチェックはそのまま残る。</span></div>`;
   return h + renderBasket(rid, tri, places, odds, raceRows) + `</div>`;
 }
 
-// ---------- 溜めた買い目(券種・フォーメーションをまたいで組み合わせる) ----------
+// ---------- 買い目候補(券種・フォーメーションをまたいで組み合わせる) ----------
 function basketOf(rid) {
   if (!state.basket) state.basket = {};
   if (!state.basket[rid]) {
@@ -1813,9 +1815,46 @@ function addToBasket(rid, kind, tickets, unit) {
   }
   saveBasket(rid);
 }
+// ---------- 購入した馬券(買い目候補から「購入した馬券に送る」で送ったもの。日別ページに出す) ----------
+// このブラウザの localStorage に日付ごとに覚えておく: [{rid, kind, t, amount, at}]
+function boughtOf(date) {
+  if (!state.bought) state.bought = {};
+  if (!state.bought[date]) {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(`keiba-viewer:bought:${date}`) || "null"); } catch (e) {}
+    state.bought[date] = Array.isArray(saved) ? saved : [];
+  }
+  return state.bought[date];
+}
+function saveBought(date) {
+  try { localStorage.setItem(`keiba-viewer:bought:${date}`, JSON.stringify(state.bought?.[date] || [])); } catch (e) {}
+}
+function sendToBought(rid, tickets) {
+  const date = rid.slice(0, 8), b = boughtOf(date);
+  for (const x of tickets) {
+    if (!(x.amount > 0)) continue;     // 0円は「買わない」
+    const hit = b.find(y => y.rid === rid && y.kind === x.kind && y.t.join("-") === x.t.join("-"));
+    if (hit) hit.amount += x.amount; else b.push({ rid, kind: x.kind, t: x.t.map(String), amount: x.amount, at: new Date().toISOString() });
+  }
+  saveBought(date);
+}
+function ticketValue(rid, kind, t, triCache) {
+  // 買い目の確率(補正つきの Harville の式)とオッズ(オッズの CSV。単勝で無ければ予想 CSV の単勝オッズ)。予想を読んでいなければ null
+  const rows = state.races.get(rid);
+  if (!rows) return { p: null, o: null };
+  if (!triCache.has(rid)) triCache.set(rid, harville(rows));
+  const tri = triCache.get(rid), places = rows.length <= 7 ? 2 : 3;
+  const p = tri.reduce((s, y) => s + (hits(kind, t, y, places) ? y[3] : 0), 0);
+  let o = state.odds.get(rid)?.get(ticketKey(kind, t));
+  if (o == null && kind === "単勝") {
+    const r = rows.find(r => String(r.umaban) === String(t[0]));
+    o = r ? getOdds(rid, r.umaban, r) : null;
+  }
+  return { p, o: o ?? null };
+}
 function renderBasket(rid, tri, places, odds, raceRows) {
   const b = basketOf(rid);
-  let h = `<h3 style="margin-top:16px">買い目(溜めた分)</h3>`;
+  let h = `<h3 style="margin-top:16px">買い目候補</h3>`;
   if (!b.length) return h + `<div class="muted">上で馬を選んで「買い目に足す」を押すと、ここに溜まります。券種やフォーメーションを変えて何回でも足せます。</div>`;
   let cost = 0, back = 0, priced = 0;
   const rows = b.map((x, i) => {
@@ -1850,8 +1889,12 @@ function renderBasket(rid, tri, places, odds, raceRows) {
       `<td class="n">${r.o && r.amount ? Math.round(r.amount * r.o).toLocaleString() + "円" + (lower ? "〜" : "") : r.amount ? "-" : "買わない"}</td>` +
       `<td><button class="del" data-i="${r.i}" title="この買い目を消す">×</button></td></tr>`;
   }
-  h += `</table></div><div class="calc" style="margin-top:8px"><button id="basketZero">全部0円にする</button><button id="basketClear">買い目を全部消す</button>` +
-    `<span class="note" style="margin:0">金額は100円単位(入れた値を丸める)。0円は「買わない」(表には残る)。溜めた買い目はこのブラウザに覚えておく(レースごと)。</span></div>` +
+  const sent = boughtOf(rid.slice(0, 8)).filter(x => x.rid === rid);
+  h += `</table></div><div class="calc" style="margin-top:8px"><button id="basketBuy" class="buy" ${live.length ? "" : "disabled"} title="金額が0円より大きい買い目を、日別ページの「購入した馬券」に足す(同じ買い目は金額を足し合わせる)">→ 購入した馬券に送る</button>` +
+    `<button id="basketZero">全部0円にする</button><button id="basketClear">買い目を全部消す</button>` +
+    `<span class="note" style="margin:0">金額は100円単位(入れた値を丸める)。0円は「買わない」(表には残る)。買い目候補はこのブラウザに覚えておく(レースごと)。</span></div>` +
+    (sent.length ? `<div class="note bought-note">このレースで購入した馬券に送った分: <b>${sent.length}点・${sent.reduce((s, x) => s + x.amount, 0).toLocaleString()}円</b>` +
+      `(<a href="#" class="toDay" data-day="${rid.slice(0, 8)}">日別ページで見る</a>)。送ったあとも買い目候補は残る。</div>` : "") +
     `<div class="note">確率は5モデルの平均の勝率から Harville の式で計算したもの(予想の上の値)。期待値 = オッズ × 確率。` +
     `オッズは オッズ フォルダの CSV(終わったレースは全券種の確定オッズ、当日は取った単勝・複勝だけ)。複勝・ワイドは下限のオッズ。</div>`;
   return h;
@@ -1987,14 +2030,133 @@ function updateRaceStatus() {
 }
 
 function renderDayPage(date) {
+  // 日別ページ: 馬場傾向の予想(場のタブ・芝ダ別)/ 見送り推奨(仮。場のタブ)/ 購入した馬券(集計付き)。
+  // 読み込んだ CSV(state)から作るので、days/ の HTML(iframe)ではなく、メインの領域に直接出す
+  const label = `${+date.slice(0, 4)}年${+date.slice(4, 6)}月${+date.slice(6, 8)}日`;
+  const rids = sortedRaces().filter(rid => rid.slice(0, 8) === date);
+  const jyos = [...new Set(rids.map(rid => rid.slice(8, 10)))];
+  const jyoName = j => JYO[j] || j;
+  const raceNo = rid => `${jyoName(rid.slice(8, 10))} ${+rid.slice(14, 16)}R`;
+  const raceLink = rid => `<a href="#" class="dayRace" data-rid="${rid}">${raceNo(rid)}</a>`;
+  const jyoTabs = (key, cur) => `<div class="tabs dayTabs" data-k="${key}">` +
+    jyos.map(j => `<button data-j="${j}" class="${j === cur ? "on" : ""}">${esc(jyoName(j))}</button>`).join("") + `</div>`;
+  const pick = key => jyos.includes(state[key]) ? state[key] : jyos[0];
+  const surf = rid => state.info.get(rid)?.["芝ダ"] || state.races.get(rid)?.[0]?.["芝ダ"] || "不明";
+  let h = `<div class="card"><h2 style="margin:0">${ymdw(date)} の日別ページ</h2><div class="muted">${label}・${jyos.map(jyoName).join("・") || "レースなし"}・${rids.length}レース</div></div>`;
+
+  // 1. 1日を通した馬場傾向の予想(場ごと・芝ダ別)。予想 CSV の馬場傾向の列は同じ場・芝ダのレースで同じ値なので、芝ダごとにまとめて出す
+  const bj = pick("dayBiasJyo");
+  h += `<div class="card"><h3>馬場傾向の予想(1日を通して)</h3>` + jyoTabs("dayBiasJyo", bj);
+  const bRids = rids.filter(rid => rid.slice(8, 10) === bj);
+  const surfaces = [...new Set(bRids.map(surf))].sort((a, b) => ["芝", "ダート", "障害"].indexOf(a) - ["芝", "ダート", "障害"].indexOf(b));
+  const bias = surfaces.map(s => {
+    const rs = bRids.filter(rid => surf(rid) === s).sort();
+    const r0 = state.races.get(rs[0])[0], src0 = state.info.get(rs[0]) || {};
+    const items = BIAS.filter(([, c]) => num(r0[c]) != null).map(([lab, c, g]) => {
+      const vals = rs.map(rid => num(state.races.get(rid)[0][c])).filter(v => v != null);
+      const lo = Math.min(...vals), hi = Math.max(...vals), sg = v => `${v >= 0 ? "+" : ""}${v.toFixed(3)}`;
+      const guide = r0[g] || "", i = guide.indexOf("(");
+      const word = i > 0 ? guide.slice(0, i) : guide, why = i > 0 ? guide.slice(i + 1, -1) : "";
+      const src = r0[`${lab}の確度`] ? r0 : src0;
+      return `<div class="pace"><div class="pl">${esc(lab)}</div><div><b>${hi - lo < 0.0005 ? sg(lo) : `${sg(lo)}〜${sg(hi)}`}</b>` +
+        (word ? ` <span class="chip ${biasTone(word)}">${esc(word)}</span>` : "") + confChip(src, lab) +
+        (hi - lo >= 0.0005 ? `<span class="note" style="margin:0 0 0 6px">レースで違う(目安は${raceNo(rs[0])}のもの)</span>` : "") +
+        (why ? `<div class="note" style="margin:0">${esc(why)}</div>` : "") + `</div></div>`;
+    }).join("");
+    return `<div class="day-bias"><h4 style="margin:4px 0">${esc(s)}<span class="muted" style="font-weight:400">(${rs.length}レース: ${rs.map(rid => +rid.slice(14, 16) + "R").join("・")})</span></h4>` +
+      (items || `<span class="muted">馬場傾向の列がありません</span>`) + `</div>`;
+  }).join("");
+  h += (bias ? `<div class="grid2">${bias}</div>` : `<div class="muted">この場のレースがありません。</div>`) +
+    `<div class="note">予想 CSV の馬場傾向の列(3着以内の馬の位置の平均 − 全馬の平均。マイナスなら内・前が有利)を、場・芝ダごとにまとめたもの。` +
+    `前の開催日までのレースから出す値なので、同じ場・芝ダならふつうはその日のどのレースでも同じ(違うときは幅で出す)。</div></div>`;
+
+  // 2. 見送り推奨のレース(場ごと)
+  const budget = savedBudget();
+  const tierName = budget ? BUDGET_TIERS.find(([lim]) => budget <= lim)[1] : (state.planTab || "〜500円");
+  const sj = pick("daySkipJyo");
+  const sRids = rids.filter(rid => rid.slice(8, 10) === sj);
+  const judged = sRids.map(rid => [rid, skipOf(rid, tierName)]);
+  const skips = judged.filter(([, x]) => x?.skip), unknown = judged.filter(([, x]) => !x);
+  const fromCsv = judged.some(([, x]) => x?.src === "csv");
+  h += `<div class="card"><h3>見送り推奨のレース（仮）</h3>` + jyoTabs("daySkipJyo", sj) +
+    `<div class="kpis" style="margin:0 0 8px">${kpi(`${skips.length} / ${sRids.length}`, "見送り推奨（仮） / この場のレース")}` +
+    (unknown.length ? kpi(unknown.length, "推奨買い目がまだ無い(判定できない)") : "") + `</div>`;
+  if (skips.length) {
+    h += `<div class="scroll"><table><tr><th>レース</th><th>発走</th><th>コース</th><th>レース名</th><th class="n">自信</th><th class="n">混戦</th>` +
+      (fromCsv ? `<th>理由</th>` : `<th>おすすめの買い方(${esc(tierName)})</th><th class="n">過去の回収率</th><th class="n">確かめの回収率</th>`) + `</tr>`;
+    for (const [rid, x] of skips) {
+      const r0 = state.races.get(rid)[0], inf = state.info.get(rid) || {}, c = confLevel(state.races.get(rid));
+      h += `<tr><td>${raceLink(rid)}</td><td>${hhmm(r0.hasso_time)}</td><td>${esc((inf["芝ダ"] || "") + (inf["距離"] || ""))}</td><td>${esc(inf["レース名"] || "")}</td>` +
+        `<td class="n">${c?.lv ?? "-"}</td><td class="n">${esc(r0["混戦の段階"] || "-")}</td>` +
+        (fromCsv ? `<td>${esc(x.why || "")}</td>` : `<td>${esc(x.how || "")}</td><td class="n">${x.past ?? "-"}%</td><td class="n"><span class="down">${x.honest}%</span></td>`) + `</tr>`;
+    }
+    h += `</table></div>`;
+  } else h += `<div class="muted">${sRids.length && unknown.length === sRids.length ? "推奨買い目の CSV が無いので判定できません。" : "この場に見送り推奨のレースはありません。"}</div>`;
+  h += `<div class="note">${fromCsv ? "予想 CSV の「見送り」の列で決めたもの。" :
+    `<b>暫定の決め方</b>: 推奨買い目の「おすすめ」(予算 ${esc(tierName)})の、4年で選んで残りの1年で確かめた回収率(確かめの回収率)が ${SKIP_ROI}% 未満のレースを見送りにしている。` +
+    `予想 CSV に「見送り」の列(と「見送りの理由」)ができたら、そちらを使う。`}</div></div>`;
+
+  // 3. 購入した馬券(個別レースページの買い目候補から「購入した馬券に送る」で送ったもの)
+  const bought = boughtOf(date), tc = new Map();
+  let cost = 0, evBack = 0, evCost = 0, setCost = 0, setBack = 0;
+  const setRaces = new Set(), allRaces = new Set();
+  const rows = bought.map((x, i) => {
+    const { p, o } = ticketValue(x.rid, x.kind, x.t, tc);
+    const settled = state.pays.has(x.rid), hp = settled ? hitPayout(x.rid, x.kind, x.t) : null;
+    const back = settled ? (hp || 0) * x.amount / 100 : null;
+    cost += x.amount; allRaces.add(x.rid);
+    if (p != null && o) { evBack += p * o * x.amount; evCost += x.amount; }
+    if (settled) { setCost += x.amount; setBack += back; setRaces.add(x.rid); }
+    return { ...x, i, p, o, settled, back };
+  }).sort((a, b) => a.rid.localeCompare(b.rid) || a.i - b.i);
+  h += `<div class="card"><h3>購入した馬券</h3>`;
+  if (!bought.length) h += `<div class="muted">まだありません。個別レースページの「買い目を入れて計算」→「買い目候補」で「→ 購入した馬券に送る」を押すと、ここに出ます。</div>`;
+  else {
+    h += `<div class="kpis" style="margin:0 0 8px">` +
+      kpi(`${cost.toLocaleString()}円`, `総投資金額(${bought.length}点・${allRaces.size}レース)`) +
+      kpi(evCost ? `${Math.round(evBack).toLocaleString()}円` : "-", `払戻の期待値${evCost < cost ? `(オッズのある ${evCost.toLocaleString()}円分)` : ""}`) +
+      kpi(evCost ? `<span class="${evBack / evCost >= 1 ? "hi" : ""}">${fix(evBack / evCost * 100)}%</span>` : "-", "回収率の期待値(予想の上で)") +
+      kpi(setCost ? `<span class="${setBack >= setCost ? "hi" : ""}">${fix(setBack / setCost * 100)}%</span>` : "-",
+        setCost ? `回収率(結果の出た ${setRaces.size}レース: ${setCost.toLocaleString()}円 → ${Math.round(setBack).toLocaleString()}円)` : "回収率(結果が出たら出す)") + `</div>`;
+    h += `<div class="scroll" style="max-height:520px;overflow-y:auto"><table><tr><th>レース</th><th>券種</th><th>買い目</th><th class="n">金額</th><th class="n">確率</th>` +
+      `<th class="n">オッズ</th><th class="n">期待値</th><th class="n">払戻の期待値</th><th class="n">結果</th><th></th></tr>`;
+    for (const r of rows) {
+      const lower = r.kind === "複勝" || r.kind === "ワイド", sep = CALC_KINDS[r.kind]?.[1] && r.t.length > 1 ? "→" : "-";
+      h += `<tr class="${r.settled && r.back ? "hit" : ""}"><td>${raceLink(r.rid)}</td><td>${esc(r.kind)}</td><td><b>${esc(r.t.join(sep))}</b></td>` +
+        `<td class="n">${r.amount.toLocaleString()}円</td><td class="n">${r.p != null ? pct(r.p, 2) : "-"}</td>` +
+        `<td class="n">${r.o ? fix(r.o) + (lower ? "〜" : "") : `<span class="dim">オッズなし</span>`}</td><td class="n">${r.o && r.p ? evCell(r.o, 1 / r.p) : ""}</td>` +
+        `<td class="n">${r.o && r.p != null ? Math.round(r.p * r.o * r.amount).toLocaleString() + "円" : "-"}</td>` +
+        `<td class="n">${!r.settled ? `<span class="dim">結果待ち</span>` : r.back ? `<b class="hi">${Math.round(r.back).toLocaleString()}円</b>` : `<span class="dim">はずれ</span>`}</td>` +
+        `<td><button class="boughtDel" data-i="${r.i}" title="この馬券を一覧から消す">×</button></td></tr>`;
+    }
+    h += `</table></div><div class="calc" style="margin-top:8px"><button id="boughtClear">この日の購入した馬券を全部消す</button></div>`;
+  }
+  h += `<div class="note">購入した馬券はこのブラウザに覚えておく(日付ごと)。実際の購入とはつながっていない(送ったものを買ったものとして数える)。` +
+    `期待値 = オッズ × 確率(確率は補正つきの Harville の式、オッズは オッズ フォルダの CSV。複勝・ワイドは下限のオッズ)。回収率は結果(払戻の CSV)が出たレースの分だけで出す。</div></div>`;
+
   const main = document.getElementById("main");
-  const frame = document.createElement("iframe");
-  frame.className = "day-page-frame";
-  frame.title = date + " の日別ページ";
-  frame.src = `./days/${date}.html?embedded=1`;
-  frame.style.height = "220px";
-  main.replaceChildren(frame);
+  main.innerHTML = h;
   document.body.classList.add("day-page-active");
+  main.querySelectorAll(".dayTabs button").forEach(b => b.onclick = () => { state[b.parentElement.dataset.k] = b.dataset.j; renderDayPage(date); });
+  main.querySelectorAll("a.dayRace").forEach(a => a.onclick = e => { e.preventDefault(); state.dayPage = null; state.current = a.dataset.rid; state.open.clear(); render(); });
+  main.querySelectorAll("button.boughtDel").forEach(b => b.onclick = () => { boughtOf(date).splice(+b.dataset.i, 1); saveBought(date); renderDayPage(date); });
+  document.getElementById("boughtClear")?.addEventListener("click", () => {
+    if (!confirm("この日の購入した馬券を全部消します。よろしいですか?")) return;
+    state.bought[date] = []; saveBought(date); renderDayPage(date);
+  });
+}
+// 見送り推奨(仮): 予想 CSV に「見送り」の列があればそれを使う。無ければ暫定で、推奨買い目の「おすすめ」(今の予算の区分)の
+// 確かめの回収率(4年で選んで残りの1年で確かめた回収率)が SKIP_ROI% 未満のレースを見送りにする。推奨買い目が無ければ null(判定できない)
+const SKIP_ROI = 80;
+function skipOf(rid, tierName) {
+  const r0 = state.races.get(rid)?.[0];
+  if (!r0) return null;
+  if ("見送り" in r0) return { skip: ["1", "true", "見送り", "○"].includes(String(r0["見送り"]).trim()), why: r0["見送りの理由"] || "", src: "csv" };
+  const plan = (state.plans.get(rid) || []).filter(x => (x["種類"] || "おすすめ") === "おすすめ");
+  const r = plan.find(x => x["予算"] === tierName) || plan[0];
+  const honest = num(r?.["確かめの回収率"]);
+  if (honest == null) return null;
+  return { skip: honest < SKIP_ROI, honest, past: num(r["過去の回収率"]), how: r["買い方"], src: "plan" };
 }
 window.addEventListener("message", event => {
   if (event.origin !== location.origin || event.data?.type !== "day-page-height") return;

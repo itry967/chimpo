@@ -405,6 +405,9 @@ header h1 { flex: 0 0 auto; }
 nav a.day-link { cursor: pointer; }
 nav a.day-link.on { background: var(--accent-soft); color: var(--text); font-weight: 700; }
 body.day-page-active #result { display: none !important; }
+a.dayRace, a.toDay { color: var(--accent); font-weight: 600; text-decoration: none; }
+a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
+.day-bias { min-width: 0; }
 
 /* リロード時の更新の確認 */
 .drive-confirm { width: min(320px, calc(100vw - 32px)); padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); }

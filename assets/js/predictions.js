@@ -2051,26 +2051,51 @@ function renderDayPage(date) {
   h += `<div class="card"><h3>馬場傾向の予想(1日を通して)</h3>` + jyoTabs("dayBiasJyo", bj);
   const bRids = rids.filter(rid => rid.slice(8, 10) === bj);
   const surfaces = [...new Set(bRids.map(surf))].sort((a, b) => ["芝", "ダート", "障害"].indexOf(a) - ["芝", "ダート", "障害"].indexOf(b));
+  // この場の全レース(最終レースまで)の結果がそろったら、実際の馬場傾向と予想の当否を出す
+  const venueDone = bRids.length > 0 && bRids.every(rid => state.results.has(rid));
+  const sg = v => `${v >= 0 ? "+" : ""}${v.toFixed(3)}`;
   const bias = surfaces.map(s => {
     const rs = bRids.filter(rid => surf(rid) === s).sort();
     const r0 = state.races.get(rs[0])[0], src0 = state.info.get(rs[0]) || {};
+    const act = s === "障害" ? null : dayBiasActual(rs);
+    const final = venueDone && act && act.done === rs.length;
+    let hit = 0, near = 0, judged = 0;
     const items = BIAS.filter(([, c]) => num(r0[c]) != null).map(([lab, c, g]) => {
       const vals = rs.map(rid => num(state.races.get(rid)[0][c])).filter(v => v != null);
-      const lo = Math.min(...vals), hi = Math.max(...vals), sg = v => `${v >= 0 ? "+" : ""}${v.toFixed(3)}`;
+      const lo = Math.min(...vals), hi = Math.max(...vals);
       const guide = r0[g] || "", i = guide.indexOf("(");
       const word = i > 0 ? guide.slice(0, i) : guide, why = i > 0 ? guide.slice(i + 1, -1) : "";
       const src = r0[`${lab}の確度`] ? r0 : src0;
+      const axis = lab.includes("内外") ? "inner" : "front";
+      const j = final && act[axis] != null ? biasJudge(axis, word, act[axis], biasNorm(guide)) : null;
+      if (j) { judged++; if (j.mark === "○") hit++; if (j.mark === "△") near++; }
       return `<div class="pace"><div class="pl">${esc(lab)}</div><div><b>${hi - lo < 0.0005 ? sg(lo) : `${sg(lo)}〜${sg(hi)}`}</b>` +
         (word ? ` <span class="chip ${biasTone(word)}">${esc(word)}</span>` : "") + confChip(src, lab) +
+        (j ? ` <span class="chip ${j.mark === "○" ? "up" : j.mark === "△" ? "gray" : "down"}" title="${esc(j.why)}">${
+          { "○": "○ 合っていた", "△": "△ 向きは合っていた(差は小さい)", "×": "× 外れ" }[j.mark]}</span>` : "") +
         (hi - lo >= 0.0005 ? `<span class="note" style="margin:0 0 0 6px">レースで違う(目安は${raceNo(rs[0])}のもの)</span>` : "") +
         (why ? `<div class="note" style="margin:0">${esc(why)}</div>` : "") + `</div></div>`;
     }).join("");
+    // 実際の馬場傾向(結果)。場の最終レースまで結果がそろうまでは「確定前」(途中の値は薄く出す)
+    let res = "";
+    if (act) {
+      const norm = { inner: biasNorm(r0[BIAS[0][2]] || ""), front: biasNorm(r0[BIAS[1][2]] || "") };
+      const show = axis => act[axis] == null ? "-" : `<b>${sg(act[axis])}</b> <span class="chip ${final ? "" : "gray"}">${esc(biasWord(axis, act[axis] - norm[axis]))}</span>`;
+      res = `<div class="pace day-bias-result"><div class="pl">結果(この日)</div><div>` +
+        (final ? `<span class="chip up">確定</span> ${judged} 項目のうち ○ <b>${hit}</b>${near ? `・△ <b>${near}</b>` : ""}・× <b>${judged - hit - near}</b>` :
+          `<span class="chip warn">確定前</span> <span class="muted">結果の出たレース ${act.done} / ${rs.length}${venueDone ? "" : `(場の全 ${bRids.length}レースの結果がそろったら判定)`}</span>`) +
+        (act.done ? `<div${final ? "" : ` class="muted"`}>内外 ${show("inner")}・前後 ${show("front")}${final ? "" : "(途中の値)"}</div>` : "") + `</div></div>`;
+    }
     return `<div class="day-bias"><h4 style="margin:4px 0">${esc(s)}<span class="muted" style="font-weight:400">(${rs.length}レース: ${rs.map(rid => +rid.slice(14, 16) + "R").join("・")})</span></h4>` +
-      (items || `<span class="muted">馬場傾向の列がありません</span>`) + `</div>`;
+      res + (items || `<span class="muted">馬場傾向の列がありません</span>`) + `</div>`;
   }).join("");
   h += (bias ? `<div class="grid2">${bias}</div>` : `<div class="muted">この場のレースがありません。</div>`) +
     `<div class="note">予想 CSV の馬場傾向の列(3着以内の馬の位置の平均 − 全馬の平均。マイナスなら内・前が有利)を、場・芝ダごとにまとめたもの。` +
-    `前の開催日までのレースから出す値なので、同じ場・芝ダならふつうはその日のどのレースでも同じ(違うときは幅で出す)。</div></div>`;
+    `前の開催日までのレースから出す値なので、同じ場・芝ダならふつうはその日のどのレースでも同じ(違うときは幅で出す)。<br>` +
+    `<b>結果</b>: 結果 CSV(馬番・通過順)から同じ定義で出したその日の値(内外 = 3着以内の馬の 馬番÷頭数 の平均 − 全馬の平均、` +
+    `前後 = 3着以内の馬の 最初のコーナーの順位÷頭数 の平均 − 全馬の平均。レースごとに出して、場・芝ダの全レースで平均。障害は除く)。` +
+    `<b>合っていたか</b>: 結果からそのコースのふだんの値(目安の「ふだん」)を引いた差の向きと、予想の向き(いつもより内/外・前/後ろ有利)が同じなら ○` +
+    `(向きは同じでも差が ±${BIAS_FLAT} 未満でふだん並みなら △)、違えば ×。予想が「いつも並み」のときは、差が ±${BIAS_FLAT} 未満なら ○。場の最終レースまで結果がそろうまでは「確定前」。結果は表示だけで、モデルには使わない。</div></div>`;
 
   // 2. 見送り推奨のレース(場ごと)
   const budget = savedBudget();
@@ -2152,6 +2177,49 @@ function renderDayPage(date) {
     if (!confirm("この日の購入した馬券を全部消します。よろしいですか?")) return;
     state.bought[date] = []; saveBought(date); renderDayPage(date);
   });
+}
+// ---------- 実際の馬場傾向(結果 CSV から。features.py の _race_bias_stats と同じ定義。表示だけで、モデルには使わない) ----------
+// 1レース: 内外 = 3着以内の馬の 馬番÷頭数 の平均 − 全馬の平均、前後 = 3着以内の馬の 最初のコーナーの順位÷頭数 の平均 − 全馬の平均。
+// 頭数は走った馬(着順か通過順のある馬。取消・除外は入れない)。最初のコーナーは通過順のいちばん前の数字(直線のレースは無い)
+function raceBiasActual(rid) {
+  const res = state.results.get(rid);
+  if (!res) return null;
+  const run = res.filter(r => num(r["着順"]) != null || String(r["通過"] || "").trim());
+  const n = run.length;
+  if (!n) return null;
+  const mean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
+  const lane = r => num(r["馬番"]) / n;
+  const pos = r => { const v = num(String(r["通過"] || "").split("-")[0]); return v > 0 ? v / n : null; };
+  const top = run.filter(r => num(r["着順"]) != null && num(r["着順"]) <= 3);
+  const ps = run.map(pos).filter(v => v != null), tps = top.map(pos).filter(v => v != null);
+  return { inner: top.length ? mean(top.map(lane)) - mean(run.map(lane)) : null,
+           front: tps.length && ps.length ? mean(tps) - mean(ps) : null };
+}
+function dayBiasActual(rids) {
+  // 場・芝ダの、結果の出たレースの平均(値の無いレースは除く)。done = 結果の出たレース数
+  const xs = rids.map(raceBiasActual).filter(Boolean);
+  const avg = k => { const v = xs.map(x => x[k]).filter(v => v != null); return v.length ? v.reduce((s, y) => s + y, 0) / v.length : null; };
+  return { inner: avg("inner"), front: avg("front"), done: xs.length };
+}
+const BIAS_FLAT = 0.03;   // ふだんとの差がこれ未満なら「ふだん並み」
+function biasNorm(guide) {
+  // 目安の文言の「芝のふだん -0.01」の値(無い古い CSV は 0 = 全馬の平均と同じ)
+  const m = String(guide).match(/のふだん\s*([+-]?\d+(?:\.\d+)?)/);
+  return m ? +m[1] : 0;
+}
+function biasWord(axis, d) {
+  const [a, b] = axis === "inner" ? ["内", "外"] : ["前", "後ろ"];
+  return Math.abs(d) < BIAS_FLAT ? `ふだん並み(わずかに${d < 0 ? a : b})` : `ふだんより${d < 0 ? a : b}有利`;
+}
+function biasJudge(axis, word, actual, norm) {
+  // 予想の向き(目安の言葉)と、実際の値 − ふだん の向きを比べる
+  const d = actual - norm;
+  const pred = /並み/.test(word) ? 0 : axis === "inner" ? (/内/.test(word) ? -1 : /外/.test(word) ? 1 : null) : (/前/.test(word) ? -1 : /後/.test(word) ? 1 : null);
+  if (pred == null) return null;
+  const ok = pred === 0 ? Math.abs(d) < BIAS_FLAT : Math.sign(d) === pred;
+  // 向きは合っていても、差が小さい(ふだん並み)ときは △
+  const mark = !ok ? "×" : pred !== 0 && Math.abs(d) < BIAS_FLAT ? "△" : "○";
+  return { ok, mark, why: `結果 ${actual >= 0 ? "+" : ""}${actual.toFixed(3)}(ふだん ${norm >= 0 ? "+" : ""}${norm.toFixed(2)} との差 ${d >= 0 ? "+" : ""}${d.toFixed(3)}: ${biasWord(axis, d)})` };
 }
 // 見送り推奨(仮): 予想 CSV に「見送り」の列があればそれを使う。無ければ暫定で、推奨買い目の「おすすめ」(今の予算の区分)の
 // 確かめの回収率(4年で選んで残りの1年で確かめた回収率)が SKIP_ROI% 未満のレースを見送りにする。推奨買い目が無ければ null(判定できない)

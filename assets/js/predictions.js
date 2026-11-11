@@ -1055,7 +1055,7 @@ function renderRace(rid) {
     `${pace || `<span class="muted">列がありません</span>`}` +
     (pace ? `<div class="note">目安(札)は検証期間(2019〜2023年)の同じ芝ダのレースと比べたもの。ペース予想の数字はコースの基準タイムとの差で、ふつうのレースでも前に行く馬は基準より少し速い(平均は下の行のとおり)ので、札はそれと比べた速さ。逃げ・先行馬が多くペースが速いと差しが届きやすく、少なく遅いと前が残りやすい。</div>` : "") +
     `</div>`;
-  const babaCard = `<div class="card"><h3>馬場傾向予想<button class="help" data-help="baba" title="馬場傾向予想の各項目の説明(別ウインドウ)">？</button></h3>` +
+  const babaCard = `<div class="card"><h3>馬場傾向予想（仮）<button class="help" data-help="baba" title="馬場傾向予想の各項目の説明(別ウインドウ)">？</button></h3>` +
     `${info ? `<dl class="kv">${info}</dl>` : ""}` +
     (bias ? `<div style="margin-top:6px">${bias}</div><div class="note">馬場傾向の数字は、3着以内の馬の位置の平均 − 全馬の平均。` +
       `内外は馬番÷頭数(0 = 内、1 = 外)、前後は最初のコーナーの順位÷頭数(0 = 前、1 = 後ろ)で、マイナスなら内・前が有利。` +
@@ -2086,7 +2086,7 @@ function renderDayPage(date) {
 
   // 1. 1日を通した馬場傾向の予想(場ごと・芝ダ別)。予想 CSV の馬場傾向の列は同じ場・芝ダのレースで同じ値なので、芝ダごとにまとめて出す
   const bj = pick("dayBiasJyo");
-  h += `<div class="card"><h3>馬場傾向の予想(1日を通して)</h3>` + jyoTabs("dayBiasJyo", bj);
+  h += `<div class="card"><h3>馬場傾向の予想(1日を通して)（仮）</h3>` + jyoTabs("dayBiasJyo", bj);
   const bRids = rids.filter(rid => rid.slice(8, 10) === bj);
   const surfaces = [...new Set(bRids.map(surf))].sort((a, b) => ["芝", "ダート", "障害"].indexOf(a) - ["芝", "ダート", "障害"].indexOf(b));
   // この場の全レース(最終レースまで)の結果がそろったら、実際の馬場傾向と予想の当否を出す

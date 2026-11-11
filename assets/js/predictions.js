@@ -1088,7 +1088,7 @@ function renderRace(rid) {
     const w = num(r["馬体重"]), z = num(r["増減"]);
     const why = catChips(r) + reasonChips(r);
     html += `<tr class="horse${why ? " has-why" : ""}" data-key="${key}"><td class="rank">${esc(r["平均_順位"])}${changeView() ? moveMark(rankMove(r)) : ""}</td><td>${umaBadge(r.umaban, nUma)}</td>` +
-      `<td class="name">${esc(r.horse_name)}${cdot(r, "予想")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}${changeView() ? winMove(r) : ""}</td><td>${placeBar(top2(r), top3(r), maxTop3)}${preTops(r, ms)}</td>` +
+      `<td class="mark-col">${markSelect(rid, r.umaban)}</td><td class="name">${esc(r.horse_name)}${cdot(r, "予想")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}${changeView() ? winMove(r) : ""}</td><td>${placeBar(top2(r), top3(r), maxTop3)}${preTops(r, ms)}</td>` +
       `<td class="n">${fix(num(r["妥当オッズ_単勝"]))}${gapMark(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]), "単勝")}${colMove(r, "妥当オッズ_単勝", 1, true)} / ` +
       `${fix(num(r["妥当オッズ_複勝"]))}${gapMark(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]), "複勝(下限)")}${colMove(r, "妥当オッズ_複勝", 1, true)}</td>` +
       `<td class="n">${odds != null ? `${fix(odds)}<span class="dim ninki">${ninki.get(String(r.umaban))}人気</span>` : `<span class="dim">—</span>`}</td>` +
@@ -1098,8 +1098,8 @@ function renderRace(rid) {
       `<td class="n">${passing(r)}${colMove(r, "前半の番手", 0, true)}${colMove(r, "4角の番手", 0, true)}${cdot(r, "通過予想")}</td><td class="n">${lastThree(r)}${colMove(r, "上がり3Fの予想", 1, true)}${cdot(r, "上がり予想")}</td>` +
       `<td class="n hide-sm">${w == null ? "" : w + (z == null ? "" : `<span class="dim">(${z > 0 ? "+" : ""}${z})</span>`)}</td>` +
       `<td class="hide-sm">${split ? `<span class="chip warn" title="モデルの順位の幅 ${spread}">割れ</span>` : ""}</td></tr>`;
-    if (why && (!simpleView() || state.whyOpen?.has(key))) html += `<tr class="why"><td></td><td colspan="16">${why}</td></tr>`;
-    if (state.open.has(key)) html += `<tr class="detail"><td colspan="17">${detail(r, ms)}</td></tr>`;
+    if (why && (!simpleView() || state.whyOpen?.has(key))) html += `<tr class="why"><td></td><td colspan="17">${why}</td></tr>`;
+    if (state.open.has(key)) html += `<tr class="detail"><td colspan="18">${detail(r, ms)}</td></tr>`;
   }
   html += `</table></div>${favNote}<div class="note">勝率・3着内は5モデルの平均。妥当オッズの横の印は実際のオッズとの差(▲▲ 1.5倍以上・▲ 1.2倍以上高い、▼ 0.8倍未満・▼▼ 0.5倍未満に低い。上にのせると比)。期待値 = オッズ ÷ 妥当オッズ(1 を超えると予想の上では得。緑は 1.0 以上、太字は 1.2 以上。複勝は下限のオッズで計算)。単勝オッズの横は人気(オッズの低い順)。「割れ」はモデルの順位の幅が4以上。馬名・予想着順・脚質・通過予想・上がり予想の横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。色は緑 = 高・灰 = 中・橙 = 低。上にのせると0〜100の点と、検証期間の同じ条件での平均のずれ)。馬名の横は勝率・3着内・期待値を含む予想全体の確度。通過予想は前半(最初のコーナー)→ 4コーナーの番手、上がり予想は秒(かっこ内はレースで速い順、緑は3位まで)。根拠は説明用の LightGBM で、▲が評価を上げた項目、▼が下げた項目。数字は点数の差(レースの平均と比べた分)と、勝つ見込みのおおよその倍率(×)。総合・能力・適性・調子・人・展開は、根拠の項目を分類ごとに足したもの(総合は全部の合計)。1行目の「相対値」はこのレースの中の順位から星(点は1位が100・最下位が0)、2行目の「絶対値」は検証期間 2019〜2023年の全出走馬の中の位置(点は上位何%かで、80以上が★5)。横の高・中・低は確度(元になった出走数・調教などのデータの量。総合は能力・適性・調子のうち一番低いもの)で、低いものは薄く出す。</div></div>`;
 
@@ -1113,8 +1113,12 @@ function renderRace(rid) {
   setupHelpButtons(document.getElementById("main"));
   setupLapBase(document.getElementById("main"));
   setupHorseSort(document.getElementById("main"), rid);
+  document.querySelectorAll("select.mark").forEach(s => {
+    s.onclick = e => e.stopPropagation();
+    s.onchange = () => { setMark(rid, s.dataset.uma, s.value); s.dataset.m = s.value; };
+  });
   document.querySelectorAll("tr.horse").forEach(tr => tr.onclick = e => {
-    if (e.target.closest("input")) return;
+    if (e.target.closest("input, select")) return;
     const k = tr.dataset.key;
     state.whyOpen = state.whyOpen || new Set();
     if (simpleView() && tr.classList.contains("has-why")) {
@@ -1213,6 +1217,7 @@ function horseCols(rid) {
   return [
     ["予", r => num(r["平均_順位"]), 1, "rank", "予想の順位"],
     ["馬番", r => +r.umaban, 1, "", ""],
+    ["印", r => { const m = markOf(rid, r.umaban); return m ? MARKS.indexOf(m) : null; }, 1, "mark-col", "自分で付ける印(◎ 〇 ▲ △ ★ 消)。印の順で並べる"],
     ["馬名", r => r.horse_name || "", 1, "", ""],
     ["勝率", r => num(r["平均_勝率"]), -1, "", ""],
     ["2・3着内", t3, -1, "", "3着内の確率で並べる"],
@@ -1228,6 +1233,32 @@ function horseCols(rid) {
     ["上がり<br>予想", r => num(r["上がり3Fの予想"]), 1, "n", "上がり3F の予想(かっこ内はレースの中で速い順)"],
     ["馬体重", r => num(r["馬体重"]), -1, "n hide-sm", ""],
   ];
+}
+// ---------- 自分で付ける印(◎ 〇 ▲ △ ★ 消)。表示だけで、予想・モデルには使わない ----------
+// このブラウザの localStorage にレースごとに覚えておく: keiba-viewer:marks:<race_id(日付入り)> = {馬番: 印}。「-」は印なし
+const MARKS = ["◎", "〇", "▲", "△", "★", "消"];
+function marksOf(rid) {
+  if (!state.marks) state.marks = {};
+  if (!state.marks[rid]) {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(`keiba-viewer:marks:${rid}`) || "null"); } catch (e) {}
+    state.marks[rid] = saved && typeof saved === "object" ? saved : {};
+  }
+  return state.marks[rid];
+}
+function markOf(rid, uma) { const m = marksOf(rid)[String(uma)]; return MARKS.includes(m) ? m : ""; }
+function setMark(rid, uma, m) {
+  const ms = marksOf(rid);
+  if (MARKS.includes(m)) ms[String(uma)] = m; else delete ms[String(uma)];
+  try {
+    if (Object.keys(ms).length) localStorage.setItem(`keiba-viewer:marks:${rid}`, JSON.stringify(ms));
+    else localStorage.removeItem(`keiba-viewer:marks:${rid}`);
+  } catch (e) {}
+}
+function markSelect(rid, uma) {
+  const m = markOf(rid, uma);
+  return `<select class="mark" data-uma="${esc(uma)}" data-m="${m}" title="印を付ける(「-」で外す)" aria-label="${esc(uma)}番の印">` +
+    ["", ...MARKS].map(x => `<option value="${x}" ${x === m ? "selected" : ""}>${x || "-"}</option>`).join("") + `</select>`;
 }
 const MODELS_OF = r => Object.keys(r).filter(c => c.endsWith("_3着内") && !c.startsWith("平均") && !c.startsWith(PRE)).map(c => c.slice(0, -4));
 function horseHead(rid) {

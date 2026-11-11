@@ -260,6 +260,15 @@ table.grid { width: auto; margin-top: 8px; }
 table.grid th, table.grid td { padding: 4px 6px; text-align: center; }
 table.grid th.gr { text-align: left; white-space: nowrap; }
 table.grid td.gc input { width: 16px; height: 16px; cursor: pointer; }
+table.grid tr.gmarks th, table.grid tr.gmarks td { padding-top: 0; padding-bottom: 2px; }
+table.grid td.gmark { font-weight: 800; font-size: 15px; line-height: 1.2; color: var(--muted); }
+table.grid td.gmark[data-m=""] { font-weight: 400; font-size: 12px; opacity: .5; }
+table.grid td.gmark[data-m="◎"] { color: var(--down); }
+table.grid td.gmark[data-m="〇"] { color: var(--accent); }
+table.grid td.gmark[data-m="▲"] { color: var(--up); }
+table.grid td.gmark[data-m="△"] { color: var(--text); }
+table.grid td.gmark[data-m="★"] { color: var(--warn); }
+table.grid td.gmark[data-m="消"] { color: var(--muted); text-decoration: line-through; }
 .calc { display: flex; gap: 8px 14px; flex-wrap: wrap; align-items: center; }
 .calc input.calcCol { width: 130px; font: inherit; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px;
   background: var(--bg); color: var(--text); }

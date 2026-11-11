@@ -1115,7 +1115,11 @@ function renderRace(rid) {
   setupHorseSort(document.getElementById("main"), rid);
   document.querySelectorAll("select.mark").forEach(s => {
     s.onclick = e => e.stopPropagation();
-    s.onchange = () => { setMark(rid, s.dataset.uma, s.value); s.dataset.m = s.value; };
+    s.onchange = () => {
+      setMark(rid, s.dataset.uma, s.value); s.dataset.m = s.value;
+      // フォーメーションの馬番の下の印も合わせる
+      document.querySelectorAll(`td.gmark[data-u="${s.dataset.uma}"]`).forEach(td => { td.dataset.m = s.value; td.textContent = s.value || "-"; });
+    };
   });
   document.querySelectorAll("tr.horse").forEach(tr => tr.onclick = e => {
     if (e.target.closest("input, select")) return;
@@ -1776,7 +1780,10 @@ function renderCalc(rid) {
   const rowName = i => n === 1 ? "馬番" : ordered ? `${i}着` : `${i}頭目`;
   const nameOf = u => raceRows.find(r => String(r.umaban) === u)?.horse_name || "";
   h += `<div class="scroll"><table class="grid"><tr><th></th>` +
-    horses.map(u => `<th class="gc" title="${esc(nameOf(u))}">${u}</th>`).join("") + `<th class="gc">全通り</th></tr>`;
+    horses.map(u => `<th class="gc" title="${esc(nameOf(u))}">${u}</th>`).join("") + `<th class="gc">全通り</th></tr>` +
+    // 出走馬の表で付けた印(買い目を選ぶときの目安。印を変えるとここもすぐ変わる)
+    `<tr class="gmarks"><th class="gr" title="出走馬の表で付けた印">印</th>` +
+    horses.map(u => { const m = markOf(rid, u); return `<td class="gc gmark" data-u="${u}" data-m="${m}" title="${esc(nameOf(u))}">${m || "-"}</td>`; }).join("") + `<td></td></tr>`;
   for (let i = 1; i <= n; i++) {
     const row = c.rows[i - 1];
     const all = horses.length && horses.every(u => row.includes(u));

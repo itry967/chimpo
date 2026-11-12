@@ -2334,7 +2334,8 @@ function fundOf(date) {
     let s = null;
     try { s = JSON.parse(localStorage.getItem(`keiba-viewer:fund:${date}`) || "null"); } catch (e) {}
     s = s && typeof s === "object" ? s : {};
-    state.fund[date] = { budget: num(s.budget), picks: s.picks && typeof s.picks === "object" ? s.picks : {}, past: !!s.past };
+    state.fund[date] = { budget: num(s.budget), picks: s.picks && typeof s.picks === "object" ? s.picks : {}, past: !!s.past,
+      byJyo: !!s.byJyo, jyo: s.jyo || null };   // byJyo = 一覧を場別のタブで見る、jyo = 選んでいる場
   }
   return state.fund[date];
 }
@@ -2509,9 +2510,19 @@ function renderFund(date, raceLink) {
   }
   if (P.budget && P.spent) h += `<div class="calc" style="margin:0 0 8px"><button id="fundCopyAll" title="✔ のレースの配分額を、各レースの個別ページの推奨買い目の「手入力」に入れる(そのレースだけの金額。✔ の無いレースは、前に送った金額を消す)">→ ✔ のレースの配分額を全部、各レースの手入力に送る</button>` +
     (P.ok.some(x => raceBudgetOf(x.rid)) ? `<button id="fundCopyClear" title="この日の各レースの「このレースだけの手入力」を消して、共通の手入力に戻す">送った手入力を消す</button>` : "") + `</div>`;
+  // 一覧: 「場別に表示」なら場のタブで切り替える(上のサマリと配分はその日の全部の場のまま)
+  const jyos = [...new Set(P.ok.map(x => x.rid.slice(8, 10)))];
+  const cur = jyos.includes(f.jyo) ? f.jyo : jyos[0];
+  const shown = f.byJyo ? P.ok.filter(x => x.rid.slice(8, 10) === cur) : P.ok;
+  h += `<div class="fund-view"><label title="一覧を競馬場ごとのタブで見る(配分はその日の全部の場で計算したまま)"><input type="checkbox" id="fundByJyo" ${f.byJyo ? "checked" : ""}> 場別に表示</label>` +
+    (f.byJyo ? `<div class="tabs fundJyo">` + jyos.map(j => {
+      const xs = P.ok.filter(x => x.rid.slice(8, 10) === j), amt = xs.reduce((a, x) => a + (x.spent || 0), 0);
+      return `<button data-j="${j}" class="${j === cur ? "on" : ""}" title="${esc(JYO[j] || j)}: ✔ ${xs.filter(x => x.pick).length} / ${xs.length}レース・配分 ${amt.toLocaleString()}円">` +
+        `${esc(JYO[j] || j)} <span class="muted">✔${xs.filter(x => x.pick).length}/${xs.length}${P.budget ? `・${amt.toLocaleString()}円` : ""}</span></button>`;
+    }).join("") + `</div>` : "") + `</div>`;
   h += `<div class="scroll"><table class="fund-table"><tr class="f-head"><th title="買う(✔)/見送り">✔</th><th>レース</th><th>発走</th><th class="n">自信</th><th class="n">混戦</th>` +
     `<th>自動の判定</th><th class="n">見込みの回収率</th><th class="n">期待値</th><th class="n">配分額</th><th>おすすめの買い目</th></tr>`;
-  for (const x of P.ok) {
+  for (const x of shown) {
     const r0 = state.races.get(x.rid)[0], c = confLevel(state.races.get(x.rid));
     const changed = x.pick !== x.autoBuy;
     const est = x.amount ? x.honestUsed : x.est;
@@ -2563,6 +2574,7 @@ function fundHelpHTML() {
     `<li>推奨買い目は各レースの発走55分前ごろに出る。まだのレースは、同じ日の同じ自信・混戦の組の別のレースの値で仮に判定し(「仮」)、` +
     `それも無ければ「判定待ち」で ✔ を付けて配分額だけ取っておく。推奨買い目が出ると判定し直すので、✔ と配分額が変わることがある。</li>` +
     `<li>各レースの「おすすめの買い目」は、配分額が入る予算の区分の推奨買い目「おすすめ」を、1点の金額をそろえて配ったもの。レース名を押すと個別レースページへ。</li>` +
+    `<li>「場別に表示」に ✔ を入れると、一覧を競馬場ごとのタブで見られる(タブに場ごとの ✔ の数と配分額)。上のサマリと配分はその日の全部の場のまま。</li>` +
     `<li>「→ 手入力へ」(レースごと)か「→ ✔ のレースの配分額を全部、各レースの手入力に送る」で、配分額を個別レースページの推奨買い目の「手入力」に入れられる。` +
     `そのレースだけの金額で、共通の手入力より先に使い、配分(均等・確率に比例 など)は個別レースページの選び方で計算する。個別レースページの「共通に戻す」か、ここの「送った手入力を消す」で消せる。</li>` +
     `<li>「↓ 配分案の買い目を購入した馬券に送る」で、配分案の買い目を下の「購入した馬券」に入れられる(実際の購入とはつながっていない)。</li></ol>` +
@@ -2585,6 +2597,9 @@ function bindFund(date) {
   if (inp) inp.onchange = () => { const v = roundYen(inp.value); f.budget = v || null; saveFund(date); again(); };
   const past = document.getElementById("fundPast");
   if (past) past.onchange = () => { f.past = past.checked; saveFund(date); again(); };
+  const byJyo = document.getElementById("fundByJyo");
+  if (byJyo) byJyo.onchange = () => { f.byJyo = byJyo.checked; saveFund(date); again(); };
+  document.querySelectorAll(".fundJyo button").forEach(b => b.onclick = () => { f.jyo = b.dataset.j; saveFund(date); again(); });
   const help = document.getElementById("fundHelp");
   if (help) help.onclick = () => openHelp("keiba-viewer-fund", "資金配分案の説明", "資金配分案（仮）の使い方と決め方", fundHelpHTML());
   const auto = document.getElementById("fundAuto");

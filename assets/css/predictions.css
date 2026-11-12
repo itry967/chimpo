@@ -434,6 +434,9 @@ a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
 .fund-tickets { font-size: 12px; line-height: 1.5; white-space: nowrap; }
 .fund-table button.fundCopy { margin-top: 2px; font-size: 12px; padding: 1px 8px; }
 .fund-odds { margin-top: 3px; }
+.fund-view { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 6px; }
+.fund-view .tabs { margin: 0; }
+.fundJyo button.on .muted { color: inherit; opacity: .85; }
 .fund-odds .chip { font-size: 11px; }
 @media (max-width: 760px) {
   .fund-card .calc label { flex: 1 1 100%; }

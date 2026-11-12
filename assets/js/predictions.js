@@ -2239,15 +2239,18 @@ function renderDayPage(date) {
   h += `<div class="card"><h3>購入した馬券</h3>`;
   if (!bought.length) h += `<div class="muted">まだありません。個別レースページの「買い目候補」の欄で「→ 購入した馬券に送る」を押すと、ここに出ます。</div>`;
   else {
-    h += `<div class="kpis" style="margin:0 0 8px">` +
-      kpi(`${cost.toLocaleString()}円`, `総投資金額(${bought.filter(x => x.amount > 0).length}点・${allRaces.size}レース${bought.some(x => !(x.amount > 0)) ? "。0円の馬券は数えない" : ""})`) +
+    // 並び: 総投資金額 → 期待値(予想の上の見込み。結果ではない)→ 実際の結果(払戻の CSV)。期待値と結果は枠で分けて見出しを付ける
+    h += `<div class="bought-kpis">` +
+      `<div class="kpis">` + kpi(`${cost.toLocaleString()}円`, `総投資金額(${bought.filter(x => x.amount > 0).length}点・${allRaces.size}レース${bought.some(x => !(x.amount > 0)) ? "。0円の馬券は数えない" : ""})`) + `</div>` +
+      `<div class="kgroup kg-ev"><div class="kg-h">期待値(予想の上の見込み。結果ではない)</div><div class="kpis">` +
+      kpi(evCost ? `${Math.round(evBack).toLocaleString()}円` : "-", `払戻の期待値${evCost < cost ? `(オッズのある ${evCost.toLocaleString()}円分)` : ""}`) +
+      kpi(evCost ? `<span class="${evBack / evCost >= 1 ? "hi" : ""}">${fix(evBack / evCost * 100)}%</span>` : "-", "回収率の期待値") + `</div></div>` +
+      `<div class="kgroup kg-res"><div class="kg-h">実際の結果(結果の出たレース)</div><div class="kpis">` +
       // 総回収額: 結果の出たレースの払戻の合計(当たった馬券の 100円あたりの払戻 × 金額 ÷ 100)と、総投資金額との差(収支)
       kpi(setCost ? `<span class="${setBack >= setCost ? "hi" : ""}">${Math.round(setBack).toLocaleString()}円</span>` : "-",
-        setCost ? `総回収額(結果の出た ${setRaces.size}レース。収支 ${setBack - setCost >= 0 ? "+" : "−"}${Math.abs(Math.round(setBack - setCost)).toLocaleString()}円${setCost < cost ? `・結果待ち ${(cost - setCost).toLocaleString()}円分は入れない` : ""})` : "総回収額(結果が出たら出す)") +
-      kpi(evCost ? `${Math.round(evBack).toLocaleString()}円` : "-", `払戻の期待値${evCost < cost ? `(オッズのある ${evCost.toLocaleString()}円分)` : ""}`) +
-      kpi(evCost ? `<span class="${evBack / evCost >= 1 ? "hi" : ""}">${fix(evBack / evCost * 100)}%</span>` : "-", "回収率の期待値(予想の上で)") +
+        setCost ? `総回収額(${setRaces.size}レース。収支 ${setBack - setCost >= 0 ? "+" : "−"}${Math.abs(Math.round(setBack - setCost)).toLocaleString()}円${setCost < cost ? `・結果待ち ${(cost - setCost).toLocaleString()}円分は入れない` : ""})` : "総回収額(結果が出たら出す)") +
       kpi(setCost ? `<span class="${setBack >= setCost ? "hi" : ""}">${fix(setBack / setCost * 100)}%</span>` : "-",
-        setCost ? `回収率(結果の出た ${setRaces.size}レース: ${setCost.toLocaleString()}円 → ${Math.round(setBack).toLocaleString()}円)` : "回収率(結果が出たら出す)") + `</div>`;
+        setCost ? `回収率(${setCost.toLocaleString()}円 → ${Math.round(setBack).toLocaleString()}円)` : "回収率(結果が出たら出す)") + `</div></div></div>`;
     h += `<div class="scroll" style="max-height:520px;overflow-y:auto"><table><tr><th>レース</th><th>券種</th><th>買い目</th><th class="n">金額</th><th class="n">確率</th>` +
       `<th class="n">オッズ</th><th class="n">期待値</th><th class="n">払戻の期待値</th><th class="n">結果</th><th></th></tr>`;
     for (const r of rows) {

@@ -434,6 +434,14 @@ a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
 .fund-tickets { font-size: 12px; line-height: 1.5; white-space: nowrap; }
 .fund-table button.fundCopy { margin-top: 2px; font-size: 12px; padding: 1px 8px; }
 .fund-odds { margin-top: 3px; }
+.bought-kpis { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px 14px; margin: 0 0 8px; }
+.bought-kpis .kpis { margin: 0; }
+.kgroup { border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px 6px; }
+.kgroup .kg-h { font-size: 11px; font-weight: 600; margin-bottom: 2px; }
+.kg-ev { border-style: dashed; }
+.kg-ev .kg-h { color: var(--muted); }
+.kg-ev .kpi .v { font-style: italic; opacity: .85; }
+.kg-res .kg-h { color: var(--text); }
 .basket-table td.bform { vertical-align: middle; font-size: 12px; white-space: nowrap; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 .fund-view { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 6px; }
 .fund-view .tabs { margin: 0; }

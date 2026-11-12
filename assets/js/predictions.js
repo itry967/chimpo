@@ -1968,7 +1968,7 @@ function renderBasket(rid, tri, places, odds, raceRows) {
     kpi(priced ? `${Math.round(back).toLocaleString()}円` : "-", `払戻の期待値${priced < cost ? `(オッズのある ${priced.toLocaleString()}円分)` : ""}`) +
     kpi(priced ? `<span class="${back / priced >= 1 ? "hi" : ""}">${fix(back / priced * 100)}%</span>` : "-", "回収率の期待値(予想の上で)") +
     (state.oddsKind?.get(rid) ? kpi(esc(state.oddsKind.get(rid)), "オッズの種類") : "") + `</div>`;
-  h += `<div class="scroll" style="max-height:460px;overflow-y:auto"><table class="basket-table"><tr><th>券種</th><th>買い目</th><th title="どのフォーメーションから入れたか(同じフォーメーションはまとめて1つ)">フォーメーション</th><th class="n">確率</th><th class="n">妥当オッズ</th>` +
+  h += `<div class="scroll" style="max-height:460px;overflow-y:auto"><table class="basket-table"><tr><th>券種</th><th title="どのフォーメーションから入れたか(同じフォーメーションはまとめて1つ)">フォーメーション</th><th>買い目</th><th class="n">確率</th><th class="n">妥当オッズ</th>` +
     `<th class="n">オッズ</th><th class="n">期待値</th><th class="n">金額(100円単位)</th><th class="n">当たったときの払戻</th><th></th></tr>`;
   rows.forEach((r, k) => {
     const lower = r.kind === "複勝" || r.kind === "ワイド";
@@ -1981,7 +1981,7 @@ function renderBasket(rid, tri, places, odds, raceRows) {
       formCell = `<td class="bform" rowspan="${span}">${r.fk ? (r.forms || []).map(esc).join("<br>") : `<span class="dim">-</span>`}${span > 1 ? `<div class="dim">${span}点</div>` : ""}</td>`;
     }
     const hp = hitPayout(rid, r.kind, r.t);
-    h += `<tr class="${r.amount ? "" : "dim"}${hp != null ? " hit" : ""}"${hp != null ? ` title="的中(100円あたり ${hp.toLocaleString()}円)"` : ""}><td>${esc(r.kind)}</td><td><b>${esc(r.t.join(sep))}</b></td>${formCell}` +
+    h += `<tr class="${r.amount ? "" : "dim"}${hp != null ? " hit" : ""}"${hp != null ? ` title="的中(100円あたり ${hp.toLocaleString()}円)"` : ""}><td>${esc(r.kind)}</td>${formCell}<td><b>${esc(r.t.join(sep))}</b></td>` +
       `<td class="n">${pct(r.p, 2)}</td><td class="n">${r.p > 0 ? fix(1 / r.p) : ""}</td>` +
       `<td class="n">${r.o ? fix(r.o) + (lower ? "〜" : "") : `<span class="dim">オッズなし</span>`}</td><td class="n">${r.o && r.p ? evCell(r.o, 1 / r.p) : ""}</td>` +
       `<td class="n"><input class="odds amt" data-i="${r.i}" type="number" min="0" step="100" value="${r.amount}" style="width:90px"> 円</td>` +

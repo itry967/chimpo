@@ -916,9 +916,9 @@ function toggleFold(key) {
 function setupHelpButtons(root) {
   root.querySelectorAll("button.help[data-help='baba']").forEach(b => b.onclick = openBabaHelp);
 }
-function setupCardFolds(root) {
-  // カードの見出し(h2・h3)を押すとたたむ。たたんだ見出しはどのレースでも同じ(見出しの文字で覚える)
-  root.querySelectorAll(".card").forEach(card => {
+function setupCardFolds(root, sel = ".card") {
+  // カードの見出し(h2・h3)を押すとたたむ。たたんだ見出しはどのレースでも同じ(見出しの文字で覚える)。sel でたためるカードを絞れる
+  root.querySelectorAll(sel).forEach(card => {
     const head = card.querySelector("h2, h3");
     if (!head) return;
     const key = "card:" + head.textContent.replace(/\s+/g, "").replace(/^[▾▸]/, "").replace(/？$/, "").slice(0, 20);   // ? ボタンの字は入れない
@@ -2202,7 +2202,7 @@ function renderDayPage(date) {
   const judged = sRids.map(rid => [rid, skipOf(rid, tierName)]);
   const skips = judged.filter(([, x]) => x?.skip), unknown = judged.filter(([, x]) => !x);
   const fromCsv = judged.some(([, x]) => x?.src === "csv");
-  h += `<div class="card"><h3>見送り推奨のレース（仮）</h3>` + jyoTabs("daySkipJyo", sj) +
+  h += `<div class="card day-fold"><h3>見送り推奨のレース（仮）</h3>` + jyoTabs("daySkipJyo", sj) +
     `<div class="kpis" style="margin:0 0 8px">${kpi(`${skips.length} / ${sRids.length}`, "見送り推奨（仮） / この場のレース")}` +
     (unknown.length ? kpi(unknown.length, "推奨買い目がまだ無い(判定できない)") : "") + `</div>`;
   if (skips.length) {
@@ -2269,6 +2269,7 @@ function renderDayPage(date) {
 
   const main = document.getElementById("main");
   main.innerHTML = h;
+  setupCardFolds(main, ".card.day-fold");     // 見送り推奨・資金配分案は見出しを押すとたためる(このブラウザに覚えておく)
   document.body.classList.add("day-page-active");
   main.querySelectorAll(".dayTabs button").forEach(b => b.onclick = () => { state[b.parentElement.dataset.k] = b.dataset.j; renderDayPage(date); });
   main.querySelectorAll("a.dayRace").forEach(a => a.onclick = e => { e.preventDefault(); state.dayPage = null; state.current = a.dataset.rid; state.open.clear(); render(); });
@@ -2527,7 +2528,7 @@ function raceName(rid) { return rid ? `${JYO[rid.slice(8, 10)] || rid.slice(8, 1
 function renderFund(date, raceLink) {
   const P = fundPlan(date), f = P.f;
   const started = P.inJyo.length - P.open.length;
-  let h = `<div class="card fund-card"><h3>資金配分案（仮）<button class="help" id="fundHelp" title="資金配分案の使い方と決め方">？</button></h3>` +
+  let h = `<div class="card fund-card day-fold"><h3>資金配分案（仮）<button class="help" id="fundHelp" title="資金配分案の使い方と決め方">？</button></h3>` +
     // 対象の場(✔ の無い場は資金配分の対象から外す)
     `<div class="calc fund-jyos" style="margin-bottom:6px"><span class="muted">対象の場:</span>` +
     P.jyos.map(j => `<label><input type="checkbox" class="fundJyoOn" data-j="${j}" ${f.offJyo.includes(j) ? "" : "checked"}> ${esc(JYO[j] || j)}</label>`).join("") +
@@ -2652,7 +2653,7 @@ function bindFund(date) {
   if (byJyo) byJyo.onchange = () => { f.byJyo = byJyo.checked; saveFund(date); again(); };
   document.querySelectorAll(".fundJyo button").forEach(b => b.onclick = () => { f.jyo = b.dataset.j; saveFund(date); again(); });
   const help = document.getElementById("fundHelp");
-  if (help) help.onclick = () => openHelp("keiba-viewer-fund", "資金配分案の説明", "資金配分案（仮）の使い方と決め方", fundHelpHTML());
+  if (help) help.onclick = e => { e.stopPropagation(); openHelp("keiba-viewer-fund", "資金配分案の説明", "資金配分案（仮）の使い方と決め方", fundHelpHTML()); };
   const auto = document.getElementById("fundAuto");
   if (auto) auto.onclick = () => { f.picks = {}; saveFund(date); again(); };
   document.querySelectorAll("input.fundPick").forEach(c => c.onchange = () => { f.picks[c.dataset.rid] = c.checked; saveFund(date); again(); });

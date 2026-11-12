@@ -1180,7 +1180,11 @@ function renderRace(rid) {
   document.getElementById("calcClear")?.addEventListener("click", () => calcUpdate(() => { calc.rows = [[], [], []]; }));
   document.getElementById("calcAddPick")?.addEventListener("click", () => {
     const picked = [...document.querySelectorAll(".prevPick:checked")].map(x => x.dataset.k.split("-"));
-    if (picked.length) addToBasket(rid, calc.kind, picked, roundYen(calc.unit));
+    if (picked.length) {
+      const horses = (state.races.get(rid) || []).map(r => String(r.umaban));
+      const cols = calc.rows.slice(0, CALC_KINDS[calc.kind][0]).map(r => horses.filter(u => r.includes(u)));
+      addToBasket(rid, calc.kind, picked, roundYen(calc.unit), formationLabel(calc.kind, cols) + "(選んだもの)");
+    }
     renderRace(rid);
   });
   document.querySelector(".prevAll")?.addEventListener("change", e => document.querySelectorAll(".prevPick").forEach(x => x.checked = e.target.checked));
@@ -1191,7 +1195,8 @@ function renderRace(rid) {
     for (const x of list) {
       const amount = x.amount || 100;
       const hit = b.find(y => y.kind === x.kind && y.t.join("-") === x.t.join("-"));
-      if (hit) hit.amount += amount; else b.push({ kind: x.kind, t: [...x.t], amount });
+      if (hit) { hit.amount += amount; if (!(hit.forms || []).includes("推奨買い目")) hit.forms = [...(hit.forms || []), "推奨買い目"]; }
+      else b.push({ kind: x.kind, t: [...x.t], amount, forms: ["推奨買い目"] });
     }
     saveBasket(rid);
     renderRace(rid);
@@ -1203,7 +1208,7 @@ function renderRace(rid) {
     const horses = raceRows.map(r => String(r.umaban)).sort((a, b) => a - b);
     const [n] = CALC_KINDS[calc.kind];
     const cols = calc.rows.slice(0, n).map(r => horses.filter(u => r.includes(u)));
-    if (cols.every(x => x.length)) addToBasket(rid, calc.kind, expandTickets(calc.kind, cols), roundYen(calc.unit));
+    if (cols.every(x => x.length)) addToBasket(rid, calc.kind, expandTickets(calc.kind, cols), roundYen(calc.unit), formationLabel(calc.kind, cols));
     renderRace(rid);
   });
   document.querySelectorAll("input.amt").forEach(x => {
@@ -1881,13 +1886,22 @@ function saveBasket(rid) {
   try { localStorage.setItem(`keiba-viewer:basket:${rid}`, JSON.stringify(state.basket[rid] || [])); } catch (e) {}
 }
 function roundYen(v) { return Math.max(0, Math.round((num(String(v).replace(/[,円\s]/g, "")) || 0) / 100) * 100); }
-function addToBasket(rid, kind, tickets, unit) {
+function addToBasket(rid, kind, tickets, unit, form) {
+  // form: どこから入れたか(フォーメーションの書き方。買い目候補の「フォーメーション」の列に出す)
   const b = basketOf(rid);
   for (const t of tickets) {
     const hit = b.find(x => x.kind === kind && x.t.join("-") === t.join("-"));
-    if (hit) hit.amount += unit; else b.push({ kind, t, amount: unit });
+    if (hit) { hit.amount += unit; if (form && !(hit.forms || []).includes(form)) hit.forms = [...(hit.forms || []), form]; }
+    else b.push({ kind, t, amount: unit, ...(form ? { forms: [form] } : {}) });
   }
   saveBasket(rid);
+}
+function formationLabel(kind, cols) {
+  // 「買い目を入れて計算」のフォーメーションの書き方。例 3連複 2 - 3,6 - 4,7,10 / 馬連 ボックス 1,3,5
+  const [n] = CALC_KINDS[kind];
+  const c = cols.slice(0, n).map(x => [...x].sort((a, b) => a - b));
+  if (n > 1 && c.every(x => x.join(",") === c[0].join(","))) return `${kind} ボックス ${c[0].join(",")}`;
+  return `${kind} ${c.map(x => x.join(",")).join(" - ")}`;
 }
 // ---------- 購入した馬券(買い目候補から「購入した馬券に送る」で送ったもの。日別ページに出す) ----------
 // このブラウザの localStorage に日付ごとに覚えておく: [{rid, kind, t, amount, at}]
@@ -1941,8 +1955,11 @@ function renderBasket(rid, tri, places, odds, raceRows) {
     }
     cost += x.amount;
     if (o && x.amount) { back += p * o * x.amount; priced += x.amount; }
-    return { ...x, i, p, o };
+    return { ...x, i, p, o, fk: (x.forms || []).join(" / ") };
   });
+  // 同じフォーメーションの行を、最初に出てきた順のかたまりにまとめる(かたまりの中は入れた順)
+  const order = [...new Set(rows.map(r => r.fk))];
+  rows.sort((a, b) => order.indexOf(a.fk) - order.indexOf(b.fk) || a.i - b.i);
   const live = b.filter(x => x.amount > 0);
   const anyP = tri.reduce((s, y) => s + (live.some(x => hits(x.kind, x.t, y, places)) ? y[3] : 0), 0);
   h += `<div class="kpis" style="margin:6px 0 8px">` +
@@ -1951,19 +1968,26 @@ function renderBasket(rid, tri, places, odds, raceRows) {
     kpi(priced ? `${Math.round(back).toLocaleString()}円` : "-", `払戻の期待値${priced < cost ? `(オッズのある ${priced.toLocaleString()}円分)` : ""}`) +
     kpi(priced ? `<span class="${back / priced >= 1 ? "hi" : ""}">${fix(back / priced * 100)}%</span>` : "-", "回収率の期待値(予想の上で)") +
     (state.oddsKind?.get(rid) ? kpi(esc(state.oddsKind.get(rid)), "オッズの種類") : "") + `</div>`;
-  h += `<div class="scroll" style="max-height:460px;overflow-y:auto"><table><tr><th>券種</th><th>買い目</th><th class="n">確率</th><th class="n">妥当オッズ</th>` +
+  h += `<div class="scroll" style="max-height:460px;overflow-y:auto"><table class="basket-table"><tr><th>券種</th><th>買い目</th><th title="どのフォーメーションから入れたか(同じフォーメーションはまとめて1つ)">フォーメーション</th><th class="n">確率</th><th class="n">妥当オッズ</th>` +
     `<th class="n">オッズ</th><th class="n">期待値</th><th class="n">金額(100円単位)</th><th class="n">当たったときの払戻</th><th></th></tr>`;
-  for (const r of rows) {
+  rows.forEach((r, k) => {
     const lower = r.kind === "複勝" || r.kind === "ワイド";
     const sep = CALC_KINDS[r.kind][1] && r.t.length > 1 ? "→" : "-";
+    // フォーメーションの列: かたまりの最初の行にだけ出し、かたまりの行数だけつなげる
+    let formCell = "";
+    if (k === 0 || rows[k - 1].fk !== r.fk) {
+      let span = 1;
+      while (k + span < rows.length && rows[k + span].fk === r.fk) span++;
+      formCell = `<td class="bform" rowspan="${span}">${r.fk ? (r.forms || []).map(esc).join("<br>") : `<span class="dim">-</span>`}${span > 1 ? `<div class="dim">${span}点</div>` : ""}</td>`;
+    }
     const hp = hitPayout(rid, r.kind, r.t);
-    h += `<tr class="${r.amount ? "" : "dim"}${hp != null ? " hit" : ""}"${hp != null ? ` title="的中(100円あたり ${hp.toLocaleString()}円)"` : ""}><td>${esc(r.kind)}</td><td><b>${esc(r.t.join(sep))}</b></td>` +
+    h += `<tr class="${r.amount ? "" : "dim"}${hp != null ? " hit" : ""}"${hp != null ? ` title="的中(100円あたり ${hp.toLocaleString()}円)"` : ""}><td>${esc(r.kind)}</td><td><b>${esc(r.t.join(sep))}</b></td>${formCell}` +
       `<td class="n">${pct(r.p, 2)}</td><td class="n">${r.p > 0 ? fix(1 / r.p) : ""}</td>` +
       `<td class="n">${r.o ? fix(r.o) + (lower ? "〜" : "") : `<span class="dim">オッズなし</span>`}</td><td class="n">${r.o && r.p ? evCell(r.o, 1 / r.p) : ""}</td>` +
       `<td class="n"><input class="odds amt" data-i="${r.i}" type="number" min="0" step="100" value="${r.amount}" style="width:90px"> 円</td>` +
       `<td class="n">${r.o && r.amount ? Math.round(r.amount * r.o).toLocaleString() + "円" + (lower ? "〜" : "") : r.amount ? "-" : "買わない"}</td>` +
       `<td><button class="del" data-i="${r.i}" title="この買い目を消す">×</button></td></tr>`;
-  }
+  });
   const sent = boughtOf(rid.slice(0, 8)).filter(x => x.rid === rid);
   h += `</table></div><div class="calc" style="margin-top:8px"><button id="basketBuy" class="buy" ${live.length ? "" : "disabled"} title="金額が0円より大きい買い目を、日別ページの「購入した馬券」に足す(同じ買い目は金額を足し合わせる)">→ 購入した馬券に送る</button>` +
     `<button id="basketZero">全部0円にする</button><button id="basketClear">買い目を全部消す</button>` +

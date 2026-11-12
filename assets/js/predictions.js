@@ -2241,6 +2241,9 @@ function renderDayPage(date) {
   else {
     h += `<div class="kpis" style="margin:0 0 8px">` +
       kpi(`${cost.toLocaleString()}円`, `総投資金額(${bought.filter(x => x.amount > 0).length}点・${allRaces.size}レース${bought.some(x => !(x.amount > 0)) ? "。0円の馬券は数えない" : ""})`) +
+      // 総回収額: 結果の出たレースの払戻の合計(当たった馬券の 100円あたりの払戻 × 金額 ÷ 100)と、総投資金額との差(収支)
+      kpi(setCost ? `<span class="${setBack >= setCost ? "hi" : ""}">${Math.round(setBack).toLocaleString()}円</span>` : "-",
+        setCost ? `総回収額(結果の出た ${setRaces.size}レース。収支 ${setBack - setCost >= 0 ? "+" : "−"}${Math.abs(Math.round(setBack - setCost)).toLocaleString()}円${setCost < cost ? `・結果待ち ${(cost - setCost).toLocaleString()}円分は入れない` : ""})` : "総回収額(結果が出たら出す)") +
       kpi(evCost ? `${Math.round(evBack).toLocaleString()}円` : "-", `払戻の期待値${evCost < cost ? `(オッズのある ${evCost.toLocaleString()}円分)` : ""}`) +
       kpi(evCost ? `<span class="${evBack / evCost >= 1 ? "hi" : ""}">${fix(evBack / evCost * 100)}%</span>` : "-", "回収率の期待値(予想の上で)") +
       kpi(setCost ? `<span class="${setBack >= setCost ? "hi" : ""}">${fix(setBack / setCost * 100)}%</span>` : "-",

@@ -2335,7 +2335,8 @@ function fundOf(date) {
     try { s = JSON.parse(localStorage.getItem(`keiba-viewer:fund:${date}`) || "null"); } catch (e) {}
     s = s && typeof s === "object" ? s : {};
     state.fund[date] = { budget: num(s.budget), picks: s.picks && typeof s.picks === "object" ? s.picks : {}, past: !!s.past,
-      byJyo: !!s.byJyo, jyo: s.jyo || null };   // byJyo = 一覧を場別のタブで見る、jyo = 選んでいる場
+      byJyo: !!s.byJyo, jyo: s.jyo || null,     // byJyo = 一覧を場別のタブで見る、jyo = 選んでいる場
+      offJyo: Array.isArray(s.offJyo) ? s.offJyo : [] };   // 資金配分の対象から外した場(場コード。初めは全場が対象)
   }
   return state.fund[date];
 }
@@ -2422,7 +2423,9 @@ function fundPlan(date) {
   // その日の資金配分案。open = 対象のレース(発走前。振り返りなら全部)。ok = 対象のうち予想 CSV のあるレース(配分する)
   const f = fundOf(date);
   const rids = sortedRaces().filter(rid => rid.slice(0, 8) === date);
-  const open = rids.filter(rid => f.past || !raceStarted(rid));
+  const jyos = [...new Set(rids.map(rid => rid.slice(8, 10)))];
+  const inJyo = rids.filter(rid => !f.offJyo.includes(rid.slice(8, 10)));     // 対象の場のレース
+  const open = inJyo.filter(rid => f.past || !raceStarted(rid));
   const budget = f.budget || 0;
   const ok = open.map(rid => {
     const own = fundOptions(rid);
@@ -2433,6 +2436,7 @@ function fundPlan(date) {
   for (const x of ok) {
     const o0 = x.opts.length ? fundChoose(x.opts, first) : null;
     x.est0 = o0?.honest ?? null;
+    x.tier0 = o0?.name || "";        // 判定に使った区分(予算 ÷ 対象のレース数 の額)
     const csv = state.races.get(x.rid)?.[0];
     if (csv && "見送り" in csv) {
       x.autoBuy = !["1", "true", "見送り", "○"].includes(String(csv["見送り"]).trim());
@@ -2487,28 +2491,33 @@ function fundPlan(date) {
     x.oddsNote = (state.odds.has(x.rid) && state.oddsKind.get(x.rid)) || p0["オッズの種類"] || "";
     x.stage = p0["予想の段階"] || "";
   });
-  return { f, rids, open, items, ok, picked, budget, spent: ok.reduce((s, x) => s + (x.spent || 0), 0) };
+  return { f, rids, jyos, inJyo, open, items, ok, picked, budget, spent: ok.reduce((s, x) => s + (x.spent || 0), 0) };
 }
 function raceName(rid) { return rid ? `${JYO[rid.slice(8, 10)] || rid.slice(8, 10)} ${+rid.slice(14, 16)}R` : ""; }
 function renderFund(date, raceLink) {
   const P = fundPlan(date), f = P.f;
-  const started = P.rids.length - P.open.length;
+  const started = P.inJyo.length - P.open.length;
   let h = `<div class="card fund-card"><h3>資金配分案（仮）<button class="help" id="fundHelp" title="資金配分案の使い方と決め方">？</button></h3>` +
+    // 対象の場(✔ の無い場は資金配分の対象から外す)
+    `<div class="calc fund-jyos" style="margin-bottom:6px"><span class="muted">対象の場:</span>` +
+    P.jyos.map(j => `<label><input type="checkbox" class="fundJyoOn" data-j="${j}" ${f.offJyo.includes(j) ? "" : "checked"}> ${esc(JYO[j] || j)}</label>`).join("") +
+    `<button id="fundJyoAll" title="全部の場を資金配分の対象にする" ${f.offJyo.some(j => P.jyos.includes(j)) ? "" : "disabled"}>全場選択</button></div>` +
     `<div class="calc" style="margin-bottom:8px"><label>この日の予算 <input id="fundBudget" class="odds" inputmode="numeric" style="width:110px" value="${f.budget ?? ""}" placeholder="例 10000"> 円</label>` +
     `<button id="fundAuto" title="✔ を最初の自動の選定(購入推奨に ✔、見送り推奨は ✔ なし)に戻す">✔ を自動の選定に戻す</button>` +
     `<label title="前の日付の振り返りや、発走済みのレースも入れて見たいとき"><input type="checkbox" id="fundPast" ${f.past ? "checked" : ""}> 発走済み・結果の出たレースも入れる</label></div>`;
+  if (!P.inJyo.length) return h + `<div class="muted">${P.rids.length ? "対象の場が選ばれていません。上の「対象の場」に ✔ を入れるか「全場選択」を押す。" : "この日のレースがありません。"}</div></div>`;
   if (!P.open.length) return h + `<div class="muted">${P.rids.length ? `発走前のレースがありません(この日の ${P.rids.length}レースはどれも発走済み・結果あり)。振り返るときは「発走済み・結果の出たレースも入れる」に ✔ を入れる。` : "この日のレースがありません。"}</div></div>`;
   const pending = P.ok.filter(x => x.pending).length;
   if (!P.budget) h += `<div class="muted" style="margin-bottom:6px">予算を入れると、✔ のレースに配分します(下の表は ✔ と見込みの回収率だけ)。</div>`;
   else {
     const left = P.budget - P.spent;
     h += `<div class="kpis" style="margin:0 0 8px">` +
-      kpi(`${P.picked.length} / ${P.ok.length}`, `✔ のレース / 対象のレース(発走前${started && !f.past ? `。発走済み ${started}レースは除く` : ""})`) +
+      kpi(`${P.picked.length} / ${P.ok.length}`, `✔ のレース / 対象のレース(${P.inJyo.length < P.rids.length ? `${P.jyos.filter(j => !f.offJyo.includes(j)).map(j => JYO[j] || j).join("・")}の` : ""}発走前${started && !f.past ? `。発走済み ${started}レースは除く` : ""})`) +
       kpi(`${P.spent.toLocaleString()}円`, `配分の合計(予算 ${P.budget.toLocaleString()}円${left > 0 ? `・残り ${left.toLocaleString()}円` : ""})`) +
       kpi(P.ok.filter(x => x.autoBuy).length, `購入推奨（仮）(見込みの回収率 ${FUND_RULE.skip}%以上)`) +
       (pending ? kpi(pending, "推奨買い目がまだのレース(配分額は取っておく)") : "") + `</div>`;
   }
-  if (P.budget && P.spent) h += `<div class="calc" style="margin:0 0 8px"><button id="fundCopyAll" title="✔ のレースの配分額を、各レースの個別ページの推奨買い目の「手入力」に入れる(そのレースだけの金額。✔ の無いレースは、前に送った金額を消す)">→ ✔ のレースの配分額を全部、各レースの手入力に送る</button>` +
+  if (P.budget && P.spent) h += `<div class="calc" style="margin:0 0 8px"><button id="fundCopyAll" title="✔ のレースの配分額を、各レースの個別ページの推奨買い目の「手入力」に入れる(そのレースだけの金額。✔ の無いレースと、対象から外した場のレースは、前に送った金額を消す)">→ ✔ のレースの配分額を全部、各レースの手入力に送る</button>` +
     (P.ok.some(x => raceBudgetOf(x.rid)) ? `<button id="fundCopyClear" title="この日の各レースの「このレースだけの手入力」を消して、共通の手入力に戻す">送った手入力を消す</button>` : "") + `</div>`;
   // 一覧: 「場別に表示」なら場のタブで切り替える(上のサマリと配分はその日の全部の場のまま)
   const jyos = [...new Set(P.ok.map(x => x.rid.slice(8, 10)))];
@@ -2521,11 +2530,14 @@ function renderFund(date, raceLink) {
         `${esc(JYO[j] || j)} <span class="muted">✔${xs.filter(x => x.pick).length}/${xs.length}${P.budget ? `・${amt.toLocaleString()}円` : ""}</span></button>`;
     }).join("") + `</div>` : "") + `</div>`;
   h += `<div class="scroll"><table class="fund-table"><tr class="f-head"><th title="買う(✔)/見送り">✔</th><th>レース</th><th>発走</th><th class="n">自信</th><th class="n">混戦</th>` +
-    `<th>自動の判定</th><th class="n">見込みの回収率</th><th class="n">期待値</th><th class="n">配分額</th><th>おすすめの買い目</th></tr>`;
+    `<th>自動の判定</th><th class="n" title="購入推奨・見送り推奨の判定に使った値(予算 ÷ 対象のレース数 の額が入る区分のおすすめの確かめの回収率)。配分額の区分の値が違えば下に小さく出す">見込みの回収率</th><th class="n">期待値</th><th class="n">配分額</th><th>おすすめの買い目</th></tr>`;
   for (const x of shown) {
     const r0 = state.races.get(x.rid)[0], c = confLevel(state.races.get(x.rid));
     const changed = x.pick !== x.autoBuy;
-    const est = x.amount ? x.honestUsed : x.est;
+    // 見込みの回収率は判定に使った値(判定と同じ数字)。配分額で区分が変わって値が違えば、その値も小さく出す
+    const est = x.est0 ?? (x.amount ? x.honestUsed : x.est);
+    const after = x.amount && x.honestUsed != null && est != null && Math.abs(x.honestUsed - est) >= 0.05 ?
+      `<div class="dim" title="配分額 ${x.amount.toLocaleString()}円 の区分(${esc(x.opt?.name || "")})のおすすめの確かめの回収率。判定には使わない">配分後 ${fix(x.honestUsed)}%</div>` : "";
     const tk = x.tickets?.filter(y => y.amount) || [];
     const sep = y => y.kind === "馬単" || y.kind === "3連単" ? "→" : "-";
     const list = tk.length ? `<div><b>${esc(x.opt.how)}</b> <span class="muted">(${esc(x.opt.name)}・${tk.length}点)</span></div>` +
@@ -2536,7 +2548,7 @@ function renderFund(date, raceLink) {
     h += `<tr class="${x.pick ? "" : "dim"}"><td class="f-ck"><input type="checkbox" class="fundPick" data-rid="${x.rid}" ${x.pick ? "checked" : ""}></td>` +
       `<td class="f-race">${raceLink(x.rid)}</td><td class="f-i" data-l="発走">${hhmm(r0.hasso_time)}</td><td class="n f-i" data-l="自信">${c?.lv ?? "-"}</td><td class="n f-i" data-l="混戦">${esc(r0["混戦の段階"] || "-")}</td>` +
       `<td class="f-auto"><span class="chip ${x.wait ? "warn" : x.autoBuy ? "up" : "gray"}" title="${esc(x.autoWhy)}">${x.wait ? "判定待ち" : x.autoBuy ? "購入推奨" : "見送り推奨"}</span>${x.pending && !x.wait ? ` <span class="chip gray" title="${esc(x.autoWhy)}">仮</span>` : ""}${changed ? ` <span class="chip warn">手で${x.pick ? "✔" : "外した"}</span>` : ""}</td>` +
-      `<td class="n f-i" data-l="見込み"><span class="${est >= 100 ? "hi" : est < FUND_RULE.skip ? "down" : ""}">${est != null ? fix(est) + "%" : "-"}</span></td>` +
+      `<td class="n f-i" data-l="見込み"><span class="${est >= 100 ? "hi" : est < FUND_RULE.skip ? "down" : ""}" title="${esc(x.tier0 ? `判定に使った値(${x.tier0}のおすすめ)` : "")}">${est != null ? fix(est) + "%" : "-"}</span>${after}</td>` +
       `<td class="n f-i" data-l="期待値">${x.ev != null ? `<span class="${x.ev >= 100 ? "hi" : ""}">${fix(x.ev)}%</span>${x.evPart ? `<span class="dim" title="オッズのある買い目だけ">*</span>` : ""}` : `<span class="dim">-</span>`}</td>` +
       `<td class="n f-amt">${x.amount ? `<b>${x.spent.toLocaleString()}円</b>${x.pending ? `<div class="dim">取っておく</div>` : ""}${x.spent < x.amount ? `<div class="dim" title="100円単位・点数に合わせた余り">配分 ${x.amount.toLocaleString()}円</div>` : ""}` : x.pick && P.budget ? `<span class="dim">0円</span>` : `<span class="dim">-</span>`}` +
         fundCopyCell(x) + `</td>` +
@@ -2547,6 +2559,7 @@ function renderFund(date, raceLink) {
   h += `<div class="note"><b>決め方(暫定)</b>: 対象は発走前のレース(発走時刻を過ぎた・結果の出たレースは除く。発走時刻はこのパソコン・スマホの時計で見る)。` +
     `①予算 ÷ レース数 の額が入る予算の区分の推奨買い目「おすすめ」の、4年で選んで残りの1年で確かめた回収率(確かめの回収率)を<b>見込みの回収率</b>とする` +
     `(自信の段階・混戦の段階の組ごとに検証期間 2019〜2023年で出したもの。自信・混戦はこの値を通して効く)。` +
+    `表の「見込みの回収率」はこの判定に使った値。見送りを除いて配り直すと1レースの額が上がって区分が変わることがあり、そのときは配分額の区分の値を「配分後」として小さく出す(判定には使わない)。` +
     `②見込みの回収率が ${FUND_RULE.skip}% 未満なら見送り推奨(✔ なし)、それ以外は購入推奨(✔)。予想 CSV に「見送り」の列があればそれを使う。` +
     `推奨買い目は各レースの発走55分前ごろに出るので、まだのレースは同じ日・同じ自信と混戦の組の別のレースの値で仮に判定し(「仮」)、それも無ければ「判定待ち」で ✔ を付けて配分額を取っておく(推奨買い目が出たら判定し直す)。` +
     (FUND_RULE.power ? `③ ✔ のレースに、重み(見込みの回収率 − ${FUND_RULE.base * 100}%)${FUND_RULE.power === 1 ? "" : `の${FUND_RULE.power}乗`}に比例して100円単位で配る${FUND_RULE.cap ? `(1レースの上限は予算の ${FUND_RULE.cap * 100}%)` : ""}。` :
@@ -2574,6 +2587,7 @@ function fundHelpHTML() {
     `<li>推奨買い目は各レースの発走55分前ごろに出る。まだのレースは、同じ日の同じ自信・混戦の組の別のレースの値で仮に判定し(「仮」)、` +
     `それも無ければ「判定待ち」で ✔ を付けて配分額だけ取っておく。推奨買い目が出ると判定し直すので、✔ と配分額が変わることがある。</li>` +
     `<li>各レースの「おすすめの買い目」は、配分額が入る予算の区分の推奨買い目「おすすめ」を、1点の金額をそろえて配ったもの。レース名を押すと個別レースページへ。</li>` +
+    `<li>「対象の場」で ✔ を外した場は、資金配分の対象から外す(その場のレースには配らず、残りの場で予算を配り直す)。「全場選択」で全部の場に戻る。</li>` +
     `<li>「場別に表示」に ✔ を入れると、一覧を競馬場ごとのタブで見られる(タブに場ごとの ✔ の数と配分額)。上のサマリと配分はその日の全部の場のまま。</li>` +
     `<li>「→ 手入力へ」(レースごと)か「→ ✔ のレースの配分額を全部、各レースの手入力に送る」で、配分額を個別レースページの推奨買い目の「手入力」に入れられる。` +
     `そのレースだけの金額で、共通の手入力より先に使い、配分(均等・確率に比例 など)は個別レースページの選び方で計算する。個別レースページの「共通に戻す」か、ここの「送った手入力を消す」で消せる。</li>` +
@@ -2597,6 +2611,13 @@ function bindFund(date) {
   if (inp) inp.onchange = () => { const v = roundYen(inp.value); f.budget = v || null; saveFund(date); again(); };
   const past = document.getElementById("fundPast");
   if (past) past.onchange = () => { f.past = past.checked; saveFund(date); again(); };
+  document.querySelectorAll("input.fundJyoOn").forEach(c => c.onchange = () => {
+    const j = c.dataset.j;
+    f.offJyo = c.checked ? f.offJyo.filter(x => x !== j) : [...new Set([...f.offJyo, j])];
+    saveFund(date); again();
+  });
+  const jyoAll = document.getElementById("fundJyoAll");
+  if (jyoAll) jyoAll.onclick = () => { f.offJyo = []; saveFund(date); again(); };
   const byJyo = document.getElementById("fundByJyo");
   if (byJyo) byJyo.onchange = () => { f.byJyo = byJyo.checked; saveFund(date); again(); };
   document.querySelectorAll(".fundJyo button").forEach(b => b.onclick = () => { f.jyo = b.dataset.j; saveFund(date); again(); });
@@ -2614,6 +2635,8 @@ function bindFund(date) {
       if (x.pick && x.amount) { saveRaceBudget(x.rid, x.amount); n++; }
       else if (raceBudgetOf(x.rid)) saveRaceBudget(x.rid, null);
     }
+    // 対象から外した場のレースに前に送った金額も消す(発走前のものだけ)
+    P.rids.filter(r => P.f.offJyo.includes(r.slice(8, 10)) && (P.f.past || !raceStarted(r)) && raceBudgetOf(r)).forEach(r => saveRaceBudget(r, null));
     alert(`${n}レースの配分額を、各レースの手入力に送りました。`);
     again();
   };

@@ -440,6 +440,7 @@ a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
 .fund-odds .chip { font-size: 11px; }
 @media (max-width: 760px) {
   .fund-card .calc label { flex: 1 1 100%; }
+  .fund-card .fund-jyos label { flex: 0 0 auto; }
   .fund-table input.fundPick { width: 24px; height: 24px; }
   /* スマホ: 1レースを1つの塊に(✔・レース・配分額 → 発走・自信・混戦・見込み・期待値 → 判定 → 買い目) */
   main .fund-card .scroll table.fund-table { width: 100%; min-width: 0; display: block; }

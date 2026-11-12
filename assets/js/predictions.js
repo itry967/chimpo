@@ -1005,8 +1005,10 @@ function renderRace(rid) {
   const favNote = state.favActive ? `<div class="note fav-note">得意モデル(${esc(fav.join("・"))})だけの平均で出しています` +
     `(${esc(r0["得意な条件"] || "")})。推奨買い目・組み合わせ・自信の段階・混戦の段階・確度は5モデルの平均のまま。</div>` : "";
   const maxWin = Math.max(...rows.map(r => num(r["平均_勝率"]) || 0));
-  const top3 = r => { const v = ms.map(m => num(r[`${m}_3着内`])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
-  const top2 = r => { const v = ms.map(m => num(r[`${m}_2着内`])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
+  // 2着内・3着内: 専門モデル(U20)を重ねた 平均_2着内・平均_3着内 があればそれ(得意モデルだけの平均を出しているときはモデルの平均)
+  const stacked = (r, k) => state.favActive ? null : num(r[`平均_${k}`]);
+  const top3 = r => { const s = stacked(r, "3着内"); if (s != null) return s; const v = ms.map(m => num(r[`${m}_3着内`])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
+  const top2 = r => { const s = stacked(r, "2着内"); if (s != null) return s; const v = ms.map(m => num(r[`${m}_2着内`])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
   const maxTop3 = Math.max(...rows.map(r => top3(r) || 0));
   const has = c => c in r0;
 
@@ -1073,7 +1075,7 @@ function renderRace(rid) {
     `<input type="checkbox" id="simpleView" ${simpleView() ? "checked" : ""}> 簡易表示</label>` +
     (hasPre(rows) ? `<label class="muted" style="font-size:13px" title="予想順位と勝率の横に枠順確定の時点からの変化を出す。レース一覧に、本命が変わったレースの印を出す">` +
       `<input type="checkbox" id="changeView" ${changeView() ? "checked" : ""}> 馬体重確定前からの変化</label>` : "") +
-    (r0["オッズの時刻"] ? `<span class="chip gray" title="単複オッズの発表時刻(過去のレースは確定オッズ)">${r0["オッズの時刻"] === "確定" ? "確定オッズ" : `オッズ ${esc(r0["オッズの時刻"])} 時点`}</span>` : "") +
+    (r0["オッズの時刻"] ? `<span class="chip gray" title="単複オッズの発表日時と、取った日時(過去のレースは確定オッズ)。オッズは発走まで変わる">${r0["オッズの時刻"] === "確定" ? "確定オッズ" : `オッズ ${esc(r0["オッズの時刻"])} 発表` + (r0["オッズの取得時刻"] ? `・${esc(r0["オッズの取得時刻"])} 取得` : "")}</span>` : "") +
     `</div>` +
     `<div class="legend" style="margin-bottom:6px">` +
     `<span>出走馬バー:</span><span><i style="background:var(--bar)"></i>2着内</span><span><i style="background:var(--bar2)"></i>3着内(2着内を含む)</span><span class="sep"></span>` + `<span>1〜5着の確率:</span><span class="grp">馬券内</span>${[1, 2, 3].map(k => `<span><i style="background:var(--f${k})"></i>${k}着</span>`).join("")}` +
@@ -1223,7 +1225,7 @@ const STYLE_ORDER = { "逃": 1, "先行": 2, "差": 3, "追込": 4, "自在": 5,
 function horseCols(rid) {
   const o = r => getOdds(rid, r.umaban, r);
   const ratio = (a, b) => a != null && b ? a / b : null;
-  const t3 = r => { const v = MODELS_OF(r).map(m => num(r[`${m}_3着内`])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
+  const t3 = r => { const s = num(r["平均_3着内"]); if (s != null) return s; const v = MODELS_OF(r).map(m => num(r[`${m}_3着内`])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
   return [
     ["予", r => num(r["平均_順位"]), 1, "rank", "予想の順位"],
     ["馬番", r => +r.umaban, 1, "", ""],
@@ -1738,7 +1740,8 @@ function renderPlan(rid) {
     kpi(priced ? `<span class="${back / priced >= 1 ? "hi" : ""}">${fix(back / priced * 100)}%</span>` : "-", "回収率の期待値(このレースのオッズで)") +
     kpi(`<span class="${roi >= 100 ? "hi" : ""}">${fix(roi)}%</span>`, `過去の回収率(的中率 ${fix(num(r["過去の的中率"]))}%)`) +
     kpi(`<span class="${honest >= 100 ? "hi" : ""}">${fix(honest)}%</span>`, "選び方を別の年で確かめた回収率") + `</div>`;
-  const kindNote = r["オッズの種類"] ? `<span class="chip gray">オッズ: ${esc(r["オッズの種類"])}</span>` : "";
+  const kindNote = (r["オッズの種類"] ? `<span class="chip gray" title="オッズは発走まで変わる">オッズ: ${esc(r["オッズの種類"])}</span>` : "") +
+    (r["予想の段階"] && r["予想の段階"] !== "馬体重あり" ? `<span class="chip gray" title="朝のオッズで出した、馬体重が入る前の版の推奨買い目。馬体重が入ると(発走55分前ごろ)作り直す">枠順確定の版(馬体重の前)</span>` : "");
   const many = kinds.length > 1;
   state.planTickets = state.planTickets || {};
   state.planTickets[rid] = tickets.map((x, i) => ({ kind: x.kind, t: x.t, amount: amt[i] || 0 }));

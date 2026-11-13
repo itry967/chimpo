@@ -179,6 +179,7 @@ select.mark[data-m="〇"] { color: var(--accent); border-color: var(--accent); b
 select.mark[data-m="▲"] { color: var(--up); border-color: var(--up); background: var(--up-soft); }
 select.mark[data-m="△"] { color: var(--text); border-color: var(--muted); }
 select.mark[data-m="★"] { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+select.mark[data-m="✓"] { color: var(--up); border-color: var(--up); }
 select.mark[data-m="消"] { color: var(--muted); text-decoration: line-through; }
 select.mark option { color: var(--text); background: var(--panel); text-decoration: none; }
 tr.horse:hover td { background: var(--accent-soft); }
@@ -268,6 +269,7 @@ table.grid td.gmark[data-m="〇"] { color: var(--accent); }
 table.grid td.gmark[data-m="▲"] { color: var(--up); }
 table.grid td.gmark[data-m="△"] { color: var(--text); }
 table.grid td.gmark[data-m="★"] { color: var(--warn); }
+table.grid td.gmark[data-m="✓"] { color: var(--up); }
 table.grid td.gmark[data-m="消"] { color: var(--muted); text-decoration: line-through; }
 .calc { display: flex; gap: 8px 14px; flex-wrap: wrap; align-items: center; }
 .calc input.calcCol { width: 130px; font: inherit; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px;

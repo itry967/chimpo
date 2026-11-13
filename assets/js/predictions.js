@@ -1234,7 +1234,7 @@ function horseCols(rid) {
   return [
     ["予", r => num(r["平均_順位"]), 1, "rank", "予想の順位"],
     ["馬番", r => +r.umaban, 1, "", ""],
-    ["印", r => { const m = markOf(rid, r.umaban); return m ? MARKS.indexOf(m) : null; }, 1, "mark-col", "自分で付ける印(◎ 〇 ▲ △ ★ 消)。印の順で並べる"],
+    ["印", r => { const m = markOf(rid, r.umaban); return m ? MARKS.indexOf(m) : null; }, 1, "mark-col", "自分で付ける印(◎ 〇 ▲ △ ★ ✓ 消)。印の順で並べる"],
     ["馬名", r => r.horse_name || "", 1, "", ""],
     ["勝率", r => num(r["平均_勝率"]), -1, "", ""],
     ["2・3着内", t3, -1, "", "3着内の確率で並べる"],
@@ -1251,9 +1251,9 @@ function horseCols(rid) {
     ["馬体重", r => num(r["馬体重"]), -1, "n hide-sm", ""],
   ];
 }
-// ---------- 自分で付ける印(◎ 〇 ▲ △ ★ 消)。表示だけで、予想・モデルには使わない ----------
+// ---------- 自分で付ける印(◎ 〇 ▲ △ ★ ✓ 消)。表示だけで、予想・モデルには使わない ----------
 // このブラウザの localStorage にレースごとに覚えておく: keiba-viewer:marks:<race_id(日付入り)> = {馬番: 印}。「-」は印なし
-const MARKS = ["◎", "〇", "▲", "△", "★", "消"];
+const MARKS = ["◎", "〇", "▲", "△", "★", "✓", "消"];
 function marksOf(rid) {
   if (!state.marks) state.marks = {};
   if (!state.marks[rid]) {

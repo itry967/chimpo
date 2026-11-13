@@ -479,3 +479,36 @@ a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
 .drive-confirm-actions button { min-width: 72px; padding: 6px 12px; }
 #driveToast { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 32px); padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); }
 #driveToast[hidden] { display: none; }
+
+/* お知らせボタンとお知らせのモーダル(日付・内容の表。新しいお知らせがあればボタンに印) */
+#noticeOpen { order: 2; white-space: nowrap; position: relative; }
+#noticeOpen .notice-new { position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: #e5484d; }
+#noticeDialog {
+  width: min(600px, calc(100vw - 24px));
+  max-width: none;
+  max-height: calc(100dvh - 40px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .24);
+}
+#noticeDialog::backdrop { background: rgba(0, 0, 0, .5); }
+#noticeDialog .gh { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+#noticeDialog .gh h2 { flex: 1; margin: 0; font-size: 16px; }
+#noticeDialog .gb { padding: 10px 16px 16px; }
+#noticeDialog .notice-table { width: 100%; border-collapse: collapse; }
+#noticeDialog .notice-table th, #noticeDialog .notice-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+#noticeDialog .notice-table th { font-size: 12px; color: var(--muted); font-weight: 600; }
+#noticeDialog .notice-table td.nd { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; width: 1%; padding-right: 14px; }
+@media (max-width: 760px) {
+  #noticeOpen { order: 1; margin-left: 0; margin-right: 0; }
+  #noticeDialog { width: calc(100vw - 20px); max-height: calc(100dvh - 30px - env(safe-area-inset-top)); margin: auto; }
+  #noticeDialog .gh { padding: 10px; }
+  #noticeDialog .gb { padding: 8px 12px 14px; }
+  #noticeDialog .notice-table td.nd { padding-right: 8px; font-size: 12px; }
+}
+@media (max-width: 430px) {
+  #noticeOpen { font-size: 10px; padding-right: 4px; padding-left: 4px; }
+}

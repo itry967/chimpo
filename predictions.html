@@ -34,6 +34,7 @@
   <button id="navToggle" title="レース一覧を開く・たたむ" aria-label="レース一覧を開く・たたむ">レース一覧</button>
   <h1>予想ビューア</h1>
   <button id="cautionOpen" title="予想をご利用いただく際の注意点">⚠️ 注意点</button>
+  <button id="noticeOpen" title="お知らせ(更新の連絡など)">📢 お知らせ<span class="notice-new" hidden></span></button>
   <button id="bandOpen" title="自信の区分ごとの回収率を表示" hidden>自信の区分ごとの回収率</button>
   <span class="muted" id="status">「データを更新」を押してデータ取得を行ってください　※2~3分かかります</span>
   <span class="sp"></span>
@@ -79,6 +80,18 @@
 <dialog id="driveUpdateDialog" aria-labelledby="driveUpdateTitle">
   <div class="gh"><h2 id="driveUpdateTitle">データを更新</h2><button id="driveUpdateClose" type="button">閉じる</button></div>
   <iframe id="driveUpdateFrame" title="Google Driveからデータを取得" src="about:blank"></iframe>
+</dialog>
+<dialog id="noticeDialog" aria-labelledby="noticeTitle">
+  <div class="gh"><h2 id="noticeTitle">📢 お知らせ</h2><button id="noticeClose">閉じる</button></div>
+  <div class="gb">
+    <!-- お知らせは新しいものを上に足す(1行 = 日付・内容) -->
+    <table class="notice-table">
+      <tr><th>日付</th><th>内容</th></tr>
+      <tr><td class="nd">2026/11/13</td><td>予想モデルの改善、差し替えを行いました</td></tr>
+      <tr><td class="nd">2026/11/13</td><td>土曜の予想は22:00以降更新</td></tr>
+      <tr><td class="nd">2026/11/13</td><td>ビューアの改善を行いました（日別ページの追加、馬別印機能、その他軽微修正）</td></tr>
+    </table>
+  </div>
 </dialog>
 <dialog id="updateTimingDialog" aria-labelledby="updateTimingTitle">
   <div class="gh"><h2 id="updateTimingTitle">データ更新タイミング</h2><button id="updateTimingClose">閉じる</button></div>
@@ -127,6 +140,29 @@
   const close = document.getElementById("cautionClose");
   if (!dialog || !open || !close) return;
   open.addEventListener("click", () => dialog.showModal());
+  close.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", event => {
+    if (event.target === dialog) dialog.close();
+  });
+})();
+</script>
+<script>
+(() => {
+  // お知らせ: ボタンでモーダルを開く。まだ見ていないお知らせがあればボタンに赤い印(見たものはこのブラウザに覚えておく)
+  const dialog = document.getElementById("noticeDialog");
+  const open = document.getElementById("noticeOpen");
+  const close = document.getElementById("noticeClose");
+  if (!dialog || !open || !close) return;
+  const latest = [...dialog.querySelectorAll(".notice-table tr")].slice(1).map(r => r.textContent.trim()).join("|");
+  let seen = null;
+  try { seen = localStorage.getItem("keiba-viewer:notice-seen"); } catch (e) {}
+  const dot = open.querySelector(".notice-new");
+  if (dot) dot.hidden = seen === latest;
+  open.addEventListener("click", () => {
+    dialog.showModal();
+    try { localStorage.setItem("keiba-viewer:notice-seen", latest); } catch (e) {}
+    if (dot) dot.hidden = true;
+  });
   close.addEventListener("click", () => dialog.close());
   dialog.addEventListener("click", event => {
     if (event.target === dialog) dialog.close();

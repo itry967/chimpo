@@ -193,7 +193,7 @@ function openDriveTransferDb() {
     const req = indexedDB.open("predictions-drive-transfer", 1);
     req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains("payload")) req.result.createObjectStore("payload"); };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => reject(req.error || new Error("この端末への保存の読み書きが中断されました。もう一度お試しください。"));
   });
 }
 async function consumeDriveTransfer(keepView = false) {
@@ -214,13 +214,13 @@ async function consumeDriveTransfer(keepView = false) {
         // F5などで再表示した場合は、前回保存したCSVを使う。
         const cached = store.get("cache");
         cached.onsuccess = () => { value = cached.result || null; };
-        cached.onerror = () => reject(cached.error);
+        cached.onerror = () => reject(cached.error || new Error("この端末への保存の読み書きが中断されました。もう一度お試しください。"));
       }
     };
-    req.onerror = () => reject(req.error);
+    req.onerror = () => reject(req.error || new Error("この端末への保存の読み書きが中断されました。もう一度お試しください。"));
     tx.oncomplete = () => resolve(value);
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error || new Error("この端末への保存の読み書きが中断されました。もう一度お試しください。"));
+    tx.onabort = () => reject(tx.error || new Error("この端末への保存の読み書きが中断されました。もう一度お試しください。"));
   });
   db.close();
   if (!payload?.files?.length) return false;
@@ -255,8 +255,8 @@ async function clearDriveTransferCache() {
     store.delete("pending");
     store.delete("cache");
     tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error || new Error("この端末への保存の読み書きが中断されました。もう一度お試しください。"));
+    tx.onabort = () => reject(tx.error || new Error("この端末への保存の読み書きが中断されました。もう一度お試しください。"));
   });
   db.close();
 }

@@ -371,6 +371,19 @@ async function listDriveChanges(accessToken,startPageToken) {
   return {hasChanges:changes.length>0,newStartPageToken,changes};
 }
 
+// 携帯(iPhone・iPad・Android)は、キャッシュに最近の日付だけを残す。全部の日付を残すと更新のたびの書き込みが重く、
+// iPhone の Safari で保存が中断される(2026-11-14 に「データの取得に失敗しました。null」が出た)。PC は今のまま全部残す
+const MOBILE_DEVICE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const MOBILE_KEEP_DAYS = 7;     // 今日を入れて7日(その週の開催日の分)。取得している日付はいつでも残す
+function mobileKeepFrom() {
+  const t = jstToday(), d = new Date(Date.UTC(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6, 8) - (MOBILE_KEEP_DAYS - 1)));
+  return d.toISOString().slice(0, 10).replaceAll("-", "");
+}
+function keepDateOnDevice(day, date) {
+  return !MOBILE_DEVICE || !day || day === date || day >= mobileKeepFrom();
+}
+function pathDate(path) { return ((path || "").match(/^predictions\/(\d{8})\//) || [])[1] || ""; }
+
 async function fetchSelectedCsv(accessToken, accountEmail, date, categories, raceFolder = "") {
   status("データ変更履歴を確認中…",true);
   const cache = await loadDriveCache(accountEmail).catch(error => {
@@ -421,7 +434,9 @@ async function fetchSelectedCsv(accessToken, accountEmail, date, categories, rac
   if (raceFolder && !metas.length) throw new Error("指定したレースフォルダにCSVがありません: " + raceFolder);
 
   const cachedById = new Map(cachedFiles.map(item => [item.id,item]));
-  const retained = cachedFiles.filter(item => !(raceFolder ? pathIsInRaceScope(item.path||"",date,raceFolder) : pathIsInSelectedScope(item.path||"",date,categories)));
+  const retained = cachedFiles.filter(item => !(raceFolder ? pathIsInRaceScope(item.path||"",date,raceFolder) : pathIsInSelectedScope(item.path||"",date,categories)))
+    .filter(item => keepDateOnDevice(pathDate(item.path), date));
+  scannedScopes = scannedScopes.filter(key => keepDateOnDevice(key.split("|")[0], date));   // 消した日付は「確認済み」からも外す
   const unchanged = [];
   const toDownload = [];
   for (const meta of metas) {
@@ -463,7 +478,12 @@ async function fetchSelectedCsv(accessToken, accountEmail, date, categories, rac
   const result = [...new Map(merged.map(item => [item.id,item])).values()]
     .sort((a,b) => (a.path||"").localeCompare(b.path||""));
   // 取れなかったものがあれば、変更履歴の起点と確認済みの範囲を保存しない(次の確認で「更新あり」になり、取り直す)
-  await saveDriveCache(accountEmail,result,failed.length ? {changePageToken:"",scannedScopes:[]} : {changePageToken,scannedScopes});
+  try {
+    await saveDriveCache(accountEmail,result,failed.length ? {changePageToken:"",scannedScopes:[]} : {changePageToken,scannedScopes});
+  } catch (error) {
+    // キャッシュは速くするためだけのもの。保存できなくても、取ったデータはそのまま出す(前のキャッシュのままなので、次の確認で取り直す)
+    console.warn("Drive CSVキャッシュを保存できませんでした:", error);
+  }
   lastFailedCount = failed.length;
   status("取得データをまとめています…",true);
   return result;
@@ -491,12 +511,27 @@ async function downloadCsv(meta, accessToken) {
   throw lastError;
 }
 
+// IndexedDB のエラー。iPhone の Safari は理由を付けずに(error が null のまま)中断することがあるので、分かる文にする
+function idbError(error, what) {
+  if (error && error.message) return error;
+  return new Error("この端末への保存(" + what + ")が中断されました。画面を消したりほかのアプリに切り替えたりせずに、もう一度お試しください。");
+}
+// 書き込みが中断されたら、データベースを開き直して1回だけやり直す
+async function idbRetry(fn) {
+  try { return await fn(); }
+  catch (error) {
+    console.warn("IndexedDB への保存をやり直します:", error);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return await fn();
+  }
+}
 function openTransferDb() {
   return new Promise((resolve,reject) => {
     const request=indexedDB.open("predictions-drive-transfer",1);
     request.onupgradeneeded=() => {if(!request.result.objectStoreNames.contains("payload"))request.result.createObjectStore("payload");};
     request.onsuccess=() => resolve(request.result);
-    request.onerror=() => reject(request.error);
+    request.onerror=() => reject(idbError(request.error,"開く"));
+    request.onblocked=() => reject(idbError(null,"開く"));
   });
 }
 async function loadDriveCache(accountEmail) {
@@ -506,11 +541,14 @@ async function loadDriveCache(accountEmail) {
       const tx=db.transaction("payload","readonly");
       const request=tx.objectStore("payload").get("drive-cache:"+accountEmail);
       request.onsuccess=() => resolve(request.result || {files:[],scannedScopes:[],changePageToken:""});
-      request.onerror=() => reject(request.error);
+      request.onerror=() => reject(idbError(request.error,"キャッシュの読み込み"));
     });
   } finally { db.close(); }
 }
 async function saveDriveCache(accountEmail,files,extra={}) {
+  return idbRetry(() => saveDriveCacheOnce(accountEmail,files,extra));
+}
+async function saveDriveCacheOnce(accountEmail,files,extra={}) {
   const db=await openTransferDb();
   try {
     await new Promise((resolve,reject) => {
@@ -518,20 +556,23 @@ async function saveDriveCache(accountEmail,files,extra={}) {
       tx.objectStore("payload").put({updatedAt:Date.now(),files,
         changePageToken:extra.changePageToken||"",scannedScopes:extra.scannedScopes||[]},"drive-cache:"+accountEmail);
       tx.oncomplete=resolve;
-      tx.onerror=() => reject(tx.error);
-      tx.onabort=() => reject(tx.error);
+      tx.onerror=() => reject(idbError(tx.error,"キャッシュ"));
+      tx.onabort=() => reject(idbError(tx.error,"キャッシュ"));
     });
   } finally { db.close(); }
 }
 async function saveTransfer(files) {
+  return idbRetry(() => saveTransferOnce(files));
+}
+async function saveTransferOnce(files) {
   const db=await openTransferDb();
   try {
     await new Promise((resolve,reject) => {
       const tx=db.transaction("payload","readwrite");
       tx.objectStore("payload").put({createdAt:Date.now(),files},"pending");
       tx.oncomplete=resolve;
-      tx.onerror=() => reject(tx.error);
-      tx.onabort=() => reject(tx.error);
+      tx.onerror=() => reject(idbError(tx.error,"ビューアへの受け渡し"));
+      tx.onabort=() => reject(idbError(tx.error,"ビューアへの受け渡し"));
     });
   } finally { db.close(); }
 }

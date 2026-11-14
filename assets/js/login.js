@@ -27,6 +27,7 @@ let accountEmail = "";
 let accountSelectionRequested = false;
 let dateFolders = [];
 let busy = false;
+let lastFailedCount = 0;   // 直近の取得で取れなかったCSVの数(ビューアに知らせる)
 const requestParams = new URLSearchParams(location.search);
 const targetDate = requestParams.get("date") || "";
 const targetRaceFolder = requestParams.get("raceFolder") || "";
@@ -174,7 +175,7 @@ downloadButton.addEventListener("click", async () => {
     await fetchAndTransfer(date, categories, targetedRaceUpdate ? targetRaceFolder : "");
     if (window.parent !== window && new URLSearchParams(location.search).get("embedded") === "1") {
       status("取得が完了しました。ビューアに反映しています…", true);
-      window.parent.postMessage({type:"drive-update-complete"}, location.origin);
+      window.parent.postMessage({type:"drive-update-complete", failed:lastFailedCount}, location.origin);
     } else {
       location.href = "./predictions.html";
     }
@@ -188,6 +189,7 @@ downloadButton.addEventListener("click", async () => {
 });
 
 async function fetchAndTransfer(date, categories, raceFolder = "") {
+  lastFailedCount = 0;
   const files = await fetchSelectedCsv(accessToken, accountEmail, date, categories, raceFolder);
   if (!files.length) throw new Error("取得済みキャッシュを含め、表示できるCSVがありません。日付・フォルダを確認してください。");
   status("データの準備が完了しました。画面を開いています…", true);
@@ -432,26 +434,61 @@ async function fetchSelectedCsv(accessToken, accountEmail, date, categories, rac
   }
 
   const downloaded = [];
+  const failed = [];     // やり直しても取れなかったCSV。前回の分があればそれを残し、次の更新でまた取りに行く
+  let done = 0;
   status("データを取得中… " + (toDownload.length ? 0 : 100) + "%",true);
   for (let i=0;i<toDownload.length;i+=4) {
     const batch=toDownload.slice(i,i+4);
-    const blobs=await Promise.all(batch.map(async meta => {
-      const url=DRIVE_API + "/" + encodeURIComponent(meta.id) + "?alt=media&supportsAllDrives=true";
-      const response=await fetch(url,{headers:{Authorization:"Bearer " + accessToken}});
-      if(!response.ok) throw new Error("データの取得に失敗しました (" + response.status + "): " + meta.name);
-      return {...meta,blob:await response.blob()};
+    const results=await Promise.all(batch.map(async meta => {
+      try {
+        return {...meta,blob:await downloadCsv(meta,accessToken)};
+      } catch (error) {
+        if (error.status === 401) throw error;   // ログインが切れたときは全体を止めて再ログインへ
+        console.warn("CSVを取得できませんでした:", meta.name, error);
+        failed.push(meta);
+        const old = cachedById.get(meta.id);
+        return old?.blob ? old : null;
+      } finally {
+        done++;
+        status("データを取得中… " + Math.min(100,Math.round(done/toDownload.length*100)) + "%",true);
+      }
     }));
-    downloaded.push(...blobs);
-    const percent=Math.min(100,Math.round(downloaded.length/toDownload.length*100));
-    status("データを取得中… " + percent + "%",true);
+    downloaded.push(...results.filter(Boolean));
+  }
+  if (toDownload.length && failed.length === toDownload.length && !unchanged.length && !retained.length) {
+    throw new Error("データの取得に失敗しました: " + failed.length + "件すべて取れませんでした (" + failed[0].name + " など)");
   }
 
   const merged = [...retained,...unchanged,...downloaded];
   const result = [...new Map(merged.map(item => [item.id,item])).values()]
     .sort((a,b) => (a.path||"").localeCompare(b.path||""));
-  await saveDriveCache(accountEmail,result,{changePageToken,scannedScopes});
+  // 取れなかったものがあれば、変更履歴の起点と確認済みの範囲を保存しない(次の確認で「更新あり」になり、取り直す)
+  await saveDriveCache(accountEmail,result,failed.length ? {changePageToken:"",scannedScopes:[]} : {changePageToken,scannedScopes});
+  lastFailedCount = failed.length;
   status("取得データをまとめています…",true);
   return result;
+}
+
+// CSVを1件取る。回数制限(429・403)・Drive側の一時的なエラー(5xx)・通信の途切れは、待ってから3回までやり直す
+async function downloadCsv(meta, accessToken) {
+  const url=DRIVE_API + "/" + encodeURIComponent(meta.id) + "?alt=media&supportsAllDrives=true";
+  let lastError=null;
+  for (let attempt=0; attempt<4; attempt++) {
+    if (attempt) await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** (attempt-1) + Math.random()*500));
+    let response;
+    try {
+      response=await fetch(url,{headers:{Authorization:"Bearer " + accessToken}});
+    } catch (error) {
+      lastError=error;        // 通信の途切れ
+      continue;
+    }
+    if (response.ok) return await response.blob();
+    const error=new Error("データの取得に失敗しました (" + response.status + "): " + meta.name);
+    error.status=response.status;
+    if (response.status !== 429 && response.status !== 403 && response.status < 500) throw error;   // 404 など、やり直しても変わらないもの
+    lastError=error;
+  }
+  throw lastError;
 }
 
 function openTransferDb() {
@@ -588,7 +625,7 @@ async function runBackground() {
     await loadDateFolders();
     await fetchAndTransfer(targetDate, (requestParams.get("categories") || "").split(",").filter(Boolean));
     status("取得が完了しました。", false);
-    window.parent.postMessage({type:"drive-update-complete"}, location.origin);
+    window.parent.postMessage({type:"drive-update-complete", failed:lastFailedCount}, location.origin);
   } catch (error) {
     console.error(error);
     status("データの取得に失敗しました。\n" + (error?.message || error));

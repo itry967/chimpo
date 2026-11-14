@@ -3074,7 +3074,8 @@ window.addEventListener("message", async event => {
     const applied = await applyDriveUpdate();
     if (fromBackground && applied) {
       const now = new Date();
-      showDriveToast(`${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")} に更新しました`, {hideAfter:5000});
+      showDriveToast(`${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")} に更新しました` +
+        (event.data?.failed ? `(${event.data.failed}件は取れず、前の分のまま。次の更新で取り直します)` : ""), {hideAfter:event.data?.failed ? 10000 : 5000});
     }
   }
 });

@@ -172,7 +172,13 @@ async function loadFiles(list, keepView = false) {
   if (state.races.size || state.band) {
     document.getElementById("drop").hidden = true;
     document.getElementById("app").hidden = false;
-    if (!state.current) { try { state.current = sessionStorage.getItem("keiba-viewer:current"); } catch (e) {} }   // 再読み込みの前に見ていたレース
+    if (!state.current) {   // 再読み込みの前に見ていたレースと日別ページ(日別ページを見ていたら、その日の日別ページに戻る)
+      try {
+        state.current = sessionStorage.getItem("keiba-viewer:current");
+        const day = sessionStorage.getItem("keiba-viewer:dayPage");
+        if (day && !state.dayPage && sortedRaces().some(rid => rid.slice(0, 8) === day)) state.dayPage = day;
+      } catch (e) {}
+    }
     if (!state.races.has(state.current)) state.current = sortedRaces()[0] || null;
     if (keepView && document.activeElement?.matches("input, textarea")) return;   // 入力中は書き換えない(次の回に)
     keepView ? render(false) : render();
@@ -2733,7 +2739,10 @@ function render(toTop = true) {
   renderResult(state.dayPage ? null : state.current);
   updateRaceStatus();
   window.scrollTo(0, toTop ? 0 : y);
-  try { sessionStorage.setItem("keiba-viewer:current", state.current ?? ""); } catch (e) {}
+  try {
+    sessionStorage.setItem("keiba-viewer:current", state.current ?? "");
+    sessionStorage.setItem("keiba-viewer:dayPage", state.dayPage ?? "");
+  } catch (e) {}
 }
 
 // ---------- フォルダを見張る(File System Access API。Chrome・Edge) ----------

@@ -2195,11 +2195,13 @@ function renderDayPage(date) {
     `(向きは同じでも差が ±${BIAS_FLAT} 未満でふだん並みなら △)、違えば ×。予想が「いつも並み」のときは、差が ±${BIAS_FLAT} 未満なら ○。場の最終レースまで結果がそろうまでは「確定前」。結果は表示だけで、モデルには使わない。</div></div>`;
 
   // 2. 見送り推奨のレース(場ごと)
-  const budget = savedBudget();
-  const tierName = budget ? BUDGET_TIERS.find(([lim]) => budget <= lim)[1] : (state.planTab || "〜500円");
+  // 判定は資金配分案と同じ(この日の予算 ÷ 対象のレース数 の額の区分。推奨買い目がまだ無いレースは同じ自信・混戦の組の別のレースの値で仮に)
   const sj = pick("daySkipJyo");
   const sRids = rids.filter(rid => rid.slice(8, 10) === sj);
-  const judged = sRids.map(rid => [rid, skipOf(rid, tierName)]);
+  const skipJ = skipJudge(date);
+  const judged = sRids.map(rid => [rid, skipJ(rid)]);
+  const tierNames = [...new Set(judged.map(([, x]) => x?.tier).filter(Boolean))];
+  const tierName = tierNames.join("・") || "〜500円";
   const skips = judged.filter(([, x]) => x?.skip), unknown = judged.filter(([, x]) => !x);
   const fromCsv = judged.some(([, x]) => x?.src === "csv");
   h += `<div class="card day-fold"><h3>見送り推奨のレース（仮）</h3>` + jyoTabs("daySkipJyo", sj) +
@@ -2212,12 +2214,14 @@ function renderDayPage(date) {
       const r0 = state.races.get(rid)[0], inf = state.info.get(rid) || {}, c = confLevel(state.races.get(rid));
       h += `<tr><td>${raceLink(rid)}</td><td>${hhmm(r0.hasso_time)}</td><td>${esc((inf["芝ダ"] || "") + (inf["距離"] || ""))}</td><td>${esc(inf["レース名"] || "")}</td>` +
         `<td class="n">${c?.lv ?? "-"}</td><td class="n">${esc(r0["混戦の段階"] || "-")}</td>` +
-        (fromCsv ? `<td>${esc(x.why || "")}</td>` : `<td>${esc(x.how || "")}</td><td class="n">${x.past ?? "-"}%</td><td class="n"><span class="down">${x.honest}%</span></td>`) + `</tr>`;
+        (fromCsv ? `<td>${esc(x.why || "")}</td>` : `<td>${esc(x.how || "")}${x.pending ? ` <span class="chip gray" title="推奨買い目がまだ無いので、同じ自信・混戦の組の ${esc(raceName(x.borrowed))} の値">仮</span>` : ""}</td>` +
+          `<td class="n">${x.past ?? "-"}%</td><td class="n"><span class="down">${x.honest}%</span></td>`) + `</tr>`;
     }
     h += `</table></div>`;
   } else h += `<div class="muted">${sRids.length && unknown.length === sRids.length ? "推奨買い目の CSV が無いので判定できません。" : "この場に見送り推奨のレースはありません。"}</div>`;
   h += `<div class="note">${fromCsv ? "予想 CSV の「見送り」の列で決めたもの。" :
-    `<b>暫定の決め方</b>: 推奨買い目の「おすすめ」(予算 ${esc(tierName)})の、4年で選んで残りの1年で確かめた回収率(確かめの回収率)が ${SKIP_ROI}% 未満のレースを見送りにしている。` +
+    `<b>暫定の決め方</b>: 下の資金配分案と同じ。この日の予算 ÷ 対象のレース数 の額が入る区分(いまは ${esc(tierName)}。予算が空なら 〜500円)の推奨買い目「おすすめ」の、` +
+    `4年で選んで残りの1年で確かめた回収率(確かめの回収率)が ${SKIP_ROI}% 未満のレースを見送りにしている。推奨買い目がまだ無いレースは、同じ自信・混戦の組の別のレースの値で仮に判定する(「仮」)。` +
     `予想 CSV に「見送り」の列(と「見送りの理由」)ができたら、そちらを使う。`}</div></div>`;
 
   // 3. 資金配分案（仮）(発走前のレースに予算を配る)
@@ -2332,15 +2336,21 @@ function biasJudge(axis, word, actual, norm) {
 // 見送り推奨(仮): 予想 CSV に「見送り」の列があればそれを使う。無ければ暫定で、推奨買い目の「おすすめ」(今の予算の区分)の
 // 確かめの回収率(4年で選んで残りの1年で確かめた回収率)が SKIP_ROI% 未満のレースを見送りにする。推奨買い目が無ければ null(判定できない)
 const SKIP_ROI = 80;
-function skipOf(rid, tierName) {
-  const r0 = state.races.get(rid)?.[0];
-  if (!r0) return null;
-  if ("見送り" in r0) return { skip: ["1", "true", "見送り", "○"].includes(String(r0["見送り"]).trim()), why: r0["見送りの理由"] || "", src: "csv" };
-  const plan = (state.plans.get(rid) || []).filter(x => (x["種類"] || "おすすめ") === "おすすめ");
-  const r = plan.find(x => x["予算"] === tierName) || plan[0];
-  const honest = num(r?.["確かめの回収率"]);
-  if (honest == null) return null;
-  return { skip: honest < SKIP_ROI, honest, past: num(r["過去の回収率"]), how: r["買い方"], src: "plan" };
+// 日別ページの見送り推奨の判定。資金配分案(fundPlan)と同じ額の区分・同じ借り方で、発走済みのレースや対象外の場のレースも判定する
+function skipJudge(date) {
+  const P = fundPlan(date);
+  const first = P.ok.length ? P.budget / P.ok.length : 0;   // 資金配分案の判定に使う額(予算 ÷ 対象のレース数)
+  return rid => {
+    const r0 = state.races.get(rid)?.[0];
+    if (!r0) return null;
+    if ("見送り" in r0) return { skip: ["1", "true", "見送り", "○"].includes(String(r0["見送り"]).trim()), why: r0["見送りの理由"] || "", src: "csv" };
+    const own = fundOptions(rid), opts = own.length ? own : fundCellOptions(date, rid);
+    const o = opts.length ? fundChoose(opts, first) : null;
+    if (o?.honest == null) return null;
+    return { skip: o.honest < SKIP_ROI, honest: o.honest, past: num(o.parts?.[0]?.["過去の回収率"]) ?? (o.borrowed ? num((state.plans.get(o.borrowed) || [])
+        .find(x => (x["種類"] || "おすすめ") === "おすすめ" && x["予算"] === o.name)?.["過去の回収率"]) : null),
+      how: o.how, tier: o.name, pending: !own.length, borrowed: o.borrowed, src: "plan" };
+  };
 }
 window.addEventListener("message", event => {
   if (event.origin !== location.origin || event.data?.type !== "day-page-height") return;
@@ -3003,16 +3013,45 @@ function startBackgroundFrame(params) {
   driveBgFrame.src = "./index.html?" + params.toString();
   document.body.append(driveBgFrame);
 }
-// リロードのたびに、裏で更新の有無を確かめる
-function checkDriveUpdate() {
+// リロードのたびに、裏で更新の有無を確かめる。開催日は、開いている間も数分おきと、ほかのアプリから戻ったときに確かめる
+const DRIVE_CHECK_EVERY = 5 * 60000;     // 開催日に、開いている間に確かめる間隔
+const DRIVE_CHECK_ON_RETURN = 60000;     // ほかのアプリから戻ったとき、前の確認からこれだけ経っていれば確かめる
+let driveLastCheck = 0;                  // 最後に確認か取得を始めた時刻
+let driveCheckPeriodic = false;          // いまの確認が、リロード以外(数分おき・戻ったとき)のものか
+let driveNeedsLogin = false;             // ログインが切れている(再ログインするまで、数分おきの確認をしない)
+function checkDriveUpdate(periodic = false) {
+  driveLastCheck = Date.now();
+  driveCheckPeriodic = periodic;
   startBackgroundFrame(new URLSearchParams({check:"1"}));
 }
+function jstTodayYmd() {
+  return new Intl.DateTimeFormat("sv-SE", {timeZone:"Asia/Tokyo"}).format(new Date()).replaceAll("-", "");
+}
+// 数分おき・戻ったときの確認をしてよいか: 画面に出ていて、今日のレースを読み込んでいて、ほかの確認・取得・ダイアログの最中でない
+function canCheckDriveNow() {
+  if (driveBgFrame && Date.now() - driveLastCheck > 10 * 60000) stopBackgroundFrame();   // 返事の来ないまま10分たった確認・取得は捨てる
+  if (document.visibilityState !== "visible" || driveNeedsLogin || driveBgFrame) return false;
+  if (driveUpdateDialog.open || driveAskDialog.open || driveDoneDialog.open) return false;
+  const today = jstTodayYmd();
+  return [...state.races.keys()].some(rid => rid.slice(0, 8) === today);
+}
+setInterval(() => {
+  if (canCheckDriveNow() && Date.now() - driveLastCheck >= DRIVE_CHECK_EVERY) checkDriveUpdate(true);
+}, 30000);
+document.addEventListener("visibilitychange", () => {
+  if (canCheckDriveNow() && Date.now() - driveLastCheck >= DRIVE_CHECK_ON_RETURN) checkDriveUpdate(true);
+});
 function handleDriveCheck(check) {
+  const periodic = driveCheckPeriodic;
+  driveCheckPeriodic = false;
   if (check.result === "login") {
+    driveNeedsLogin = true;
     if (state.races.size) showDriveToast("更新の確認には再ログインが必要です", {button:"再ログイン", onButton:() => openDriveUpdate()});
     return;
   }
   if (check.result !== "update") return;
+  if (periodic && !check.raceDay) return;   // 数分おきの確認では、開催日以外の「更新しますか？」は出さない
+  driveLastCheck = Date.now();
   const params = new URLSearchParams({auto:"1", date:check.date, categories:check.categories.join(",")});
   if (check.raceDay) {
     showDriveToast("データを自動更新中…");
@@ -3065,6 +3104,8 @@ window.addEventListener("message", async event => {
     stopBackgroundFrame();
     showDriveToast("自動更新できませんでした。前のデータを表示しています", {hideAfter:8000});
   } else if (type === "drive-update-complete") {
+    driveNeedsLogin = false;
+    driveLastCheck = Date.now();
     if (fromDialog && driveAskMode) {
       driveUpdateDialog.close();
       driveDoneDialog.showModal();      // OK を押してから画面を描き直す

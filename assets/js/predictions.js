@@ -16,13 +16,13 @@ const PACE = [  // 展開の数字: [表示名, 値の列, 目安の列, 値の�
   ["ペース予想", "ペース予想(前に行く3頭の前半の速さ)", "ペース予想の目安",
    v => `前に行く3頭のテン: コースの基準より ${Math.abs(v).toFixed(1)}% ${v >= 0 ? "速い" : "遅い"}`]];
 const state = { races: new Map(), combos: new Map(), plans: new Map(), odds: new Map(), oddsKind: new Map(), calc: {},
-  info: new Map(), results: new Map(), pays: new Map(), review: new Map(), fileUpdated: new Map(),
+  info: new Map(), results: new Map(), pays: new Map(), review: new Map(), fileUpdated: new Map(), fileTime: new Map(),
   band: null, strength: null, current: null, dayPage: null, open: new Set(),
   loaded: new Map() };   // Drive から読んだ CSV: パス → 更新日時|サイズ(次の更新で変わったものだけ読むため)
 
 // 読んだデータを空にする(見ているレースと開いている行はそのまま)
 function clearData() {
-  for (const k of ["races", "combos", "plans", "odds", "oddsKind", "info", "results", "pays", "review", "fileUpdated", "loaded"]) state[k].clear();
+  for (const k of ["races", "combos", "plans", "odds", "oddsKind", "info", "results", "pays", "review", "fileUpdated", "fileTime", "loaded"]) state[k].clear();
   state.band = null; state.strength = null;
 }
 
@@ -53,14 +53,41 @@ const fix = (v, d = 1) => v == null ? "" : (+v).toFixed(d);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const raceKey = rid => rid;  // race_id(16桁)そのもの
 
+// CSV の更新時刻(Drive なら modifiedTime、手元のファイルなら lastModified)を種類 × レースごとに持つ。各欄の見出しに出す
+function noteFileTime(kind, rid, stamp) {
+  const k = kind + ":" + rid, prev = state.fileTime.get(k);
+  if (!prev || new Date(stamp) > new Date(prev)) state.fileTime.set(k, stamp);
+}
+function fmtStamp(stamp, withDate = false) {
+  if (!stamp) return "";
+  const p = Object.fromEntries(new Intl.DateTimeFormat("ja-JP", {timeZone: "Asia/Tokyo", month: "numeric", day: "numeric",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"}).formatToParts(new Date(stamp)).map(x => [x.type, x.value]));
+  return (withDate ? `${p.month}/${p.day} ` : "") + `${p.hour}:${p.minute}`;
+}
+function updTag(kinds, rids) {
+  // 欄の見出しに付ける「更新 HH:MM」。kinds の CSV のうち一番新しい時刻(rids が複数ならその中の一番新しいもの)。日付が今日でなければ月日も
+  let best = "";
+  for (const rid of [].concat(rids)) for (const k of [].concat(kinds)) {
+    const jyo = JYO[String(rid).slice(8, 10)];   // race_id の列が無い CSV(組み合わせ)は 年月日_場名_R数2桁R で持つ
+    const t = state.fileTime.get(k + ":" + rid) ?? (jyo ? state.fileTime.get(`${k}:${rid.slice(0, 8)}_${jyo}_${rid.slice(14, 16)}R`) : null);
+    if (t && (!best || new Date(t) > new Date(best))) best = t;
+  }
+  if (!best) return "";
+  const today = fmtStamp(new Date().toISOString(), true).split(" ")[0], d = fmtStamp(best, true);
+  return `<span class="sec-upd" title="この欄の CSV(${[].concat(kinds).join("・")})の更新時刻">更新 ${esc(d.startsWith(today + " ") ? d.split(" ")[1] : d)}</span>`;
+}
+
 async function readFile(file, path, modifiedTime) {
   const rows = parseCSV(await file.text());
   if (!rows.length) return 0;
   const cols = Object.keys(rows[0]);
   const name = (path || file.webkitRelativePath || file.name).replace(/\\/g, "/");
   const raceFolder = name.match(/(?:^|\/)([^/]+_\d{2}R)\/[^/]*_(\d{8})_[^/]+$/);
+  const stamp = modifiedTime || (file.lastModified ? new Date(file.lastModified).toISOString() : "");
+  const kindName = (name.split("/").pop().match(/^([^_]+)_/) || [])[1];   // 予想・推奨買い目・オッズ・組み合わせ・結果・払戻・回顧
+  if (stamp && kindName && rows[0].race_id) noteFileTime(kindName, String(rows[0].race_id), stamp);
+  else if (stamp && kindName && raceFolder) noteFileTime(kindName, raceFolder[2] + "_" + raceFolder[1], stamp);   // 組み合わせ(race_id の列が無い)
   if (raceFolder) {
-    const stamp = modifiedTime || (file.lastModified ? new Date(file.lastModified).toISOString() : "");
     if (stamp) {
       const folderKey = raceFolder[2] + "_" + raceFolder[1];   // 日付も入れる(同じ場・R が別の日にもあるため)
       const prev = state.fileUpdated.get(folderKey);
@@ -556,7 +583,7 @@ function changeCard(rows) {
   const ranks = r => `(${num(r["枠順時_順位"])}位 → <b>${num(r["平均_順位"])}位</b>)`;   // 枠順確定の時点 → 今の予想順位
   const top = (list) => list.slice(0, 3).map(([r, d]) => `${moveMark(d)} ${who(r)} ${ranks(r)}${weight(r)}`).join("<br>") || "なし";
   const stage = (col, now) => { const x = num(rows[0][col]), y = num(rows[0][now]); return x == null || y == null ? "-" : x === y ? `${y}(変わらず)` : `${x} → <b>${y}</b>`; };
-  return `<div class="card"><h3>枠順確定 → 馬体重の変化</h3><dl class="kv">` +
+  return `<div class="card"><h3>枠順確定 → 馬体重の変化${updTag("予想", rows[0].race_id)}</h3><dl class="kv">` +
     `<dt>本命</dt><dd>${a && b && +a.umaban === +b.umaban ? `変わらず(${who(b)})` : `${who(a)} → <b>${who(b)}</b> <span class="chip warn">本命変更</span>`}</dd>` +
     `<dt>順位が上がった馬</dt><dd>${top(moved.filter(([, d]) => d > 0).sort((x, y) => y[1] - x[1]))}</dd>` +
     `<dt>順位が下がった馬</dt><dd>${top(moved.filter(([, d]) => d < 0).sort((x, y) => x[1] - y[1]))}</dd>` +
@@ -713,7 +740,7 @@ function renderReview(rid, rows) {
   const fastest = Math.min(...fin.map(r => num(r["上がり3F"])).filter(v => v != null));
   const fastHorses = fin.filter(r => num(r["上がり3F"]) === fastest);
   const q = predictionQuality(rows, res, rv);
-  let h = `<div class="card review"><h3>レース回顧</h3>`;
+  let h = `<div class="card review"><h3>レース回顧${updTag(["回顧", "結果", "払戻"], rid)}</h3>`;
   if (q) {
     const [word, tone] = qualityWord(q.score);
     h += `<div class="quality"><span class="ql">予想の質</span><b class="qs">${q.score}</b><span class="muted">/100</span>` +
@@ -794,7 +821,7 @@ function renderResult(rid) {
   if (!res) { box.innerHTML = ""; return; }
   const pred = new Map((state.races.get(rid) || []).map(r => [String(+r.umaban), num(r["平均_順位"])]));
   const sep = t => t === "馬単" || t === "3連単" ? "→" : "-";
-  let h = `<div class="res-top"><b>結果</b><span class="muted">${esc(title(rid))}</span>` +
+  let h = `<div class="res-top"><b>結果</b><span class="muted">${esc(title(rid))}</span>${updTag(["結果", "払戻"], rid)}` +
     `<button id="resClose" title="結果の欄をたたむ">→</button></div><div class="scroll"><table class="res">` +
     `<tr><th class="n">着</th><th class="n">馬番</th><th>馬名</th><th class="n" title="予想の順位">予</th><th class="n">タイム</th>` +
     `<th class="n">差</th><th class="n">通過</th><th class="n">上3F</th><th class="n">人気</th><th class="n">単勝</th></tr>`;
@@ -1022,7 +1049,7 @@ function renderRace(rid) {
     .map(s => { const i = s.lastIndexOf(" "); return [s.slice(0, i), parseFloat(s.slice(i + 1))]; }));
   const bets = [...new Set(ms.flatMap(m => Object.keys(roiOf(m))))];
   // モデルごとの自信と区分の回収率(カードの一番下に出す)
-  let modelCard = `<div class="card"><h3>モデルごとの自信と、その区分の過去の回収率</h3><div class="scroll"><table>` +
+  let modelCard = `<div class="card"><h3>モデルごとの自信と、その区分の過去の回収率${updTag("予想", rid)}</h3><div class="scroll"><table>` +
     `<tr><th>モデル</th><th>区分</th>${bets.map(b => `<th class="n">${esc(b)}</th>`).join("")}</tr>`;
   for (const m of ms) {
     const roi = roiOf(m);
@@ -1054,11 +1081,11 @@ function renderRace(rid) {
       (word ? ` <span class="chip ${biasTone(word)}">${esc(word)}</span>` : "") + confChip(src, label) +
       (why || cw ? `<div class="note" style="margin:0">${esc(why)}${why && cw ? "。" : ""}${cw ? "確度の根拠: " + esc(cw) : ""}</div>` : "") + `</div></div>`;
   }).join("");
-  const tenkaiCard = `<div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">展開予想</h3>${favBox}</div>${favNote}` +
+  const tenkaiCard = `<div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">展開予想${updTag("予想", rid)}</h3>${favBox}</div>${favNote}` +
     `${pace || `<span class="muted">列がありません</span>`}` +
     (pace ? `<div class="note">目安(札)は検証期間(2019〜2023年)の同じ芝ダのレースと比べたもの。ペース予想の数字はコースの基準タイムとの差で、ふつうのレースでも前に行く馬は基準より少し速い(平均は下の行のとおり)ので、札はそれと比べた速さ。逃げ・先行馬が多くペースが速いと差しが届きやすく、少なく遅いと前が残りやすい。</div>` : "") +
     `</div>`;
-  const babaCard = `<div class="card"><h3>馬場傾向予想（仮）<button class="help" data-help="baba" title="馬場傾向予想の各項目の説明(別ウインドウ)">？</button></h3>` +
+  const babaCard = `<div class="card"><h3>馬場傾向予想（仮）<button class="help" data-help="baba" title="馬場傾向予想の各項目の説明(別ウインドウ)">？</button>${updTag("予想", rid)}</h3>` +
     `${info ? `<dl class="kv">${info}</dl>` : ""}` +
     (bias ? `<div style="margin-top:6px">${bias}</div><div class="note">馬場傾向の数字は、3着以内の馬の位置の平均 − 全馬の平均。` +
       `内外は馬番÷頭数(0 = 内、1 = 外)、前後は最初のコーナーの順位÷頭数(0 = 前、1 = 後ろ)で、マイナスなら内・前が有利。` +
@@ -1070,7 +1097,7 @@ function renderRace(rid) {
   html += changeCard(base);   // 得意モデルだけの表示のときも、枠順確定との比較は5モデルの平均どうしで
   // 出走馬
   html += `<div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">` +
-    `<h3 style="margin:0">出走馬</h3>` + favBox +
+    `<h3 style="margin:0">出走馬${updTag(["予想", "オッズ"], rid)}</h3>` + favBox +
     `<label class="muted" style="font-size:13px" title="相対値・絶対値・理由をたたむ。馬の行を1回押すとそれが出て、2回目で詳細が出る">` +
     `<input type="checkbox" id="simpleView" ${simpleView() ? "checked" : ""}> 簡易表示</label>` +
     (hasPre(rows) ? `<label class="muted" style="font-size:13px" title="予想順位と勝率の横に枠順確定の時点からの変化を出す。レース一覧に、本命が変わったレースの印を出す">` +
@@ -1693,7 +1720,7 @@ function renderPlan(rid) {
   }
   const kinds = [...new Set(parts.map(x => x["券種"]))];
   const roi = num(r?.["過去の回収率"]), honest = num(r?.["確かめの回収率"]);
-  let h = `<div class="card"><h3>推奨買い目と資金配分</h3>` +
+  let h = `<div class="card"><h3>推奨買い目と資金配分${updTag(["推奨買い目", "オッズ"], rid)}</h3>` +
 `<div class="tabs pmode" style="margin-bottom:6px">` + modes.map(m => `<button data-t="${m}" class="${m === pmode ? "on" : ""}" title="${
       { "おすすめ": "1つの買い方で一番良かったもの", "組み合わせ": "券種の違う2つの買い方を合わせて一番良かったもの", "券種別": "券種ごとに一番良かった買い方" }[m]}">${
       { "おすすめ": "おすすめ(1券種)", "組み合わせ": "券種を組み合わせ", "券種別": "券種別" }[m]}</button>`).join("") + `</div>` +
@@ -2034,7 +2061,7 @@ function renderCombos(rid) {
   const max = Math.max(...list.map(r => r.p));
   const sep = tab === "馬単" || tab === "3連単" ? "→" : "-";
   const lower = tab === "ワイド";
-  let h = `<div class="card"><h3>組み合わせ馬券(${sortBy === "期待値" ? "期待値の高い順" : "確率の高い順"})</h3><div class="tabs combo">` +
+  let h = `<div class="card"><h3>組み合わせ馬券(${sortBy === "期待値" ? "期待値の高い順" : "確率の高い順"})${updTag(["組み合わせ", "オッズ"], rid)}</h3><div class="tabs combo">` +
     kinds.map(k => `<button data-t="${esc(k)}" class="${k === tab ? "on" : ""}">${esc(k)}</button>`).join("") + `</div>` +
     `<div class="tabs csort" style="margin-top:6px">` + ["確率", "期待値"].map(x =>
       `<button data-t="${x}" class="${x === sortBy ? "on" : ""}" ${x === "期待値" && !odds ? "disabled title=\"オッズ フォルダの CSV を落とすと使える\"" : ""}>${x}の高い順</button>`).join("") + `</div>` +
@@ -2145,7 +2172,7 @@ function renderDayPage(date) {
 
   // 1. 1日を通した馬場傾向の予想(場ごと・芝ダ別)。予想 CSV の馬場傾向の列は同じ場・芝ダのレースで同じ値なので、芝ダごとにまとめて出す
   const bj = pick("dayBiasJyo");
-  h += `<div class="card"><h3>馬場傾向の予想(1日を通して)（仮）</h3>` + jyoTabs("dayBiasJyo", bj);
+  h += `<div class="card"><h3>馬場傾向の予想(1日を通して)（仮）${updTag("予想", rids)}</h3>` + jyoTabs("dayBiasJyo", bj);
   const bRids = rids.filter(rid => rid.slice(8, 10) === bj);
   const surfaces = [...new Set(bRids.map(surf))].sort((a, b) => ["芝", "ダート", "障害"].indexOf(a) - ["芝", "ダート", "障害"].indexOf(b));
   // この場の全レース(最終レースまで)の結果がそろったら、実際の馬場傾向と予想の当否を出す
@@ -2204,7 +2231,7 @@ function renderDayPage(date) {
   const tierName = tierNames.join("・") || "〜500円";
   const skips = judged.filter(([, x]) => x?.skip), unknown = judged.filter(([, x]) => !x);
   const fromCsv = judged.some(([, x]) => x?.src === "csv");
-  h += `<div class="card day-fold"><h3>見送り推奨のレース（仮）</h3>` + jyoTabs("daySkipJyo", sj) +
+  h += `<div class="card day-fold"><h3>見送り推奨のレース（仮）${updTag(["推奨買い目", "予想"], rids)}</h3>` + jyoTabs("daySkipJyo", sj) +
     `<div class="kpis" style="margin:0 0 8px">${kpi(`${skips.length} / ${sRids.length}`, "見送り推奨（仮） / この場のレース")}` +
     (unknown.length ? kpi(unknown.length, "推奨買い目がまだ無い(判定できない)") : "") + `</div>`;
   if (skips.length) {
@@ -2538,7 +2565,7 @@ function raceName(rid) { return rid ? `${JYO[rid.slice(8, 10)] || rid.slice(8, 1
 function renderFund(date, raceLink) {
   const P = fundPlan(date), f = P.f;
   const started = P.inJyo.length - P.open.length;
-  let h = `<div class="card fund-card day-fold"><h3>資金配分案（仮）<button class="help" id="fundHelp" title="資金配分案の使い方と決め方">？</button></h3>` +
+  let h = `<div class="card fund-card day-fold"><h3>資金配分案（仮）<button class="help" id="fundHelp" title="資金配分案の使い方と決め方">？</button>${updTag(["推奨買い目", "予想"], sortedRaces().filter(r => r.slice(0, 8) === date))}</h3>` +
     // 対象の場(✔ の無い場は資金配分の対象から外す)
     `<div class="calc fund-jyos" style="margin-bottom:6px"><span class="muted">対象の場:</span>` +
     P.jyos.map(j => `<label><input type="checkbox" class="fundJyoOn" data-j="${j}" ${f.offJyo.includes(j) ? "" : "checked"}> ${esc(JYO[j] || j)}</label>`).join("") +
@@ -3122,7 +3149,7 @@ window.addEventListener("message", async event => {
 });
 async function applyDriveUpdate() {
   // 失敗したら元に戻せるように控えておく(表は消さない。変わった CSV だけを読み直すため。consumeDriveTransfer を見る)
-  const keys = ["races", "combos", "plans", "odds", "oddsKind", "info", "results", "pays", "review", "fileUpdated", "loaded"];
+  const keys = ["races", "combos", "plans", "odds", "oddsKind", "info", "results", "pays", "review", "fileUpdated", "fileTime", "loaded"];
   const previous = Object.fromEntries(keys.map(key => [key, new Map(state[key])]));
   const previousBand = state.band, previousStrength = state.strength;
   const previousCurrent = state.current;

@@ -4,23 +4,12 @@ const GOOGLE_CLIENT_ID = "585615498103-i5804umtma380k2jp4o631uu5mmj1nsb.apps.goo
 const DRIVE_ROOT_ID = "10mpZ9x81Q5I1FOyWS3NF9ojLsIDSTMHT";
 const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email";
-const CATEGORIES = [
-  {name:"レース単位CSV", root:true},
-  {name:"オッズ"},
-  {name:"回顧"},
-  {name:"結果"},
-  {name:"推奨買い目"},
-  {name:"組み合わせ"},
-  {name:"払戻"}
-];
 const statusEl = document.getElementById("status");
 const loginButton = document.getElementById("login");
 const selectionPanel = document.getElementById("selection");
 const dateSelect = document.getElementById("date");
 const categoryList = document.getElementById("categories");
 const downloadButton = document.getElementById("download");
-const selectAllButton = document.getElementById("selectAll");
-const clearAllButton = document.getElementById("clearAll");
 let tokenClient = null;
 let accessToken = null;
 let accountEmail = "";
@@ -95,24 +84,20 @@ async function handleTokenResponse(response) {
     if (!dateFolders.length) throw new Error("predictions直下にYYYYMMDD形式の日付フォルダが見つかりません。");
     renderDateFolders();
     selectionPanel.hidden = false;
-    if (targetedRaceUpdate) {
-      const matchingDate = dateFolders.some(folder => folder.name === targetDate);
-      if (!matchingDate) throw new Error("指定された日付フォルダが見つかりません: " + targetDate);
-      dateSelect.value = targetDate;
-      categoryList.querySelectorAll('input[type="checkbox"]').forEach(input => input.checked = true);
-      document.querySelector("#selection h2").hidden = true;
-      document.querySelector('label[for="date"]').hidden = true;
-      dateSelect.hidden = true;
-      document.querySelector(".selection-heading").hidden = true;
-      categoryList.hidden = true;
-      const note = document.getElementById("targetScopeNote");
-      note.hidden = false;
-      note.textContent = targetDate.slice(0,4) + "/" + targetDate.slice(4,6) + "/" + targetDate.slice(6,8) + " の " + targetRaceFolder + " のデータだけを更新します。";
-      downloadButton.textContent = "このRのデータを取得・更新";
+    // 種類を選ぶ欄は使わない(1日分をまとめて取るので。2026-11-15)
+    document.querySelector(".selection-heading").hidden = true;
+    categoryList.hidden = true;
+    if (/^\d{8}$/.test(targetDate) && dateFolders.some(folder => folder.name === targetDate)) {
+      dateSelect.value = targetDate;     // 「このRのデータを更新」から来たときも、その日の分をまとめて取る(まとめファイル2つで済むため)
+      if (targetedRaceUpdate) {
+        const note = document.getElementById("targetScopeNote");
+        note.hidden = false;
+        note.textContent = targetDate.slice(0,4) + "/" + targetDate.slice(4,6) + "/" + targetDate.slice(6,8) + " の分をまとめて更新します(" + targetRaceFolder + " も入ります)。";
+      }
     }
     accountSelectionRequested = true;
     loginButton.textContent = "Googleアカウントを変更・再ログイン";
-    status(targetedRaceUpdate ? "表示中のレースだけを更新します。" : "取得する日付とフォルダを選択してください。");
+    status("取得する日付を選んでください。");
   } catch (error) {
     console.error(error);
     status("データ一覧情報を取得できませんでした。\n" + (error?.message || error) + "\n\n共有設定を確認してください。");
@@ -132,47 +117,21 @@ function renderDateFolders() {
     option.textContent = folder.name.slice(0,4) + "/" + folder.name.slice(4,6) + "/" + folder.name.slice(6,8);
     dateSelect.appendChild(option);
   }
-  categoryList.replaceChildren();
-  for (const category of CATEGORIES) {
-    const label = document.createElement("label");
-    label.className = "category";
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.value = category.name;
-    input.checked = true;
-    const text = document.createElement("span");
-    text.textContent = category.name;
-    label.append(input, text);
-    categoryList.appendChild(label);
-  }
   updateDownloadButton();
-}
-function selectedCategories() {
-  return [...categoryList.querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value);
 }
 function updateDownloadButton() {
-  downloadButton.disabled = !accessToken || !dateSelect.value || selectedCategories().length === 0 || busy;
+  downloadButton.disabled = !accessToken || !dateSelect.value || busy;
 }
-categoryList.addEventListener("change", updateDownloadButton);
 dateSelect.addEventListener("change", updateDownloadButton);
-selectAllButton.addEventListener("click", () => {
-  categoryList.querySelectorAll('input[type="checkbox"]').forEach(input => input.checked = true);
-  updateDownloadButton();
-});
-clearAllButton.addEventListener("click", () => {
-  categoryList.querySelectorAll('input[type="checkbox"]').forEach(input => input.checked = false);
-  updateDownloadButton();
-});
 downloadButton.addEventListener("click", async () => {
   if (busy || !accessToken) return;
   const date = dateSelect.value;
-  const categories = selectedCategories();
-  if (!date || !categories.length) return;
+  if (!date) return;
   busy = true;
   updateDownloadButton();
   loginButton.disabled = true;
   try {
-    await fetchAndTransfer(date, categories, targetedRaceUpdate ? targetRaceFolder : "");
+    await fetchAndTransfer(date);
     if (window.parent !== window && new URLSearchParams(location.search).get("embedded") === "1") {
       status("取得が完了しました。ビューアに反映しています…", true);
       window.parent.postMessage({type:"drive-update-complete", failed:lastFailedCount}, location.origin);
@@ -188,14 +147,13 @@ downloadButton.addEventListener("click", async () => {
   }
 });
 
-async function fetchAndTransfer(date, categories, raceFolder = "") {
+async function fetchAndTransfer(date) {
   lastFailedCount = 0;
-  const files = await fetchSelectedCsv(accessToken, accountEmail, date, categories, raceFolder);
-  if (!files.length) throw new Error("取得済みキャッシュを含め、表示できるCSVがありません。日付・フォルダを確認してください。");
+  const bundles = await fetchDayBundles(accessToken, accountEmail, date);
   status("データの準備が完了しました。画面を開いています…", true);
-  await saveTransfer(files);
+  await saveTransfer({bundles});
   try {
-    if (!raceFolder) localStorage.setItem(SCOPE_KEY, JSON.stringify({date, categories}));
+    localStorage.setItem(SCOPE_KEY, JSON.stringify({date}));
     localStorage.removeItem(dismissKey(accountEmail, date));
   } catch (_) {}
 }
@@ -235,21 +193,6 @@ async function listChildren(parentId, accessToken) {
   return all;
 }
 
-async function collectFolder(folder, accessToken, output, visited, prefix, depth=0) {
-  if(visited.has(folder.id)) return;
-  if(depth>20) throw new Error("フォルダ階層が深すぎるため取得を中止しました。");
-  visited.add(folder.id);
-  const children=await listChildren(folder.id,accessToken);
-  for(const item of children) {
-    if(item.mimeType==="application/vnd.google-apps.folder") {
-      await collectFolder(item,accessToken,output,visited,prefix+item.name+"/",depth+1);
-    } else if(item.name?.toLowerCase().endsWith(".csv") && item.mimeType!=="application/vnd.google-apps.shortcut") {
-      output.push({id:item.id,name:item.name,path:prefix+item.name,modifiedTime:item.modifiedTime||"",size:Number(item.size||0)});
-      if(output.length>5000) throw new Error("選択した範囲のCSVが5,000件を超えました。取得対象を分けてください。");
-    }
-  }
-}
-
 async function getAccountEmail(accessToken) {
   const response=await fetch("https://www.googleapis.com/oauth2/v3/userinfo",{headers:{Authorization:"Bearer " + accessToken}});
   if(!response.ok) throw new Error("Googleアカウント情報を取得できませんでした。再ログインしてください。");
@@ -258,121 +201,14 @@ async function getAccountEmail(accessToken) {
   return data.email.toLowerCase();
 }
 
-// 日付フォルダの中のパスがどのカテゴリか。今の形は <場名>_<R2桁>R/<種類>_<年月日>_<場名>_<R2桁>R.csv(予想本体の種類は「予想」)。
-// 日付フォルダ直下のCSV(レース情報.csv・自信の区分ごとの回収率.csv)と予想は「レース単位CSV」。昔の形の <種類>/… も見分ける。
-const RACE_FOLDER = /^.+_\d{2}R$/;
-function categoryOf(rest) {
-  const parts = rest.split("/");
-  if (parts.length === 1) return "レース単位CSV";
-  if (parts.length === 2 && RACE_FOLDER.test(parts[0])) {
-    const kind = parts[1].split("_")[0];
-    return kind === "予想" ? "レース単位CSV" : kind;
-  }
-  return parts[0];
-}
+// ---------- 1日分のまとめファイル(2026-11-15 から) ----------
+// PC が日付のフォルダに、その日の CSV を圧縮してまとめた2つ(本体とオッズ)を置く。CSV を1件ずつ(1日 200件超)取りに行くと
+// 止まりやすかったので、日付のフォルダの一覧1回 + 変わったまとめファイルだけ(多くて2回)で済ませる。
+// 端末には、まとめファイル(圧縮のまま。1日 1.3MB ほど)だけを残す。携帯は直近7日分だけ。
+const BUNDLE_NAMES = {main:"_viewer_main.json.gz", odds:"_viewer_odds.json.gz"};
+const BUNDLE_CACHE_KEY = email => "bundle-cache:" + email;
 
-function pathIsInSelectedScope(path, date, categories) {
-  const datePrefix = "predictions/" + date + "/";
-  if (!path.startsWith(datePrefix)) return false;
-  return categories.includes(categoryOf(path.slice(datePrefix.length)));
-}
-
-function pathIsInRaceScope(path, date, raceFolder) {
-  const prefix = "predictions/" + date + "/";
-  return path.startsWith(prefix) && path.slice(prefix.length).split("/")[0] === raceFolder;
-}
-
-async function listSelectedMetadata(accessToken, date, categories, raceFolder = "") {
-  const dateFolder = dateFolders.find(folder => folder.name === date);
-  if (!dateFolder) throw new Error("選択した日付フォルダが見つかりません。");
-  const datePrefix = "predictions/" + date + "/";
-  const children = await listChildren(dateFolder.id, accessToken);
-  const metas = [];
-  const selectedSet = new Set(categories);
-  const isCsv = item => item.name?.toLowerCase().endsWith(".csv") && item.mimeType !== "application/vnd.google-apps.shortcut";
-  const pushFile = (item, path) => metas.push({id:item.id,name:item.name,path,modifiedTime:item.modifiedTime||"",size:Number(item.size||0)});
-  if (raceFolder) {
-    const folder = children.find(item => item.mimeType === "application/vnd.google-apps.folder" && item.name === raceFolder);
-    if (!folder) throw new Error("指定されたレースフォルダが見つかりません: " + raceFolder);
-    const files = await listChildren(folder.id, accessToken);
-    for (const item of files) {
-      if (isCsv(item) && selectedSet.has(categoryOf(raceFolder + "/" + item.name))) {
-        pushFile(item, datePrefix + raceFolder + "/" + item.name);
-      }
-    }
-    return [...new Map(metas.map(item => [item.id,item])).values()];
-  }
-  const raceFolders = [];
-  for (const item of children) {
-    if (item.mimeType === "application/vnd.google-apps.folder") {
-      if (RACE_FOLDER.test(item.name)) raceFolders.push(item);              // 今の形: R ごとのフォルダ
-      else if (selectedSet.has(item.name) && item.name !== "レース単位CSV") {   // 昔の形: 種類ごとのフォルダ
-        await collectFolder(item, accessToken, metas, new Set(), datePrefix + item.name + "/");
-      }
-    } else if (isCsv(item) && selectedSet.has("レース単位CSV")) {
-      pushFile(item, datePrefix + item.name);
-    }
-  }
-  // R ごとのフォルダは4つずつ並べて一覧を取り、選んだカテゴリのCSVだけ残す
-  for (let i = 0; i < raceFolders.length; i += 4) {
-    const batch = raceFolders.slice(i, i + 4);
-    const lists = await Promise.all(batch.map(folder => listChildren(folder.id, accessToken)));
-    batch.forEach((folder, j) => {
-      for (const item of lists[j]) {
-        const rest = folder.name + "/" + item.name;
-        if (isCsv(item) && selectedSet.has(categoryOf(rest))) pushFile(item, datePrefix + rest);
-      }
-    });
-    status("選択したデータを確認中… " + Math.min(raceFolders.length, i + 4) + "/" + raceFolders.length, true);
-  }
-  return [...new Map(metas.map(item => [item.id,item])).values()];
-}
-
-async function getDriveStartPageToken(accessToken) {
-  const params = new URLSearchParams({fields:"startPageToken",supportsAllDrives:"true"});
-  const response = await fetch("https://www.googleapis.com/drive/v3/changes/startPageToken?" + params,
-    {headers:{Authorization:"Bearer " + accessToken}});
-  if (!response.ok) {
-    let detail = "";
-    try { detail = (await response.json()).error?.message || ""; } catch (_) {}
-    throw new Error("変更履歴の起点を取得できません (" + response.status + ") " + detail);
-  }
-  const data = await response.json();
-  if (!data.startPageToken) throw new Error("変更履歴の起点が返されませんでした。");
-  return data.startPageToken;
-}
-
-async function listDriveChanges(accessToken,startPageToken) {
-  let pageToken = startPageToken;
-  const changes = [];
-  let newStartPageToken = "";
-  do {
-    const params = new URLSearchParams({
-      pageToken,
-      pageSize:"1000",
-      fields:"nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,mimeType,modifiedTime,size,parents,trashed))",
-      supportsAllDrives:"true",
-      includeItemsFromAllDrives:"true"
-    });
-    const response = await fetch("https://www.googleapis.com/drive/v3/changes?" + params,
-      {headers:{Authorization:"Bearer " + accessToken}});
-    if (!response.ok) {
-      let detail = "";
-      try { detail = (await response.json()).error?.message || ""; } catch (_) {}
-      const error = new Error("変更履歴を取得できません (" + response.status + ") " + detail);
-      error.status = response.status;
-      throw error;
-    }
-    const data = await response.json();
-    changes.push(...(data.changes || []));
-    pageToken = data.nextPageToken || "";
-    if (data.newStartPageToken) newStartPageToken = data.newStartPageToken;
-  } while (pageToken);
-  return {hasChanges:changes.length>0,newStartPageToken,changes};
-}
-
-// 携帯(iPhone・iPad・Android)は、キャッシュに最近の日付だけを残す。全部の日付を残すと更新のたびの書き込みが重く、
-// iPhone の Safari で保存が中断される(2026-11-14 に「データの取得に失敗しました。null」が出た)。PC は今のまま全部残す
+// 携帯(iPhone・iPad・Android)は、最近の日付だけを残す(2026-11-14 に、全部残して iPhone の Safari で保存が中断された)
 const MOBILE_DEVICE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const MOBILE_KEEP_DAYS = 7;     // 今日を入れて7日(その週の開催日の分)。取得している日付はいつでも残す
 function mobileKeepFrom() {
@@ -382,111 +218,55 @@ function mobileKeepFrom() {
 function keepDateOnDevice(day, date) {
   return !MOBILE_DEVICE || !day || day === date || day >= mobileKeepFrom();
 }
-function pathDate(path) { return ((path || "").match(/^predictions\/(\d{8})\//) || [])[1] || ""; }
 
-async function fetchSelectedCsv(accessToken, accountEmail, date, categories, raceFolder = "") {
-  status("データ変更履歴を確認中…",true);
-  const cache = await loadDriveCache(accountEmail).catch(error => {
-    console.warn("Drive CSVキャッシュを読み込めません。選択範囲を再取得します:",error);
-    return {files:[],scannedScopes:[],changePageToken:""};
+// 日付のフォルダにあるまとめファイル {main: {id,name,modifiedTime,size}, odds: {...}}
+async function listDayBundles(accessToken, date) {
+  const folder = dateFolders.find(item => item.name === date);
+  if (!folder) throw new Error("選択した日付フォルダが見つかりません: " + date);
+  const children = await listChildren(folder.id, accessToken);
+  const found = {};
+  for (const [kind, name] of Object.entries(BUNDLE_NAMES)) {
+    const item = children.find(x => x.name === name && x.mimeType !== "application/vnd.google-apps.folder");
+    if (item) found[kind] = item;
+  }
+  if (!found.main) throw new Error("この日付のまとめファイル(" + BUNDLE_NAMES.main + ")がまだありません。PC の当日の処理が Drive に置くまでお待ちください。");
+  return found;
+}
+function bundleSignature(found) {
+  return Object.keys(BUNDLE_NAMES).map(kind => kind + ":" + (found[kind]?.modifiedTime || "")).join("|");
+}
+
+async function fetchDayBundles(accessToken, accountEmail, date) {
+  status("データの更新を確認中…", true);
+  const found = await listDayBundles(accessToken, date);
+  const cache = await loadBundleCache(accountEmail).catch(error => {
+    console.warn("保存済みのまとめファイルを読み込めません。取り直します:", error);
+    return {days:{}};
   });
-  const cachedFiles = cache.files || [];
-  let changePageToken = cache.changePageToken || "";
-  let hasDriveChanges = true;
-  if (changePageToken) {
-    try {
-      const changes = await listDriveChanges(accessToken,changePageToken);
-      changePageToken = changes.newStartPageToken || changePageToken;
-      hasDriveChanges = changes.hasChanges;
-    } catch (error) {
-      if (error.status === 410) {
-        // トークン期限切れ。新しい起点を取り直して、選択範囲を全件確認する。
-        changePageToken = await getDriveStartPageToken(accessToken);
-      } else {
-        // changes.list が一時的に使えない場合も、従来のフォルダ走査で取得を続ける。
-        console.warn("Drive変更履歴を利用できないため、フォルダ一覧を確認します:",error);
-      }
-      hasDriveChanges = true;
-    }
-  } else {
-    // 初回だけ起点を先に記録。走査中に発生した変更は次回の changes.list で拾う。
-    changePageToken = await getDriveStartPageToken(accessToken);
-    hasDriveChanges = true;
-  }
-
-  const scopeKeys = categories.map(category => raceFolder ? date + "|" + raceFolder + "|" + category : date + "|" + category);
-  const scopeReady = scopeKeys.every(key => (cache.scannedScopes || []).includes(key));
-  const canUseCache = !hasDriveChanges && scopeReady;
-  let metas;
-  let scannedScopes;
-  if (canUseCache) {
-    status("変更なし。保存済みCSVを使用します…",true);
-    metas = cachedFiles.filter(item => raceFolder ? pathIsInRaceScope(item.path||"",date,raceFolder) : pathIsInSelectedScope(item.path||"",date,categories));
-    scannedScopes = cache.scannedScopes || [];
-  } else {
-    status("選択したデータを確認中…",true);
-    metas = await listSelectedMetadata(accessToken,date,categories,raceFolder);
-    // changes.list はユーザー全体の変更履歴なので、変更があれば他の日付の確認済み状態も無効化する。
-    scannedScopes = hasDriveChanges ? [] : (cache.scannedScopes || []);
-    for (const key of scopeKeys) if (!scannedScopes.includes(key)) scannedScopes.push(key);
-  }
-
-  if (raceFolder && !metas.length) throw new Error("指定したレースフォルダにCSVがありません: " + raceFolder);
-
-  const cachedById = new Map(cachedFiles.map(item => [item.id,item]));
-  const retained = cachedFiles.filter(item => !(raceFolder ? pathIsInRaceScope(item.path||"",date,raceFolder) : pathIsInSelectedScope(item.path||"",date,categories)))
-    .filter(item => keepDateOnDevice(pathDate(item.path), date));
-  scannedScopes = scannedScopes.filter(key => keepDateOnDevice(key.split("|")[0], date));   // 消した日付は「確認済み」からも外す
-  const unchanged = [];
-  const toDownload = [];
-  for (const meta of metas) {
-    const old = cachedById.get(meta.id);
-    if (old?.blob && meta.modifiedTime && old.modifiedTime===meta.modifiedTime && Number(old.size||0)===Number(meta.size||0)) {
-      unchanged.push({...meta,blob:old.blob});
-    } else {
-      toDownload.push(meta);
-    }
-  }
-
-  const downloaded = [];
-  const failed = [];     // やり直しても取れなかったCSV。前回の分があればそれを残し、次の更新でまた取りに行く
+  const days = cache.days || {};
+  const day = {};
+  const kinds = Object.keys(found);
   let done = 0;
-  status("データを取得中… " + (toDownload.length ? 0 : 100) + "%",true);
-  for (let i=0;i<toDownload.length;i+=4) {
-    const batch=toDownload.slice(i,i+4);
-    const results=await Promise.all(batch.map(async meta => {
-      try {
-        return {...meta,blob:await downloadCsv(meta,accessToken)};
-      } catch (error) {
-        if (error.status === 401) throw error;   // ログインが切れたときは全体を止めて再ログインへ
-        console.warn("CSVを取得できませんでした:", meta.name, error);
-        failed.push(meta);
-        const old = cachedById.get(meta.id);
-        return old?.blob ? old : null;
-      } finally {
-        done++;
-        status("データを取得中… " + Math.min(100,Math.round(done/toDownload.length*100)) + "%",true);
-      }
-    }));
-    downloaded.push(...results.filter(Boolean));
+  status("データを取得中… 0/" + kinds.length, true);
+  for (const kind of kinds) {
+    const item = found[kind], old = days[date]?.[kind];
+    if (old?.blob && old.modifiedTime === item.modifiedTime && Number(old.size || 0) === Number(item.size || 0)) {
+      day[kind] = old;
+    } else {
+      day[kind] = {modifiedTime:item.modifiedTime || "", size:Number(item.size || 0), blob:await downloadCsv(item, accessToken)};
+    }
+    status("データを取得中… " + (++done) + "/" + kinds.length, true);
   }
-  if (toDownload.length && failed.length === toDownload.length && !unchanged.length && !retained.length) {
-    throw new Error("データの取得に失敗しました: " + failed.length + "件すべて取れませんでした (" + failed[0].name + " など)");
-  }
-
-  const merged = [...retained,...unchanged,...downloaded];
-  const result = [...new Map(merged.map(item => [item.id,item])).values()]
-    .sort((a,b) => (a.path||"").localeCompare(b.path||""));
-  // 取れなかったものがあれば、変更履歴の起点と確認済みの範囲を保存しない(次の確認で「更新あり」になり、取り直す)
+  days[date] = day;
+  for (const d of Object.keys(days)) if (!keepDateOnDevice(d, date)) delete days[d];
   try {
-    await saveDriveCache(accountEmail,result,failed.length ? {changePageToken:"",scannedScopes:[]} : {changePageToken,scannedScopes});
+    await saveBundleCache(accountEmail, {days});
   } catch (error) {
-    // キャッシュは速くするためだけのもの。保存できなくても、取ったデータはそのまま出す(前のキャッシュのままなので、次の確認で取り直す)
-    console.warn("Drive CSVキャッシュを保存できませんでした:", error);
+    // 端末への保存は次の F5 を速くするためだけのもの。保存できなくても、取ったデータはそのまま出す
+    console.warn("まとめファイルを端末に保存できませんでした:", error);
   }
-  lastFailedCount = failed.length;
-  status("取得データをまとめています…",true);
-  return result;
+  return Object.entries(days).sort((a, b) => a[0].localeCompare(b[0]))
+    .flatMap(([d, kinds]) => Object.entries(kinds).map(([kind, x]) => ({date:d, kind, modifiedTime:x.modifiedTime, blob:x.blob})));
 }
 
 // CSVを1件取る。回数制限(429・403)・Drive側の一時的なエラー(5xx)・通信の途切れは、待ってから3回までやり直す
@@ -534,42 +314,46 @@ function openTransferDb() {
     request.onblocked=() => reject(idbError(null,"開く"));
   });
 }
-async function loadDriveCache(accountEmail) {
+async function loadBundleCache(accountEmail) {
   const db=await openTransferDb();
   try {
     return await new Promise((resolve,reject) => {
-      const tx=db.transaction("payload","readonly");
-      const request=tx.objectStore("payload").get("drive-cache:"+accountEmail);
-      request.onsuccess=() => resolve(request.result || {files:[],scannedScopes:[],changePageToken:""});
-      request.onerror=() => reject(idbError(request.error,"キャッシュの読み込み"));
+      const tx=db.transaction("payload","readwrite");
+      const store=tx.objectStore("payload");
+      store.delete("drive-cache:"+accountEmail);    // 前の形(CSV を1件ずつ全部の日付ぶん)。大きいので消す
+      const request=store.get(BUNDLE_CACHE_KEY(accountEmail));
+      let value={days:{}};
+      request.onsuccess=() => { value=request.result || {days:{}}; };
+      tx.oncomplete=() => resolve(value);
+      tx.onerror=() => reject(idbError(tx.error,"キャッシュの読み込み"));
+      tx.onabort=() => reject(idbError(tx.error,"キャッシュの読み込み"));
     });
   } finally { db.close(); }
 }
-async function saveDriveCache(accountEmail,files,extra={}) {
-  return idbRetry(() => saveDriveCacheOnce(accountEmail,files,extra));
+async function saveBundleCache(accountEmail,value) {
+  return idbRetry(() => saveBundleCacheOnce(accountEmail,value));
 }
-async function saveDriveCacheOnce(accountEmail,files,extra={}) {
+async function saveBundleCacheOnce(accountEmail,value) {
   const db=await openTransferDb();
   try {
     await new Promise((resolve,reject) => {
       const tx=db.transaction("payload","readwrite");
-      tx.objectStore("payload").put({updatedAt:Date.now(),files,
-        changePageToken:extra.changePageToken||"",scannedScopes:extra.scannedScopes||[]},"drive-cache:"+accountEmail);
+      tx.objectStore("payload").put({updatedAt:Date.now(),days:value.days||{}},BUNDLE_CACHE_KEY(accountEmail));
       tx.oncomplete=resolve;
       tx.onerror=() => reject(idbError(tx.error,"キャッシュ"));
       tx.onabort=() => reject(idbError(tx.error,"キャッシュ"));
     });
   } finally { db.close(); }
 }
-async function saveTransfer(files) {
-  return idbRetry(() => saveTransferOnce(files));
+async function saveTransfer(payload) {
+  return idbRetry(() => saveTransferOnce(payload));
 }
-async function saveTransferOnce(files) {
+async function saveTransferOnce(payload) {
   const db=await openTransferDb();
   try {
     await new Promise((resolve,reject) => {
       const tx=db.transaction("payload","readwrite");
-      tx.objectStore("payload").put({createdAt:Date.now(),files},"pending");
+      tx.objectStore("payload").put({createdAt:Date.now(),...payload},"pending");
       tx.oncomplete=resolve;
       tx.onerror=() => reject(idbError(tx.error,"ビューアへの受け渡し"));
       tx.onabort=() => reject(idbError(tx.error,"ビューアへの受け渡し"));
@@ -613,8 +397,8 @@ function useSession() {
   return true;
 }
 
-// 更新があるかだけを調べる。ここでは保存済みの起点を進めない(進めるのは実際に取得したとき)。
-// 今日の日付フォルダがあればレース日として今日を見る。無ければ前回まとめて取得した日付を見る。
+// 更新があるかだけを調べる(フォルダの一覧2回)。今日の日付フォルダがあればレース日として今日を見る。無ければ前回取得した日付を見る。
+// 「いいえ」を選んだときは、その時点のまとめファイルの更新時刻を覚えておき、それより後に変わったときだけ聞く
 async function checkForUpdate() {
   if (!useSession()) return {result:"login"};
   await loadDateFolders();
@@ -623,28 +407,17 @@ async function checkForUpdate() {
   const raceDay = dateFolders.some(folder => folder.name === today);
   const date = raceDay ? today : scope?.date;
   if (!date || !dateFolders.some(folder => folder.name === date)) return {result:"none"};
-  const categories = scope?.categories?.length ? scope.categories : CATEGORIES.map(category => category.name);
-  const cache = await loadDriveCache(accountEmail);
+  let found;
+  try { found = await listDayBundles(accessToken, date); }
+  catch (error) { if (error.status) throw error; return {result:"none"}; }    // まとめファイルがまだ無い
+  const sig = bundleSignature(found);
+  const cache = await loadBundleCache(accountEmail).catch(() => ({days:{}}));
+  const have = cache.days?.[date] || {};
+  const same = Object.keys(found).every(kind => have[kind]?.blob && have[kind].modifiedTime === found[kind].modifiedTime);
+  if (same) return {result:"none"};
   const key = dismissKey(accountEmail, date);
-  const dismissed = raceDay ? "" : readDismissed(key);     // 「いいえ」を選んだ時点の起点。これより後の変更だけ見る
-  const startToken = dismissed || cache.changePageToken;
-  const found = {result:"update", date, categories, raceDay, dismissKey:key};
-  if (!startToken) return {...found, dismissToken:await getDriveStartPageToken(accessToken)};
-  const scanned = categories.every(category => (cache.scannedScopes || []).includes(date + "|" + category));
-  if (!scanned && !dismissed) return {...found, dismissToken:startToken};
-  let listed;
-  try {
-    listed = await listDriveChanges(accessToken, startToken);
-  } catch (error) {
-    if (error.status !== 410) throw error;
-    return {...found, dismissToken:await getDriveStartPageToken(accessToken)};
-  }
-  // 変更履歴は Drive 全体のものなので、この日付の CSV に関わる変更だけを見る
-  const prefix = "predictions/" + date + "/";
-  const known = new Set((cache.files || []).filter(item => (item.path || "").startsWith(prefix)).map(item => item.id));
-  const relevant = listed.changes.some(change => known.has(change.fileId) ||
-    (change.file?.name?.toLowerCase().endsWith(".csv") && change.file.name.includes(date)));
-  return relevant ? {...found, dismissToken:listed.newStartPageToken || startToken} : {result:"none"};
+  if (!raceDay && readDismissed(key) === sig) return {result:"none"};
+  return {result:"update", date, categories:[], raceDay, dismissKey:key, dismissToken:sig};
 }
 
 async function runBackground() {
@@ -664,7 +437,7 @@ async function runBackground() {
   try {
     if (!useSession()) throw new Error("再ログインが必要です。");
     await loadDateFolders();
-    await fetchAndTransfer(targetDate, (requestParams.get("categories") || "").split(",").filter(Boolean));
+    await fetchAndTransfer(targetDate);
     status("取得が完了しました。", false);
     window.parent.postMessage({type:"drive-update-complete", failed:lastFailedCount}, location.origin);
   } catch (error) {

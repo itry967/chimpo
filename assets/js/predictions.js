@@ -223,6 +223,10 @@ async function consumeDriveTransfer(keepView = false) {
     tx.onabort = () => reject(tx.error || new Error("この端末への保存の読み書きが中断されました。もう一度お試しください。"));
   });
   db.close();
+  if (payload?.bundles?.length) {
+    document.getElementById("status").textContent = "データを読み込み中…";
+    payload.files = await expandBundles(payload.bundles);
+  }
   if (!payload?.files?.length) return false;
   document.getElementById("status").textContent = "データを読み込み中…";
   // 取得データは Drive の保存分すべて(変わらなかった分も入る)。表示中の更新(keepView)なら、前回読んだものと比べて
@@ -245,6 +249,24 @@ async function consumeDriveTransfer(keepView = false) {
   state.loaded = now;
   updateRaceStatus();
   return true;
+}
+// 1日分のまとめファイル(gzip の JSON。index.html が Drive から取る。2026-11-15 から)を、CSV 1件ずつの形に戻す。
+// 形は {date, kind, files: [{p: 日付のフォルダからのパス, t: CSV の更新時刻, c: CSV の中身}]}
+async function expandBundles(bundles) {
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error("このブラウザは圧縮したデータを戻せません。iPhone は iOS 16.4 以降、または新しいブラウザでお試しください。");
+  }
+  const out = [];
+  for (const b of bundles) {
+    const text = await new Response(b.blob.stream().pipeThrough(new DecompressionStream("gzip"))).text();
+    const data = JSON.parse(text);
+    const date = data.date || b.date;
+    for (const f of data.files || []) {
+      out.push({ name: f.p.split("/").pop(), path: "predictions/" + date + "/" + f.p, modifiedTime: f.t, size: f.c.length,
+        blob: new Blob([f.c], { type: "text/csv" }) });
+    }
+  }
+  return out;
 }
 async function clearDriveTransferCache() {
   if (!window.indexedDB) return;

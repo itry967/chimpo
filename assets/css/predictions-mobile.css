@@ -753,9 +753,8 @@ header { padding-right: 58px; }
 }
 
 /* ---------- SPヘッダーの並び(2026-11-16 作り直し。ここより前のSPヘッダーの order・幅の指定はここで上書きする) ----------
-   1段目: タイトル(左)・明るさ ◐(右)
-   2段目: 説明系のボタン(注意点・お知らせ・区分の回収率・指標の説明・更新時刻)を均等に
-   3段目: 表示中のレース(左。長ければ … で切る)・データを更新(右)・結果 */
+   1段目: 説明系のボタン(注意点・お知らせ・区分の回収率・指標の説明・更新時刻)を均等に・明るさ ◐(右)
+   2段目: タイトル・表示中のレース(長ければ … で切る)・データを更新(右)・結果 */
 .lbl-s { display: none; }
 @media (max-width: 760px) {
   .lbl-l { display: none; }
@@ -763,40 +762,39 @@ header { padding-right: 58px; }
   header {
     flex-wrap: wrap !important;
     align-items: center;
-    gap: 6px !important;
-    padding: max(8px, env(safe-area-inset-top)) 10px 8px !important;
+    gap: 5px !important;
+    padding: max(8px, env(safe-area-inset-top)) 8px 8px !important;
   }
-  header::before, header::after { content: ""; flex-basis: 100%; height: 0; }
-  header::before { order: 2; }
-  header::after { order: 8; }
-  header > h1 { order: 0 !important; flex: 1 1 auto; margin: 0 !important; font-size: 16px !important; letter-spacing: 0 !important; }
-  header > #theme {
-    order: 1 !important; position: static !important; flex: 0 0 auto;
-    margin: 0 !important; min-width: 36px; min-height: 32px; padding: 2px 8px !important; font-size: 14px !important;
-  }
-  header > #cautionOpen { order: 3 !important; }
-  header > #noticeOpen { order: 4 !important; }
-  header > #bandOpen { order: 5 !important; }
-  header > #guideBtn { order: 6 !important; }
-  header > #updateTimingOpen { order: 7 !important; }
+  header::before { content: ""; order: 7; flex-basis: 100%; height: 0; }
+  header > #cautionOpen { order: 1 !important; }
+  header > #noticeOpen { order: 2 !important; }
+  header > #bandOpen { order: 3 !important; }
+  header > #guideBtn { order: 4 !important; }
+  header > #updateTimingOpen { order: 5 !important; }
   header > #cautionOpen, header > #noticeOpen, header > #bandOpen, header > #guideBtn, header > #updateTimingOpen {
     flex: 1 1 0; margin: 0 !important; min-width: 0; min-height: 32px;
     padding: 4px 2px !important; font-size: 11px !important; letter-spacing: 0 !important; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis;
   }
+  header > #theme {
+    order: 6 !important; position: static !important; flex: 0 0 auto;
+    margin: 0 !important; min-width: 34px; min-height: 32px; padding: 2px 8px !important; font-size: 14px !important;
+  }
+  header > h1 { order: 8 !important; flex: 0 0 auto; margin: 0 !important; font-size: 13px !important; letter-spacing: -.02em !important; }
   header > #status {
     order: 9 !important; flex: 1 1 0 !important; width: auto !important; min-width: 0; margin: 0 !important;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    padding: 6px 10px !important; font-size: 13px !important; text-align: left !important; line-height: 1.4;
+    padding: 6px 8px !important; font-size: 13px !important; text-align: left !important; line-height: 1.4;
   }
-  header > #driveReload { order: 10 !important; flex: 0 0 auto; margin: 0 !important; min-height: 36px; padding: 4px 12px !important; font-size: 12px !important; }
+  header > #driveReload { order: 10 !important; flex: 0 0 auto; margin: 0 !important; min-height: 34px; padding: 4px 10px !important; font-size: 12px !important; }
   header > #resOpen { order: 11 !important; flex: 0 0 auto; margin: 0 !important; }
   header > .sp { display: none !important; }
-  header { padding-right: 10px !important; }
 }
 @media (max-width: 400px) {
   header > #cautionOpen, header > #noticeOpen, header > #bandOpen, header > #guideBtn, header > #updateTimingOpen {
-    font-size: 10px !important; letter-spacing: -.02em !important;
+    font-size: 10px !important; letter-spacing: -.03em !important;
   }
-  header { gap: 5px !important; }
+  header > h1 { font-size: 12px !important; }
+  header > #status { font-size: 12px !important; padding: 6px 6px !important; }
+  header > #driveReload { padding: 4px 8px !important; font-size: 11px !important; }
 }

@@ -36,10 +36,9 @@
   <button id="cautionOpen" title="予想をご利用いただく際の注意点">⚠️ 注意点</button>
   <button id="noticeOpen" title="お知らせ(更新の連絡など)">📢 お知らせ<span class="notice-new" hidden></span></button>
   <button id="bandOpen" title="自信の区分ごとの回収率を表示" hidden>自信の区分ごとの回収率</button>
-  <span class="muted" id="status">「データを更新」を押してデータ取得を行ってください　※2~3分かかります</span>
+  <span class="muted" id="status">「データを更新」を押して、その日のデータを取得してください</span>
   <span class="sp"></span>
-  <button id="driveReload" title="Google Driveから全体のデータを更新">データをまとめて更新</button>
-  <button id="driveReloadRace" title="表示中のレースのデータだけを更新" disabled>このRのデータを更新</button>
+  <button id="driveReload" title="Google Driveから、その日のデータ(1日分のまとめファイル)を取得・更新">データを更新</button>
   <button id="resOpen" title="結果の欄を開く">結果</button>
   <button id="guideBtn" title="総合・能力・適性・調子・人・展開が何を評価しているかの一覧">指標の説明</button>
   <button id="updateTimingOpen" title="データの更新タイミングを表示">データ更新タイミング</button>
@@ -96,6 +95,19 @@
 <dialog id="updateTimingDialog" aria-labelledby="updateTimingTitle">
   <div class="gh"><h2 id="updateTimingTitle">データ更新タイミング</h2><button id="updateTimingClose">閉じる</button></div>
   <div class="gb">
+    <section class="timing-section">
+      <h3>データの受け取り方</h3>
+      <div class="timing-item">
+        <h4>1日分をまとめて受け取ります</h4>
+        <p>PC が下の時刻にデータを作り直すたびに、その日の分を2つのまとめファイル(予想・買い目・結果など / オッズ)にして Google Drive に置きます。ビューアはこの2つだけを受け取ります。</p>
+        <p class="timing-note">自動で確かめるとき</p>
+        <ul>
+          <li>ページを開いたとき・再読み込み(F5)したとき</li>
+          <li>開催日は、開いている間5分おきと、ほかのアプリから戻ったとき</li>
+        </ul>
+        <p>更新があれば、開催日は自動で取り込みます(それ以外の日は取り込むか聞きます)。Google のログインは1時間ほどで切れるので、切れたら「再ログイン」を押してください。</p>
+      </div>
+    </section>
     <section class="timing-section">
       <h3>レース前日</h3>
       <div class="timing-item">

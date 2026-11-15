@@ -710,3 +710,24 @@
     white-space: nowrap;
   }
 }
+
+/* SP専用: 項目名が長い表(枠順確定 → 馬体重の変化 など)で、中身の列の幅が 0 になって文字が見えなくなっていた(2026-11-16)。
+   項目名と中身を折り返せるようにし、kv-stack は項目名の下に中身を置く */
+@media (max-width: 760px) {
+  dl.kv dt,
+  dl.kv dd {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  dl.kv.kv-stack {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  dl.kv.kv-stack dt {
+    margin-top: 8px;
+    font-size: 12px;
+  }
+  dl.kv.kv-stack dt:first-child {
+    margin-top: 0;
+  }
+}

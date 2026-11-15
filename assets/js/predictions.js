@@ -611,7 +611,7 @@ function changeCard(rows) {
   const ranks = r => `(${num(r["枠順時_順位"])}位 → <b>${num(r["平均_順位"])}位</b>)`;   // 枠順確定の時点 → 今の予想順位
   const top = (list) => list.slice(0, 3).map(([r, d]) => `${moveMark(d)} ${who(r)} ${ranks(r)}${weight(r)}`).join("<br>") || "なし";
   const stage = (col, now) => { const x = num(rows[0][col]), y = num(rows[0][now]); return x == null || y == null ? "-" : x === y ? `${y}(変わらず)` : `${x} → <b>${y}</b>`; };
-  return `<div class="card"><h3>枠順確定 → 馬体重の変化${updTag("予想", rows[0].race_id)}</h3><dl class="kv">` +
+  return `<div class="card"><h3>枠順確定 → 馬体重の変化${updTag("予想", rows[0].race_id)}</h3><dl class="kv kv-stack">` +
     `<dt>本命</dt><dd>${a && b && +a.umaban === +b.umaban ? `変わらず(${who(b)})` : `${who(a)} → <b>${who(b)}</b> <span class="chip warn">本命変更</span>`}</dd>` +
     `<dt>順位が上がった馬</dt><dd>${top(moved.filter(([, d]) => d > 0).sort((x, y) => y[1] - x[1]))}</dd>` +
     `<dt>順位が下がった馬</dt><dd>${top(moved.filter(([, d]) => d < 0).sort((x, y) => x[1] - y[1]))}</dd>` +
@@ -987,7 +987,7 @@ function toggleFold(key) {
 function setupHelpButtons(root) {
   root.querySelectorAll("button.help[data-help='baba']").forEach(b => b.onclick = openBabaHelp);
 }
-const MOBILE_SHUT = /^card:(展開予想|馬場傾向予想)/;
+const MOBILE_SHUT = /^card:(展開予想|馬場傾向予想|枠順確定)/;   // 枠順確定 → 馬体重の変化 も(2026-11-16)
 function setupCardFolds(root, sel = ".card") {
   if (!state.mobileOpen || state.mobileOpenRid !== state.current) { state.mobileOpen = new Set(); state.mobileOpenRid = state.current; }
   // カードの見出し(h2・h3)を押すとたたむ。たたんだ見出しはどのレースでも同じ(見出しの文字で覚える)。sel でたためるカードを絞れる

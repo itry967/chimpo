@@ -692,3 +692,21 @@
   #driveUpdateDialog .gh { height: 44px; padding: 7px 10px; }
   #driveUpdateFrame { height: calc(100% - 44px); }
 }
+
+/* SP専用: レース一覧の競馬場は日付ごとの横並びのタブ(2026-11-15) */
+@media (max-width: 760px) {
+  nav .jyo-tabs {
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin: 2px 0 4px;
+    padding: 0 10px;
+    overflow-x: auto;
+  }
+  nav .jyo-tabs button {
+    flex: 1 1 0;
+    min-width: 64px;
+    min-height: 36px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+}

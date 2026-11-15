@@ -903,16 +903,28 @@ function renderNav() {
     (byDayJyo[k] = byDayJyo[k] || []).push(rid);
   }
   const days = [...new Set(Object.keys(byDayJyo).map(k => k.slice(0, 8)))].sort((a, b) => b.localeCompare(a));
+  // 携帯: 日付の並びはそのままで、競馬場は日付ごとに横並びのタブにする(選んだ場のレースだけ出す。2026-11-15 ユーザーの指示)
+  const mobile = window.matchMedia("(max-width: 760px)").matches;
+  state.navJyo = state.navJyo || {};
   for (const day of days) {
-    const dayKeys = Object.keys(byDayJyo).filter(k => k.slice(0, 8) === day).sort();
+    let dayKeys = Object.keys(byDayJyo).filter(k => k.slice(0, 8) === day).sort();
+    if (mobile) {
+      const cur = state.current && state.current.slice(0, 8) === day ? day + state.current.slice(8, 10) : "";
+      if (cur && state.navJyoSeen !== state.current) state.navJyo[day] = cur;   // ほかの所からレースを開いたら、そのレースの場のタブにする
+      if (!dayKeys.includes(state.navJyo[day])) state.navJyo[day] = cur || dayKeys[0];
+      html += `<a class="day day-link ${state.dayPage === day ? "on" : ""}" data-day="${day}" title="${day}の日別ページを表示">${ymdw(day)}</a>` +
+        `<div class="tabs jyo-tabs">` + dayKeys.map(k => `<button data-navjyo="${k}" class="${state.navJyo[day] === k ? "on" : ""}">${JYO[k.slice(8)] || k.slice(8)}</button>`).join("") + `</div>`;
+      lastDay = day;
+      dayKeys = [state.navJyo[day]];
+    }
     for (const k of dayKeys) {
       const jyo = k.slice(8);
-      const jyoShut = folded(`jyo:${k}`);
+      const jyoShut = !mobile && folded(`jyo:${k}`);
       if (day !== lastDay) {
         html += `<a class="day day-link ${state.dayPage === day ? "on" : ""}" data-day="${day}" title="${day}の日別ページを表示">${ymdw(day)}</a>`;
         lastDay = day;
       }
-      html += `<div class="jyo fold-h" data-fold="jyo:${k}">${jyoShut ? "▸" : "▾"} ${JYO[jyo] || jyo}</div>`;
+      if (!mobile) html += `<div class="jyo fold-h" data-fold="jyo:${k}">${jyoShut ? "▸" : "▾"} ${JYO[jyo] || jyo}</div>`;
       if (jyoShut) continue;
       byDayJyo[k].sort((a, b) => a.slice(14).localeCompare(b.slice(14)));
       for (const rid of byDayJyo[k]) {
@@ -926,10 +938,12 @@ function renderNav() {
       }
     }
   }
+  state.navJyoSeen = state.current;
   nav.innerHTML = html;
   nav.querySelectorAll("a[data-day]").forEach(a => a.onclick = () => { if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("mobile-nav-collapsed"); state.dayPage = a.dataset.day; state.open.clear(); render(); });
   nav.querySelectorAll("a[data-rid]").forEach(a => a.onclick = () => { if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("mobile-nav-collapsed"); state.dayPage = null; state.current = a.dataset.rid; state.open.clear(); render(); });
   nav.querySelectorAll(".fold-h").forEach(d => d.onclick = () => { toggleFold(d.dataset.fold); renderNav(); });
+  nav.querySelectorAll("button[data-navjyo]").forEach(b => b.onclick = () => { state.navJyo[b.dataset.navjyo.slice(0, 8)] = b.dataset.navjyo; renderNav(); });
   document.getElementById("navClose").onclick = () => document.getElementById("navToggle").click();
 }
 
@@ -2992,6 +3006,8 @@ document.getElementById("resOpen").onclick = () => {
     localStorage.setItem("keiba-viewer:result-closed", document.body.classList.contains("result-closed") ? "1" : "0");
   } catch (e) {}
 };
+// 携帯の幅と PC の幅を行き来したら一覧を描き直す(携帯は競馬場がタブ、PC は見出し)
+try { window.matchMedia("(max-width: 760px)").addEventListener("change", () => { if (state.races && state.races.size) renderNav(); }); } catch (e) {}
 // レース一覧の開閉(このブラウザに覚えておく)
 try { if (localStorage.getItem("keiba-viewer:nav-closed") === "1") document.body.classList.add("nav-closed"); } catch (e) {}
 document.getElementById("navToggle").onclick = () => {

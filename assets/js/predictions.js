@@ -600,7 +600,9 @@ function changeCard(rows) {
 
 function simpleView() {
   // 出走馬の簡易表示(このブラウザに覚えておく)
-  try { return localStorage.getItem("keiba-viewer:simple") === "1"; } catch (e) { return !!state.simple; }
+  // 携帯は、まだ選んでいなければ簡易表示にする(2026-11-15 ユーザーの指示)
+  const dflt = () => window.matchMedia("(max-width: 760px)").matches;
+  try { const v = localStorage.getItem("keiba-viewer:simple"); return v == null ? dflt() : v === "1"; } catch (e) { return state.simple ?? dflt(); }
 }
 function hitPayout(rid, kind, t) {
   // 結果が出たレースで、その買い目が当たっていれば 100円あたりの払戻(当たっていなければ null)。馬単・3連単は順番どおり
@@ -963,20 +965,26 @@ function toggleFold(key) {
 function setupHelpButtons(root) {
   root.querySelectorAll("button.help[data-help='baba']").forEach(b => b.onclick = openBabaHelp);
 }
+const MOBILE_SHUT = /^card:(展開予想|馬場傾向予想)/;
 function setupCardFolds(root, sel = ".card") {
+  if (!state.mobileOpen || state.mobileOpenRid !== state.current) { state.mobileOpen = new Set(); state.mobileOpenRid = state.current; }
   // カードの見出し(h2・h3)を押すとたたむ。たたんだ見出しはどのレースでも同じ(見出しの文字で覚える)。sel でたためるカードを絞れる
   root.querySelectorAll(sel).forEach(card => {
     const head = card.querySelector("h2, h3");
     if (!head) return;
     const key = "card:" + head.textContent.replace(/\s+/g, "").replace(/^[▾▸]/, "").replace(/？$/, "").slice(0, 20);   // ? ボタンの字は入れない
+    // 携帯: 展開予想・馬場傾向予想は、レースを開いたときはたたんでおく(開いたのはそのレースを見ているあいだだけ。2026-11-15 ユーザーの指示)
+    const mob = MOBILE_SHUT.test(key) && window.matchMedia("(max-width: 760px)").matches;
+    const isShut = () => mob ? !state.mobileOpen.has(key) : folded(key);
     head.classList.add("fold-card");
-    head.insertAdjacentHTML("afterbegin", `<span class="fold-mark">${folded(key) ? "▸" : "▾"}</span>`);
-    card.classList.toggle("folded", folded(key));
+    head.insertAdjacentHTML("afterbegin", `<span class="fold-mark">${isShut() ? "▸" : "▾"}</span>`);
+    card.classList.toggle("folded", isShut());
     head.onclick = e => {
       e.stopPropagation();
-      toggleFold(key);
-      card.classList.toggle("folded", folded(key));
-      head.querySelector(".fold-mark").textContent = folded(key) ? "▸" : "▾";
+      if (mob) state.mobileOpen.has(key) ? state.mobileOpen.delete(key) : state.mobileOpen.add(key);
+      else toggleFold(key);
+      card.classList.toggle("folded", isShut());
+      head.querySelector(".fold-mark").textContent = isShut() ? "▸" : "▾";
     };
   });
 }

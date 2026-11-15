@@ -798,3 +798,9 @@ header { padding-right: 58px; }
   header > #status { font-size: 12px !important; padding: 6px 6px !important; }
   header > #driveReload { padding: 4px 8px !important; font-size: 11px !important; }
 }
+
+/* SP: 表示中のレース(青い欄)は押すとレース一覧を開く・たたむ */
+@media (max-width: 760px) {
+  header > #status.race-context { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  header > #status.race-context:active { filter: brightness(1.15); }
+}

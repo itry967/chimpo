@@ -3079,6 +3079,12 @@ document.getElementById("resOpen").onclick = () => {
 try { window.matchMedia("(max-width: 760px)").addEventListener("change", () => { if (state.races && state.races.size) renderNav(); }); } catch (e) {}
 // レース一覧の開閉(このブラウザに覚えておく)
 try { if (localStorage.getItem("keiba-viewer:nav-closed") === "1") document.body.classList.add("nav-closed"); } catch (e) {}
+// 携帯: ヘッダの表示中のレース(青い欄)を押すと、レース一覧を開く・たたむ(2026-11-16 ユーザーの指示)
+document.getElementById("status").addEventListener("click", () => {
+  if (!window.matchMedia("(max-width: 760px)").matches || !state.races.size) return;
+  document.getElementById("navToggle").click();
+  if (!document.body.classList.contains("mobile-nav-collapsed")) document.getElementById("nav").scrollIntoView({ block: "start" });
+});
 document.getElementById("navToggle").onclick = () => {
   if (window.matchMedia("(max-width: 760px)").matches) {
     document.body.classList.toggle("mobile-nav-collapsed");

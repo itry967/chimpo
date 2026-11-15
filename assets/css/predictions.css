@@ -97,6 +97,10 @@ nav .day { padding: 8px 12px 4px; font-weight: 600; color: var(--muted); font-si
 nav a.day-link { display: block; padding: 8px 12px 4px; font-weight: 600; color: var(--muted); font-size: 12px; border-left: 0; }
 nav a.day-link:hover { color: var(--text); }
 nav .day-link-mark { float: right; opacity: .65; }
+nav .day-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px 4px 12px; font-weight: 600; color: var(--muted); font-size: 12px; cursor: pointer; user-select: none; }
+nav .day-row:hover { color: var(--text); }
+nav .day-row.on { background: var(--accent-soft); color: var(--text); font-weight: 700; }
+nav .day-row .day-page-btn { margin-left: auto; padding: 1px 10px; font-size: 11px; font-weight: 600; }
 nav .jyo { padding: 6px 12px 2px; font-weight: 600; font-size: 13px; }
 nav a { display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 20px; color: inherit; text-decoration: none;
   cursor: pointer; border-left: 3px solid transparent; }

@@ -731,3 +731,23 @@
     margin-top: 0;
   }
 }
+
+/* 明るさの切り替え(◐)はヘッダの右上に置く(2026-11-16 ユーザーの指示)。ほかのボタンの並びに入れず、右上に固定する */
+header { position: sticky; }
+header #theme {
+  position: absolute;
+  top: 10px;
+  right: 16px;
+  margin: 0;
+  order: 99;
+}
+header { padding-right: 58px; }
+@media (max-width: 760px) {
+  header #theme {
+    top: max(8px, env(safe-area-inset-top));
+    right: 6px;
+    min-width: 34px;
+    padding: 4px 6px;
+  }
+  header { padding-right: 44px; }
+}

@@ -1214,7 +1214,14 @@ function renderRace(rid) {
   }
   document.querySelectorAll('input[name="alloc"]').forEach(x => x.onchange = () => { saveMode(x.value); renderRace(rid); });
   const calc = state.calc[rid];
-  const calcUpdate = (f) => { f(); renderRace(rid); };
+  // 描き直すとフォーメーションの表の横の位置が左に戻るので、前の位置に戻す(携帯で毎回左に戻っていた。2026-11-15 ユーザーの指示)
+  const calcUpdate = (f) => {
+    const x = document.querySelector("table.grid")?.parentElement?.scrollLeft || 0, y = window.scrollY;
+    f(); renderRace(rid);
+    const g = document.querySelector("table.grid")?.parentElement;
+    if (g) g.scrollLeft = x;
+    window.scrollTo(window.scrollX, y);
+  };
   document.getElementById("calcKind")?.addEventListener("change", e => calcUpdate(() => calc.kind = e.target.value));
   document.querySelectorAll(".calcBox").forEach(x => x.onchange = () => calcUpdate(() => {
     const row = calc.rows[x.dataset.i - 1];

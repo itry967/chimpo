@@ -958,7 +958,7 @@ function renderNav() {
       const rows = state.races.get(rid), r = rows[0], c = confLevel(rows), x = num(r["混戦の段階"]);
       html += `<a data-rid="${rid}" class="${state.current === rid ? "on" : ""}"><span class="r">${+rid.slice(14, 16)}R</span>` +
         `<span class="t">${hhmm(r.hasso_time)}</span><span class="tag">` +
-        (c ? `<span class="chip ${c.lv >= 7 ? "up" : c.lv <= 3 ? "gray" : ""}" title="自信 ${c.lv}/10(${CONF_WORDS[c.lv]})">自信${c.lv}</span>` : "") +
+        (c ? `<span class="chip ${c.lv >= 7 ? "up" : c.lv <= 3 ? "gray" : ""}" title="自信 ${c.score}/100(10段階で ${c.lv}・${CONF_WORDS[c.lv]})">自信${c.score}</span>` : "") +
         (x ? ` <span class="chip ${x >= 7 ? "warn" : "gray"}" title="混戦 ${x}/10(${MIX_WORDS[x]})">混戦${x}</span>` : "") +
         (changeView() && honmeiChanged(rows) ? ` <span class="chip warn" title="枠順確定の時点と馬体重の版で本命が変わった">本命変更</span>` : "") +
         navQuality(rid, rows) + `</span></a>`;
@@ -1583,11 +1583,17 @@ const MIX_WORDS = {10: "大混戦", 9: "大混戦", 8: "混戦", 7: "混戦", 6:
 function confLevel(rows) {
   // 予想 CSV の「自信の段階」(5モデル平均を検証期間と比べたもの)。無い古い CSV は、各モデルの自信の上位%の平均で代わりにする
   const r = rows[0], lv = num(r["自信の段階"]);
-  if (lv) return { lv, top: num(r["自信の上位%(平均)"]), exact: true };
+  if (lv) return withScore({ lv, top: num(r["自信の上位%(平均)"]), exact: true });
   const tops = models(rows).map(m => num(r[`${m}_自信の上位%`])).filter(v => v != null);
   if (!tops.length) return null;
   const top = tops.reduce((a, b) => a + b) / tops.length;
-  return { lv: Math.min(10, Math.max(1, 10 - Math.floor(top / 10))), top, exact: false };
+  return withScore({ lv: Math.min(10, Math.max(1, 10 - Math.floor(top / 10))), top, exact: false });
+}
+// 自信の100段階(2026-11-16 ユーザーの指示「10段階だけど100段階にできたりする？」)。検証期間のレースの中の上位% から 100 − 上位%(1〜100)。
+// 10段階(推奨買い目・資金配分の組分けに使う)はそのまま。100段階は見る用で、買う・買わないの組分けには使わない(組が細かすぎて回収率が当てにならないため)
+function withScore(c) {
+  c.score = c.top != null ? Math.min(100, Math.max(1, Math.round(100 - c.top))) : c.lv * 10;
+  return c;
 }
 function meter(lv, cls) {
   return `<div class="meter ${cls}">${Array.from({ length: 10 }, (_, i) => `<i class="${i < lv ? "on" : ""}"></i>`).join("")}</div>`;
@@ -1595,8 +1601,8 @@ function meter(lv, cls) {
 function confMeter(rows) {
   const c = confLevel(rows), r0 = rows[0];
   if (!c) return "";
-  return `<div class="mt"><div class="mh"><span class="ml">自信</span><b class="mv">${c.lv}</b><span class="dim">/10</span>` +
-    `<span class="chip ${c.lv >= 7 ? "up" : c.lv <= 3 ? "gray" : ""}">${CONF_WORDS[c.lv]}</span></div>${meter(c.lv, "conf")}` +
+  return `<div class="mt"><div class="mh"><span class="ml">自信</span><b class="mv">${c.score}</b><span class="dim">/100</span>` +
+    `<span class="chip ${c.lv >= 7 ? "up" : c.lv <= 3 ? "gray" : ""}">${CONF_WORDS[c.lv]}</span><span class="dim" title="推奨買い目・資金配分の組分けに使う10段階">(10段階で ${c.lv})</span></div>${meter(c.lv, "conf")}` +
     `<div class="note" style="margin:4px 0 0">予想1位の勝率 ${pct(num(r0["平均_自信"]))}。検証期間(2019〜2023年)のレースの中で上位 ${fix(c.top, 0)}%` +
     (c.exact ? "" : "(各モデルの平均で代用)") + `</div></div>`;
 }
@@ -2293,12 +2299,12 @@ function renderDayPage(date) {
     `<div class="kpis" style="margin:0 0 8px">${kpi(`${skips.length} / ${sRids.length}`, "見送り推奨（仮） / この場のレース")}` +
     (unknown.length ? kpi(unknown.length, "推奨買い目がまだ無い(判定できない)") : "") + `</div>`;
   if (skips.length) {
-    h += `<div class="scroll"><table><tr><th>レース</th><th>発走</th><th>コース</th><th>レース名</th><th class="n">自信</th><th class="n">混戦</th>` +
+    h += `<div class="scroll"><table><tr><th>レース</th><th>発走</th><th>コース</th><th>レース名</th><th class="n" title="自信は100段階、混戦は10段階">自信<small>/100</small></th><th class="n">混戦<small>/10</small></th>` +
       (fromCsv ? `<th>理由</th>` : `<th>おすすめの買い方(${esc(tierName)})</th><th class="n">過去の回収率</th><th class="n">確かめの回収率</th>`) + `</tr>`;
     for (const [rid, x] of skips) {
       const r0 = state.races.get(rid)[0], inf = state.info.get(rid) || {}, c = confLevel(state.races.get(rid));
       h += `<tr><td>${raceLink(rid)}</td><td>${hhmm(r0.hasso_time)}</td><td>${esc((inf["芝ダ"] || "") + (inf["距離"] || ""))}</td><td>${esc(inf["レース名"] || "")}</td>` +
-        `<td class="n">${c?.lv ?? "-"}</td><td class="n">${esc(r0["混戦の段階"] || "-")}</td>` +
+        `<td class="n" title="10段階で ${c?.lv ?? "-"}">${c?.score ?? "-"}</td><td class="n">${esc(r0["混戦の段階"] || "-")}</td>` +
         (fromCsv ? `<td>${esc(x.why || "")}</td>` : `<td>${esc(x.how || "")}${x.pending ? ` <span class="chip gray" title="推奨買い目がまだ無いので、同じ自信・混戦の組の ${esc(raceName(x.borrowed))} の値">仮</span>` : ""}</td>` +
           `<td class="n">${x.past ?? "-"}%</td><td class="n"><span class="down">${x.honest}%</span></td>`) + `</tr>`;
     }
@@ -2683,7 +2689,7 @@ function renderFund(date, raceLink) {
       return `<button data-j="${j}" class="${j === cur ? "on" : ""}" title="${esc(JYO[j] || j)}: ✔ ${xs.filter(x => x.pick).length} / ${xs.length}レース・配分 ${amt.toLocaleString()}円">` +
         `${esc(JYO[j] || j)} <span class="muted">✔${xs.filter(x => x.pick).length}/${xs.length}${P.budget ? `・${amt.toLocaleString()}円` : ""}</span></button>`;
     }).join("") + `</div>` : "") + `</div>`;
-  h += `<div class="scroll"><table class="fund-table"><tr class="f-head"><th title="買う(✔)/見送り">✔</th><th>レース</th><th>発走</th><th class="n">自信</th><th class="n">混戦</th>` +
+  h += `<div class="scroll"><table class="fund-table"><tr class="f-head"><th title="買う(✔)/見送り">✔</th><th>レース</th><th>発走</th><th class="n" title="自信は100段階、混戦は10段階">自信<small>/100</small></th><th class="n">混戦<small>/10</small></th>` +
     `<th>自動の判定</th><th class="n" title="購入推奨・見送り推奨の判定に使った値(予算 ÷ 対象のレース数 の額が入る区分のおすすめの確かめの回収率)。配分額の区分の値が違えば下に小さく出す">見込みの回収率</th><th class="n">期待値</th><th class="n">配分額</th><th>${fundMode() === "hit" ? "的中重視の買い目" : "おすすめの買い目"}</th></tr>`;
   for (const x of shown) {
     const r0 = state.races.get(x.rid)[0], c = confLevel(state.races.get(x.rid));
@@ -2700,7 +2706,7 @@ function renderFund(date, raceLink) {
         (/枠順/.test(x.stage) ? ` <span class="chip warn" title="馬体重が出る前(枠順確定の版)の予想で作った推奨買い目。馬体重が入ると作り直す">${esc(x.stage)}</span>` : "") + `</div>` : "") :
       x.pending && x.amount ? `<div class="muted">${x.opt ? `<b>${esc(x.opt.how)}</b>(${esc(x.opt.name)})の予定。` : ""}推奨買い目は発走55分前ごろに出る</div>` : "";
     h += `<tr class="${x.pick ? "" : "dim"}"><td class="f-ck"><input type="checkbox" class="fundPick" data-rid="${x.rid}" ${x.pick ? "checked" : ""}></td>` +
-      `<td class="f-race">${raceLink(x.rid)}</td><td class="f-i" data-l="発走">${hhmm(r0.hasso_time)}</td><td class="n f-i" data-l="自信">${c?.lv ?? "-"}</td><td class="n f-i" data-l="混戦">${esc(r0["混戦の段階"] || "-")}</td>` +
+      `<td class="f-race">${raceLink(x.rid)}</td><td class="f-i" data-l="発走">${hhmm(r0.hasso_time)}</td><td class="n f-i" data-l="自信" title="10段階で ${c?.lv ?? "-"}">${c?.score ?? "-"}</td><td class="n f-i" data-l="混戦">${esc(r0["混戦の段階"] || "-")}</td>` +
       `<td class="f-auto"><span class="chip ${x.wait ? "warn" : x.autoBuy ? "up" : "gray"}" title="${esc(x.autoWhy)}">${x.wait ? "判定待ち" : x.autoBuy ? "購入推奨" : "見送り推奨"}</span>${x.pending && !x.wait ? ` <span class="chip gray" title="${esc(x.autoWhy)}">仮</span>` : ""}${changed ? ` <span class="chip warn">手で${x.pick ? "✔" : "外した"}</span>` : ""}</td>` +
       `<td class="n f-i" data-l="見込み"><span class="${est >= 100 ? "hi" : est < FUND_RULE.skip ? "down" : ""}" title="${esc(x.tier0 ? `判定に使った値(${x.tier0}のおすすめ)` : "")}">${est != null ? fix(est) + "%" : "-"}</span>${after}</td>` +
       `<td class="n f-i" data-l="期待値">${x.ev != null ? `<span class="${x.ev >= 100 ? "hi" : ""}">${fix(x.ev)}%</span>${x.evPart ? `<span class="dim" title="オッズのある買い目だけ">*</span>` : ""}` : `<span class="dim">-</span>`}</td>` +

@@ -1083,7 +1083,7 @@ function renderRace(rid) {
     `<label class="muted fav-box" style="font-size:13px" title="このレースの条件が得意なモデル: ${esc(r0["得意な条件"] || fav.join("・"))}">` +
     `<input type="checkbox" class="favView" ${state.favActive ? "checked" : ""}> 得意モデルのみの予想を表示</label>`;
   const favNote = state.favActive ? `<div class="note fav-note">得意モデル(${esc(fav.join("・"))})だけの平均で出しています` +
-    `(${esc(r0["得意な条件"] || "")})。推奨買い目・組み合わせ・自信の段階・混戦の段階・確度は5モデルの平均のまま。</div>` : "";
+    `(${esc(r0["得意な条件"] || "")})。推奨買い目・組み合わせ・自信の段階・混戦の段階・確度は6モデルの平均のまま。</div>` : "";
   const maxWin = Math.max(...rows.map(r => num(r["平均_勝率"]) || 0));
   // 2着内・3着内: 専門モデル(U20)を重ねた 平均_2着内・平均_3着内 があればそれ(得意モデルだけの平均を出しているときはモデルの平均)
   const stacked = (r, k) => state.favActive ? null : num(r[`平均_${k}`]);
@@ -1147,7 +1147,7 @@ function renderRace(rid) {
     (info || bias ? "" : `<span class="muted">列がありません</span>`) + `</div>`;
   html += `<div class="grid2">${babaCard}${tenkaiCard}</div>`;   // 左に馬場、右に展開
 
-  html += changeCard(base);   // 得意モデルだけの表示のときも、枠順確定との比較は5モデルの平均どうしで
+  html += changeCard(base);   // 得意モデルだけの表示のときも、枠順確定との比較は6モデルの平均どうしで
   // 出走馬
   html += `<div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">` +
     `<h3 style="margin:0">出走馬${updTag(["予想", "オッズ"], rid)}</h3>` + favBox +
@@ -1184,7 +1184,7 @@ function renderRace(rid) {
     if (why && (!simpleView() || state.whyOpen?.has(key))) html += `<tr class="why"><td></td><td colspan="17">${why}</td></tr>`;
     if (state.open.has(key)) html += `<tr class="detail"><td colspan="18">${detail(r, ms)}</td></tr>`;
   }
-  html += `</table></div>${favNote}<div class="note">勝率・3着内は5モデルの平均。妥当オッズの横の印は実際のオッズとの差(▲▲ 1.5倍以上・▲ 1.2倍以上高い、▼ 0.8倍未満・▼▼ 0.5倍未満に低い。上にのせると比)。期待値 = オッズ ÷ 妥当オッズ(1 を超えると予想の上では得。緑は 1.0 以上、太字は 1.2 以上。複勝は下限のオッズで計算)。単勝オッズの横は人気(オッズの低い順)。「割れ」はモデルの順位の幅が4以上。馬名・予想着順・脚質・通過予想・上がり予想の横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。色は緑 = 高・灰 = 中・橙 = 低。上にのせると0〜100の点と、検証期間の同じ条件での平均のずれ)。馬名の横は勝率・3着内・期待値を含む予想全体の確度。通過予想は前半(最初のコーナー)→ 4コーナーの番手、上がり予想は秒(かっこ内はレースで速い順、緑は3位まで)。根拠は説明用の LightGBM で、▲が評価を上げた項目、▼が下げた項目。数字は点数の差(レースの平均と比べた分)と、勝つ見込みのおおよその倍率(×)。総合・能力・適性・調子・人・展開は、根拠の項目を分類ごとに足したもの(総合は全部の合計)。1行目の「相対値」はこのレースの中の順位から星(点は1位が100・最下位が0)、2行目の「絶対値」は検証期間 2019〜2023年の全出走馬の中の位置(点は上位何%かで、80以上が★5)。横の高・中・低は確度(元になった出走数・調教などのデータの量。総合は能力・適性・調子のうち一番低いもの)で、低いものは薄く出す。</div></div>`;
+  html += `</table></div>${favNote}<div class="note">勝率・3着内は6モデルの平均。妥当オッズの横の印は実際のオッズとの差(▲▲ 1.5倍以上・▲ 1.2倍以上高い、▼ 0.8倍未満・▼▼ 0.5倍未満に低い。上にのせると比)。期待値 = オッズ ÷ 妥当オッズ(1 を超えると予想の上では得。緑は 1.0 以上、太字は 1.2 以上。複勝は下限のオッズで計算)。単勝オッズの横は人気(オッズの低い順)。「割れ」はモデルの順位の幅が4以上。馬名・予想着順・脚質・通過予想・上がり予想の横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。色は緑 = 高・灰 = 中・橙 = 低。上にのせると0〜100の点と、検証期間の同じ条件での平均のずれ)。馬名の横は勝率・3着内・期待値を含む予想全体の確度。通過予想は前半(最初のコーナー)→ 4コーナーの番手、上がり予想は秒(かっこ内はレースで速い順、緑は3位まで)。根拠は説明用の LightGBM で、▲が評価を上げた項目、▼が下げた項目。数字は点数の差(レースの平均と比べた分)と、勝つ見込みのおおよその倍率(×)。総合・能力・適性・調子・人・展開は、根拠の項目を分類ごとに足したもの(総合は全部の合計)。1行目の「相対値」はこのレースの中の順位から星(点は1位が100・最下位が0)、2行目の「絶対値」は検証期間 2019〜2023年の全出走馬の中の位置(点は上位何%かで、80以上が★5)。横の高・中・低は確度(元になった出走数・調教などのデータの量。総合は能力・適性・調子のうち一番低いもの)で、低いものは薄く出す。</div></div>`;
 
   html += renderPlan(rid);
   html += renderCalc(rid);
@@ -1459,7 +1459,7 @@ function gapMark(odds, fair, label) {
   return `<span class="gap ${cls}" title="${label}: 実際のオッズ ${fix(odds)} ÷ 妥当オッズ ${fix(fair)} = ${r.toFixed(2)}(${r >= 1 ? "妥当より高い = 予想の上では得" : "妥当より低い = 予想の上では損"})">${mark}</span>`;
 }
 function fairRange(r, ms, col) {
-  // 5モデルの確率の最小〜最大から、妥当オッズの幅(1 ÷ 確率)
+  // 6モデルの確率の最小〜最大から、妥当オッズの幅(1 ÷ 確率)
   const v = ms.map(m => num(r[`${m}_${col}`])).filter(x => x != null && x > 0);
   if (!v.length) return "";
   return `${fix(1 / Math.max(...v))}〜${fix(1 / Math.min(...v))}`;
@@ -1581,7 +1581,7 @@ function paceTone(w) { return /速い|多い/.test(w) ? (w.startsWith("やや") 
 const CONF_WORDS = {10: "かなり高い", 9: "かなり高い", 8: "高い", 7: "高い", 6: "やや高い", 5: "普通", 4: "やや低い", 3: "低い", 2: "かなり低い", 1: "かなり低い"};
 const MIX_WORDS = {10: "大混戦", 9: "大混戦", 8: "混戦", 7: "混戦", 6: "やや混戦", 5: "普通", 4: "やや堅い", 3: "堅い", 2: "かなり堅い", 1: "かなり堅い"};
 function confLevel(rows) {
-  // 予想 CSV の「自信の段階」(5モデル平均を検証期間と比べたもの)。無い古い CSV は、各モデルの自信の上位%の平均で代わりにする
+  // 予想 CSV の「自信の段階」(6モデル平均を検証期間と比べたもの)。無い古い CSV は、各モデルの自信の上位%の平均で代わりにする
   const r = rows[0], lv = num(r["自信の段階"]);
   if (lv) return withScore({ lv, top: num(r["自信の上位%(平均)"]), exact: true });
   const tops = models(rows).map(m => num(r[`${m}_自信の上位%`])).filter(v => v != null);
@@ -1632,13 +1632,13 @@ function detail(r, ms) {
     `<td class="n">${pct(num(r[`${m}_2着内`]))}${pctMove(r, `${m}_2着内`)}</td><td class="n">${pct(num(r[`${m}_3着内`]))}${pctMove(r, `${m}_3着内`)}</td></tr>`;
   t += `</table></div><dl class="kv">`;
   // 項目 → どの確度を付けるか(勝率のばらつき・順位の幅は、それ自体が予想の確度の目安)
-  t += `<dt>妥当オッズ(単勝)</dt><dd>${fix(num(r["妥当オッズ_単勝"]))}${colMove(r, "妥当オッズ_単勝", 1, true)}<span class="dim">(5モデルで ${fairRange(r, ms, "勝率")})</span>${cdot(r, "予想")}</dd>`;
-  t += `<dt>妥当オッズ(複勝)</dt><dd>${fix(num(r["妥当オッズ_複勝"]))}${colMove(r, "妥当オッズ_複勝", 1, true)}<span class="dim">(5モデルで ${fairRange(r, ms, "3着内")})</span>${cdot(r, "予想")}</dd>`;
+  t += `<dt>妥当オッズ(単勝)</dt><dd>${fix(num(r["妥当オッズ_単勝"]))}${colMove(r, "妥当オッズ_単勝", 1, true)}<span class="dim">(6モデルで ${fairRange(r, ms, "勝率")})</span>${cdot(r, "予想")}</dd>`;
+  t += `<dt>妥当オッズ(複勝)</dt><dd>${fix(num(r["妥当オッズ_複勝"]))}${colMove(r, "妥当オッズ_複勝", 1, true)}<span class="dim">(6モデルで ${fairRange(r, ms, "3着内")})</span>${cdot(r, "予想")}</dd>`;
   const extra = [["1着の確率", "予想"], ["2着の確率", "予想"], ["3着の確率", "予想"], ["4着の確率", "予想"], ["5着の確率", "予想"],
     ["勝率のばらつき", "目安"], ["順位の幅", "目安"], ["位置取り(近5走、0=前・1=後ろ)", "脚質"], ["前に行く順位", "脚質"],
     ["前半の速さの順位", "前半の速さ"]];
   for (const [c, k] of extra) if (c in r && r[c] !== "") {
-    const mark = k === "目安" ? ` <span class="dim" title="5モデルの意見の割れ具合。小さいほど予想の確度が高い">(確度の目安)</span>` : cdot(r, k);
+    const mark = k === "目安" ? ` <span class="dim" title="6モデルの意見の割れ具合。小さいほど予想の確度が高い">(確度の目安)</span>` : cdot(r, k);
     // 変化: 確率はポイント差、ばらつき・順位の幅・順位は小さいほど緑、位置取りは数字の増減
     const mv = c.endsWith("確率") ? pctMove(r, c) : c === "勝率のばらつき" ? colMove(r, c, 4, true)
       : c.endsWith("順位") || c === "順位の幅" ? colMove(r, c, 1, true) : colMove(r, c, 3);
@@ -1673,7 +1673,7 @@ function savedMode() { try { return localStorage.getItem("keiba-viewer:alloc") |
 function saveMode(v) { state.alloc = v; try { localStorage.setItem("keiba-viewer:alloc", v); } catch (e) {} }
 
 function harville(raceRows) {
-  // 5モデルの平均の勝率から、着順の上位3頭の並びごとの確率(Harville の式)
+  // 6モデルの平均の勝率から、着順の上位3頭の並びごとの確率(Harville の式)
   const horses = raceRows.map(r => [String(r.umaban), num(r["平均_勝率"]) || 0]);
   const total = horses.reduce((a, [, p]) => a + p, 0) || 1;
   const q = horses.map(([u, p]) => [u, p / total]);
@@ -1861,7 +1861,7 @@ function renderPlan(rid) {
     (budget && spent < budget ? `<div class="note">残り ${(budget - spent).toLocaleString()}円は使わない(100円単位にそろえた余り)。</div>` : "") +
     (budget && amt.some(a => !a) ? `<div class="note">予算が点数に足りないので、確率の低い買い目は買わない。</div>` : "") +
     `<div class="note">根拠: ${esc(r["根拠"] || "")}</div>` +
-    `<div class="note">買い目の数字は馬番。確率は5モデルの平均の勝率から Harville の式で計算したもの(予想の上の値)。オッズは、終わったレースは確定オッズ、当日は取ってある単勝・複勝だけ(組み合わせ馬券の当日のオッズは取らない)。期待値 = オッズ × 確率。複勝・ワイドは下限のオッズ。` +
+    `<div class="note">買い目の数字は馬番。確率は6モデルの平均の勝率から Harville の式で計算したもの(予想の上の値)。オッズは、終わったレースは確定オッズ、当日は取ってある単勝・複勝だけ(組み合わせ馬券の当日のオッズは取らない)。期待値 = オッズ × 確率。複勝・ワイドは下限のオッズ。` +
     `過去の回収率は100%を下回るものが多く、儲かることを約束するものではない。</div></div>`;
   return h;
 }
@@ -2087,7 +2087,7 @@ function renderBasket(rid, tri, places, odds, raceRows) {
     `<span class="note" style="margin:0">金額は100円単位(入れた値を丸める)。0円は「買わない」(表には残る)。買い目候補はこのブラウザに覚えておく(レースごと)。</span></div>` +
     (sent.length ? `<div class="note bought-note">このレースで購入した馬券に送った分: <b>${sent.length}点・${sent.reduce((s, x) => s + x.amount, 0).toLocaleString()}円</b>` +
       `(<a href="#" class="toDay" data-day="${rid.slice(0, 8)}">日別ページで見る</a>)。送ったあとも買い目候補は残る。</div>` : "") +
-    `<div class="note">確率は5モデルの平均の勝率から Harville の式で計算したもの(予想の上の値)。期待値 = オッズ × 確率。` +
+    `<div class="note">確率は6モデルの平均の勝率から Harville の式で計算したもの(予想の上の値)。期待値 = オッズ × 確率。` +
     `オッズは オッズ フォルダの CSV(終わったレースは全券種の確定オッズ、当日は取った単勝・複勝だけ)。複勝・ワイドは下限のオッズ。</div>`;
   return h;
 }
@@ -2134,7 +2134,7 @@ function renderCombos(rid) {
     `<div class="scroll"><table><tr><th>組番</th><th>確率</th><th class="n">妥当なオッズ</th><th class="n">オッズ${lower ? "(下限)" : ""}</th><th class="n">期待値</th></tr>`;
   for (const r of list) h += `<tr><td><b>${esc(r.k.split("-").join(sep))}</b></td><td>${bar(r.p, max)}</td><td class="n">${fix(1 / r.p)}</td>` +
     `<td class="n">${r.o ? fix(r.o) : `<span class="dim">オッズなし</span>`}</td><td class="n">${r.o ? evCell(r.o, 1 / r.p) : ""}</td></tr>`;
-  return h + `</table></div><div class="note">全部の組から上位20点。確率は5モデルの平均の勝率から Harville の式で計算。妥当なオッズ = 1 ÷ 確率(これより高いオッズなら期待値がプラス)。` +
+  return h + `</table></div><div class="note">全部の組から上位20点。確率は6モデルの平均の勝率から Harville の式で計算。妥当なオッズ = 1 ÷ 確率(これより高いオッズなら期待値がプラス)。` +
     `期待値 = オッズ × 確率。オッズは オッズ フォルダの CSV(終わったレースは確定オッズ。当日は組み合わせのオッズは取らないので期待値順は使えない)。</div></div>`;
 }
 
@@ -2950,7 +2950,7 @@ function guideHTML() {
   return `
     <h3>何を数えているか</h3>
     <p>説明用の LightGBM が、各項目で「その馬の勝つ見込みをどれだけ上げ下げしたか」を出し、それを下の5つの分類ごとに足したもの。
-    <b>総合</b>は5つ全部(と、どこにも入らない少しの項目)の合計。予想の勝率そのものは予想に使うモデル(深層学習5本と LightGBM 1本)の平均で、点はその理由の目安。</p>
+    <b>総合</b>は5つ全部(と、どこにも入らない少しの項目)の合計。予想の勝率そのものは予想に使うモデル(深層学習5本と LightGBM 1本。2026/11/17 から2023年末までのデータで学習した版)の平均で、点はその理由の目安。</p>
     <table><tr><th>総合</th><td><p>下の5つを全部足したもの</p><p class="muted">確度: ${esc(CONF_ABOUT["総合"])}</p></td></tr>${rows}</table>
     <h3>相対値と絶対値</h3>
     <table>

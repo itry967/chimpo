@@ -88,7 +88,7 @@ async function handleTokenResponse(response) {
     document.querySelector(".selection-heading").hidden = true;
     categoryList.hidden = true;
     if (/^\d{8}$/.test(targetDate) && dateFolders.some(folder => folder.name === targetDate)) {
-      dateSelect.value = targetDate;     // 「このRのデータを更新」から来たときも、その日の分をまとめて取る(まとめファイル2つで済むため)
+      for (const o of dateSelect.options) o.selected = o.value === targetDate;     // 「このRのデータを更新」から来たときも、その日の分をまとめて取る(まとめファイル2つで済むため)
       if (targetedRaceUpdate) {
         const note = document.getElementById("targetScopeNote");
         note.hidden = false;
@@ -109,7 +109,20 @@ async function handleTokenResponse(response) {
   }
 }
 
+// PC では日付を複数選べる(Ctrl・Shift を押しながら。2026-11-16 ユーザーの指示)。携帯は1日だけ(端末に残す量を抑えるため)
+function setupDateSelect() {
+  if (MOBILE_DEVICE) return;
+  dateSelect.multiple = true;
+  dateSelect.size = Math.min(10, Math.max(4, dateFolders.length));
+  dateSelect.title = "Ctrl(Mac は ⌘)を押しながらクリックで複数の日付、Shift で範囲を選べます";
+  const label = document.querySelector('label[for="date"]');
+  if (label) label.textContent = "日付(Ctrl・Shift を押しながらクリックで複数選べます)";
+}
+function selectedDates() {
+  return [...dateSelect.selectedOptions].map(o => o.value).filter(Boolean);
+}
 function renderDateFolders() {
+  setupDateSelect();
   dateSelect.replaceChildren();
   for (const folder of dateFolders) {
     const option = document.createElement("option");
@@ -117,16 +130,19 @@ function renderDateFolders() {
     option.textContent = folder.name.slice(0,4) + "/" + folder.name.slice(4,6) + "/" + folder.name.slice(6,8);
     dateSelect.appendChild(option);
   }
+  if (dateSelect.options.length) dateSelect.options[0].selected = true;
   updateDownloadButton();
 }
 function updateDownloadButton() {
-  downloadButton.disabled = !accessToken || !dateSelect.value || busy;
+  const n = selectedDates().length;
+  downloadButton.disabled = !accessToken || !n || busy;
+  downloadButton.textContent = n > 1 ? "選んだ" + n + "日分のデータを取得・更新" : "この日のデータを取得・更新";
 }
 dateSelect.addEventListener("change", updateDownloadButton);
 downloadButton.addEventListener("click", async () => {
   if (busy || !accessToken) return;
-  const date = dateSelect.value;
-  if (!date) return;
+  const date = selectedDates();
+  if (!date.length) return;
   busy = true;
   updateDownloadButton();
   loginButton.disabled = true;
@@ -147,14 +163,16 @@ downloadButton.addEventListener("click", async () => {
   }
 });
 
-async function fetchAndTransfer(date) {
+async function fetchAndTransfer(dates) {
   lastFailedCount = 0;
-  const bundles = await fetchDayBundles(accessToken, accountEmail, date);
+  dates = (Array.isArray(dates) ? dates : [dates]).filter(Boolean);
+  const date = [...dates].sort().at(-1);      // 前回取得した日付として覚えるのは一番新しい日
+  const bundles = await fetchDayBundles(accessToken, accountEmail, dates);
   status("データの準備が完了しました。画面を開いています…", true);
   await saveTransfer({bundles});
   try {
     localStorage.setItem(SCOPE_KEY, JSON.stringify({date}));
-    localStorage.removeItem(dismissKey(accountEmail, date));
+    for (const d of dates) localStorage.removeItem(dismissKey(accountEmail, d));
   } catch (_) {}
 }
 
@@ -215,8 +233,8 @@ function mobileKeepFrom() {
   const t = jstToday(), d = new Date(Date.UTC(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6, 8) - (MOBILE_KEEP_DAYS - 1)));
   return d.toISOString().slice(0, 10).replaceAll("-", "");
 }
-function keepDateOnDevice(day, date) {
-  return !MOBILE_DEVICE || !day || day === date || day >= mobileKeepFrom();
+function keepDateOnDevice(day, dates) {
+  return !MOBILE_DEVICE || !day || dates.includes(day) || day >= mobileKeepFrom();
 }
 
 // 日付のフォルダにあるまとめファイル {main: {id,name,modifiedTime,size}, odds: {...}}
@@ -236,29 +254,32 @@ function bundleSignature(found) {
   return Object.keys(BUNDLE_NAMES).map(kind => kind + ":" + (found[kind]?.modifiedTime || "")).join("|");
 }
 
-async function fetchDayBundles(accessToken, accountEmail, date) {
-  status("データの更新を確認中…", true);
-  const found = await listDayBundles(accessToken, date);
+async function fetchDayBundles(accessToken, accountEmail, dates) {
   const cache = await loadBundleCache(accountEmail).catch(error => {
     console.warn("保存済みのまとめファイルを読み込めません。取り直します:", error);
     return {days:{}};
   });
   const days = cache.days || {};
-  const day = {};
-  const kinds = Object.keys(found);
-  let done = 0;
-  status("データを取得中… 0/" + kinds.length, true);
-  for (const kind of kinds) {
-    const item = found[kind], old = days[date]?.[kind];
-    if (old?.blob && old.modifiedTime === item.modifiedTime && Number(old.size || 0) === Number(item.size || 0)) {
-      day[kind] = old;
-    } else {
-      day[kind] = {modifiedTime:item.modifiedTime || "", size:Number(item.size || 0), blob:await downloadCsv(item, accessToken)};
+  for (const [i, date] of dates.entries()) {
+    const head = dates.length > 1 ? date.slice(4,6) + "/" + date.slice(6,8) + " (" + (i + 1) + "/" + dates.length + "日目) " : "";
+    status(head + "データの更新を確認中…", true);
+    const found = await listDayBundles(accessToken, date);
+    const day = {};
+    const kinds = Object.keys(found);
+    let done = 0;
+    status(head + "データを取得中… 0/" + kinds.length, true);
+    for (const kind of kinds) {
+      const item = found[kind], old = days[date]?.[kind];
+      if (old?.blob && old.modifiedTime === item.modifiedTime && Number(old.size || 0) === Number(item.size || 0)) {
+        day[kind] = old;
+      } else {
+        day[kind] = {modifiedTime:item.modifiedTime || "", size:Number(item.size || 0), blob:await downloadCsv(item, accessToken)};
+      }
+      status(head + "データを取得中… " + (++done) + "/" + kinds.length, true);
     }
-    status("データを取得中… " + (++done) + "/" + kinds.length, true);
+    days[date] = day;
   }
-  days[date] = day;
-  for (const d of Object.keys(days)) if (!keepDateOnDevice(d, date)) delete days[d];
+  for (const d of Object.keys(days)) if (!keepDateOnDevice(d, dates)) delete days[d];
   try {
     await saveBundleCache(accountEmail, {days});
   } catch (error) {

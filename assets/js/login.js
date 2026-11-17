@@ -8,6 +8,7 @@ const statusEl = document.getElementById("status");
 const loginButton = document.getElementById("login");
 const selectionPanel = document.getElementById("selection");
 const dateSelect = document.getElementById("date");
+if (window.parent !== window && new URLSearchParams(location.search).get("embedded") === "1") document.body.classList.add("embedded");   // ビューアのダイアログの中
 const categoryList = document.getElementById("categories");
 const downloadButton = document.getElementById("download");
 let tokenClient = null;
@@ -113,7 +114,7 @@ async function handleTokenResponse(response) {
 function setupDateSelect() {
   if (MOBILE_DEVICE) return;
   dateSelect.multiple = true;
-  dateSelect.size = Math.min(10, Math.max(4, dateFolders.length));
+  dateSelect.size = Math.min(6, Math.max(4, dateFolders.length));   // 多いと取得のボタンが画面の下に隠れるので6行まで(2026-11-17)
   dateSelect.title = "Ctrl(Mac は ⌘)を押しながらクリックで複数の日付、Shift で範囲を選べます";
   const label = document.querySelector('label[for="date"]');
   if (label) label.textContent = "日付(Ctrl・Shift を押しながらクリックで複数選べます)";

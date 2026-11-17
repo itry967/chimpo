@@ -2362,6 +2362,9 @@ function renderDayPage(date) {
   h += `<div class="note">金額は馬券ごとに変えられる(100円単位に丸める。0円は「買わない」で表には残り、集計には入れない)。購入した馬券はこのブラウザに覚えておく(日付ごと)。実際の購入とはつながっていない(送ったものを買ったものとして数える)。` +
     `期待値 = オッズ × 確率(確率は補正つきの Harville の式、オッズは オッズ フォルダの CSV。複勝・ワイドは下限のオッズ)。回収率は結果(払戻の CSV)が出たレースの分だけで出す。</div></div>`;
 
+  // 5. もし推奨馬券を一日の予算X円で買ったら(2026-11-17 ユーザーの指示)
+  h += renderDaySim(date, raceLink);
+
   const main = document.getElementById("main");
   main.innerHTML = h;
   setupCardFolds(main, ".card.day-fold");     // 見送り推奨・資金配分案は見出しを押すとたためる(このブラウザに覚えておく)
@@ -2375,6 +2378,10 @@ function renderDayPage(date) {
     const y = window.scrollY; renderDayPage(date); window.scrollTo(0, y);
   });
   bindFund(date);
+  main.querySelectorAll(".simBtn").forEach(b => b.onclick = () => {
+    state[b.dataset.k] = b.dataset.v;
+    const y = window.scrollY; renderDayPage(date); window.scrollTo(0, y);
+  });
   main.querySelectorAll("button.boughtDel").forEach(b => b.onclick = () => { boughtOf(date).splice(+b.dataset.i, 1); saveBought(date); renderDayPage(date); });
   document.getElementById("boughtClear")?.addEventListener("click", () => {
     if (!confirm("この日の購入した馬券を全部消します。よろしいですか?")) return;
@@ -2576,9 +2583,9 @@ function fundCellOptions(date, rid) {
   const src = sortedRaces().find(r => r !== rid && r.slice(0, 8) === date && state.plans.has(r) && fundCell(r) === cell);
   return src ? fundOptions(src).map(o => ({ ...o, parts: [], borrowed: src })) : [];
 }
-function fundPlan(date) {
+function fundPlan(date, fOver = null) {
   // その日の資金配分案。open = 対象のレース(発走前。振り返りなら全部)。ok = 対象のうち予想 CSV のあるレース(配分する)
-  const f = fundOf(date);
+  const f = fOver || fundOf(date);   // fOver: 日別ページの「もし推奨馬券を買ったら」用の仮の設定(覚えておく設定は変えない)
   const rids = sortedRaces().filter(rid => rid.slice(0, 8) === date);
   const jyos = [...new Set(rids.map(rid => rid.slice(8, 10)))];
   const inJyo = rids.filter(rid => !f.offJyo.includes(rid.slice(8, 10)));     // 対象の場のレース
@@ -2649,6 +2656,67 @@ function fundPlan(date) {
     x.stage = p0["予想の段階"] || "";
   });
   return { f, rids, jyos, inJyo, open, items, ok, picked, budget, spent: ok.reduce((s, x) => s + (x.spent || 0), 0) };
+}
+const SIM_BUDGETS = [1000, 5000, 10000];
+function renderDaySim(date, raceLink) {
+  const rids = sortedRaces().filter(rid => rid.slice(0, 8) === date);
+  const jyos = [...new Set(rids.map(rid => rid.slice(8, 10)))];
+  const budget = SIM_BUDGETS.includes(+state.simBudget) ? +state.simBudget : 5000;
+  const jyo = state.simJyo === "all" || jyos.includes(state.simJyo) ? state.simJyo : "all";
+  const P = fundPlan(date, { budget, picks: {}, past: true, byJyo: false, jyo: null, offJyo: jyo === "all" ? [] : jyos.filter(j => j !== jyo) });
+  const btn = (k, v, label, on) => `<button class="simBtn${on ? " on" : ""}" data-k="${k}" data-v="${v}">${label}</button>`;
+  let h = `<div class="card day-fold"><h3>もし推奨馬券を一日の予算 ${budget.toLocaleString()}円で買ったら${updTag(["推奨買い目", "払戻"], rids)}</h3>` +
+    `<div class="tabs" style="margin-bottom:6px"><span class="muted" style="align-self:center;margin-right:6px">予算:</span>` +
+    SIM_BUDGETS.map(b => btn("simBudget", b, b.toLocaleString() + "円", b === budget)).join("") + `</div>` +
+    `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">場:</span>` +
+    btn("simJyo", "all", "全場", jyo === "all") + jyos.map(j => btn("simJyo", j, esc(JYO[j] || j), j === jyo)).join("") + `</div>`;
+  const rows = [];
+  let cost = 0, back = 0, setCost = 0, hitRaces = 0, setRaces = 0, waitRaces = 0;
+  for (const x of P.ok) {
+    if (!x.pick) { rows.push({ x, skip: true }); continue; }
+    if (!x.tickets?.length) { rows.push({ x, none: true }); continue; }
+    const settled = state.pays.has(x.rid);
+    let rc = 0, rb = 0;
+    const ts = x.tickets.filter(t => t.amount > 0).map(t => {
+      const hp = settled ? hitPayout(x.rid, t.kind, t.t) : null;
+      const b = settled ? (hp || 0) * t.amount / 100 : null;
+      rc += t.amount; if (b) rb += b;
+      return { ...t, back: b };
+    });
+    cost += rc;
+    if (settled) { setCost += rc; back += rb; setRaces++; if (rb > 0) hitRaces++; } else waitRaces++;
+    rows.push({ x, ts, rc, rb, settled });
+  }
+  const sign = v => `${v >= 0 ? "+" : "−"}${Math.abs(Math.round(v)).toLocaleString()}円`;
+  h += `<div class="kpis" style="margin:0 0 8px">` +
+    kpi(`${cost.toLocaleString()}円`, `使った額(${rows.filter(r => r.ts).length}レース。見送り ${rows.filter(r => r.skip).length}レース)`) +
+    kpi(setCost ? `<span class="${back >= setCost ? "hi" : ""}">${Math.round(back).toLocaleString()}円</span>` : "-", `払戻(結果の出た ${setRaces}レース)`) +
+    kpi(setCost ? `<span class="${back >= setCost ? "hi" : ""}">${sign(back - setCost)}</span>` : "-", "収支(結果の出たレースだけ)") +
+    kpi(setCost ? `<span class="${back >= setCost ? "hi" : ""}">${fix(back / setCost * 100)}%</span>` : "-", "回収率") +
+    kpi(setRaces ? `${hitRaces} / ${setRaces}` : "-", "当たったレース") +
+    (waitRaces ? kpi(`${waitRaces}レース`, "結果待ち(収支に入れない)") : "") + `</div>`;
+  if (!P.ok.length) h += `<div class="muted">この場のレースの予想がありません。</div>`;
+  else {
+    h += `<div class="scroll" style="max-height:560px;overflow-y:auto"><table><tr><th>レース</th><th>買い方</th><th>券種</th><th>買い目</th><th class="n">金額</th><th class="n">払戻</th><th class="n">レースの収支</th></tr>`;
+    for (const r of rows) {
+      if (r.skip || r.none) {
+        h += `<tr class="dim"><td>${raceLink(r.x.rid)}</td><td colspan="6">${r.skip ? "見送り(" + esc(r.x.autoWhy || "") + ")" : "推奨買い目が無い(買えない)"}</td></tr>`;
+        continue;
+      }
+      r.ts.forEach((t, i) => {
+        const sep = (t.kind === "馬単" || t.kind === "3連単") ? "→" : "-";
+        h += `<tr class="${t.back ? "hit" : ""}">` +
+          (i ? "" : `<td rowspan="${r.ts.length}">${raceLink(r.x.rid)}</td><td rowspan="${r.ts.length}">${esc(r.x.opt?.how || "")}</td>`) +
+          `<td>${esc(t.kind)}</td><td><b>${esc(t.t.join(sep))}</b></td><td class="n">${t.amount.toLocaleString()}円</td>` +
+          `<td class="n">${!r.settled ? `<span class="dim">結果待ち</span>` : t.back ? `<b class="hi">${Math.round(t.back).toLocaleString()}円</b>` : `<span class="dim">はずれ</span>`}</td>` +
+          (i ? "" : `<td class="n" rowspan="${r.ts.length}">${r.settled ? `<b class="${r.rb >= r.rc ? "hi" : ""}">${sign(r.rb - r.rc)}</b>` : `<span class="dim">${r.rc.toLocaleString()}円 結果待ち</span>`}</td>`) + `</tr>`;
+      });
+    }
+    h += `</table></div>`;
+  }
+  return h + `<div class="note">資金配分案と同じ決め方を、発走の前後を問わずこの日の全レース(選んだ場)に当てはめたもの: 見込みの回収率が ${FUND_RULE.skip}% 未満のレースは見送り、` +
+    `残りのレースに予算を100円単位で均等に配り、配分額の区分の推奨買い目(${fundMode() === "hit" ? "的中重視" : "回収率重視"}のモード)を1点ずつ均等に買う。` +
+    `資金配分案の ✔ の付け外し・予算とは別で、ここでの選択は覚えておくだけ。推奨買い目は発走55分前ごろの版なので、実際に買えたものとは違うことがある。結果は表示だけで、モデルには使わない。</div></div>`;
 }
 function raceName(rid) { return rid ? `${JYO[rid.slice(8, 10)] || rid.slice(8, 10)} ${+rid.slice(14, 16)}R` : ""; }
 function renderFund(date, raceLink) {

@@ -2618,7 +2618,7 @@ function fundPlan(date, fOver = null) {
       x.autoWhy = `見込みの回収率 ${fix(x.est0)}%(${o0.name}の${fundLabel(o0)}${x.pending ? "。推奨買い目がまだ無いので、同じ自信・混戦の組の " +
         raceName(o0.borrowed) + " の値" : ""})${x.autoBuy ? "" : ` < ${FUND_RULE.skip}%`}`;
     }
-    x.pick = x.rid in f.picks ? !!f.picks[x.rid] : x.autoBuy;
+    x.pick = f.only ? f.only.has(x.rid) : x.rid in f.picks ? !!f.picks[x.rid] : x.autoBuy;
   }
   // 重み(power > 0 のとき)は、✔ のレースの数で均等に割ったときの額の区分の見込みの回収率から
   const picked = ok.filter(x => x.pick);
@@ -2626,7 +2626,7 @@ function fundPlan(date, fOver = null) {
   for (const x of ok) {
     const o = x.opts.length ? fundChoose(x.opts, share || first) : null;
     x.est = o?.honest ?? x.est0;
-    x.w = !x.pick ? 0 : FUND_RULE.power ? Math.pow(Math.max((x.est ?? 0) / 100 - FUND_RULE.base, 1e-6), FUND_RULE.power) : 1;
+    x.w = !x.pick ? 0 : f.weightOf ? f.weightOf(x) : FUND_RULE.power ? Math.pow(Math.max((x.est ?? 0) / 100 - FUND_RULE.base, 1e-6), FUND_RULE.power) : 1;
   }
   const amt = fundDistribute(budget, ok.map(x => x.w), picked.length > 1 ? FUND_RULE.cap : null);
   const tc = new Map();
@@ -2666,17 +2666,34 @@ function renderDaySim(date, raceLink) {
   const jyos = [...new Set(rids.map(rid => rid.slice(8, 10)))];
   const budget = SIM_BUDGETS.includes(+state.simBudget) ? +state.simBudget : 5000;
   const jyo = state.simJyo === "all" || jyos.includes(state.simJyo) ? state.simJyo : "all";
-  const P = fundPlan(date, { budget, picks: {}, past: true, byJyo: false, jyo: null, offJyo: jyo === "all" ? [] : jyos.filter(j => j !== jyo) });
+  const base = { budget, picks: {}, past: true, byJyo: false, jyo: null, offJyo: jyo === "all" ? [] : jyos.filter(j => j !== jyo) };
+  // 優先順位(2026-11-21 ユーザーの指示): 推奨(見送りでない)レースを、見込みの回収率と期待値で並べ、上から選ぶ。
+  // 点数 = 見込みの回収率と期待値の平均(期待値はオッズのあるレースだけ。無ければ見込みの回収率だけ)
+  const P0 = fundPlan(date, base);
+  const cand = P0.ok.filter(x => x.autoBuy && !x.wait && x.est0 != null);
+  for (const x of cand) x.score = x.ev != null ? (x.est0 + x.ev) / 2 : x.est0;
+  cand.sort((a, b) => b.score - a.score);
+  const SELS = [["n3", "上位3"], ["n5", "上位5"], ["n8", "上位8"], ["p30", "上位30%"], ["p50", "上位50%"], ["all", "全部"]];
+  const sel = SELS.some(([k]) => k === state.simSel) ? state.simSel : "n5";
+  const nSel = sel === "all" ? cand.length : sel[0] === "n" ? +sel.slice(1) : Math.max(1, Math.round(cand.length * +sel.slice(1) / 100));
+  const chosen = cand.slice(0, nSel);
+  const rank = new Map(cand.map((x, i) => [x.rid, { i: i + 1, score: x.score, ev: x.ev, est: x.est0 }]));
+  // 配分: 見込みの回収率が高いほど多く(80% を超えた分に比例)
+  const P = fundPlan(date, { ...base, only: new Set(chosen.map(x => x.rid)), weightOf: x => Math.max((x.est0 ?? 0) - 80, 5) });
+  P.ok.sort((a, b) => (rank.get(a.rid)?.i ?? 999) - (rank.get(b.rid)?.i ?? 999));
   const btn = (k, v, label, on) => `<button class="simBtn${on ? " on" : ""}" data-k="${k}" data-v="${v}">${label}</button>`;
   let h = `<div class="card day-fold"><h3>もし推奨馬券を一日の予算 ${budget.toLocaleString()}円で買ったら${updTag(["推奨買い目", "払戻"], rids)}</h3>` +
     `<div class="tabs" style="margin-bottom:6px"><span class="muted" style="align-self:center;margin-right:6px">予算:</span>` +
     SIM_BUDGETS.map(b => btn("simBudget", b, b.toLocaleString() + "円", b === budget)).join("") + `</div>` +
     `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">場:</span>` +
-    btn("simJyo", "all", "全場", jyo === "all") + jyos.map(j => btn("simJyo", j, esc(JYO[j] || j), j === jyo)).join("") + `</div>`;
+    btn("simJyo", "all", "全場", jyo === "all") + jyos.map(j => btn("simJyo", j, esc(JYO[j] || j), j === jyo)).join("") + `</div>` +
+    `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">買うレース:</span>` +
+    SELS.map(([k, l]) => btn("simSel", k, l, k === sel)).join("") +
+    `<span class="muted" style="align-self:center;margin-left:6px">推奨 ${cand.length}レースのうち ${chosen.length}レース</span></div>`;
   const rows = [];
   let cost = 0, back = 0, setCost = 0, hitRaces = 0, setRaces = 0, waitRaces = 0;
   for (const x of P.ok) {
-    if (!x.pick) { rows.push({ x, skip: true }); continue; }
+    if (!x.pick) { rows.push({ x, skip: true, out: rank.has(x.rid) }); continue; }
     if (!x.tickets?.length) { rows.push({ x, none: true }); continue; }
     const settled = state.pays.has(x.rid);
     let rc = 0, rb = 0;
@@ -2692,7 +2709,7 @@ function renderDaySim(date, raceLink) {
   }
   const sign = v => `${v >= 0 ? "+" : "−"}${Math.abs(Math.round(v)).toLocaleString()}円`;
   h += `<div class="kpis" style="margin:0 0 8px">` +
-    kpi(`${cost.toLocaleString()}円`, `使った額(${rows.filter(r => r.ts).length}レース。見送り ${rows.filter(r => r.skip).length}レース)`) +
+    kpi(`${cost.toLocaleString()}円`, `使った額(${rows.filter(r => r.ts).length}レース。選外 ${rows.filter(r => r.out).length}・見送り ${rows.filter(r => r.skip && !r.out).length}レース)`) +
     kpi(setCost ? `<span class="${back >= setCost ? "hi" : ""}">${Math.round(back).toLocaleString()}円</span>` : "-", `払戻(結果の出た ${setRaces}レース)`) +
     kpi(setCost ? `<span class="${back >= setCost ? "hi" : ""}">${sign(back - setCost)}</span>` : "-", "収支(結果の出たレースだけ)") +
     kpi(setCost ? `<span class="${back >= setCost ? "hi" : ""}">${fix(back / setCost * 100)}%</span>` : "-", "回収率") +
@@ -2700,16 +2717,21 @@ function renderDaySim(date, raceLink) {
     (waitRaces ? kpi(`${waitRaces}レース`, "結果待ち(収支に入れない)") : "") + `</div>`;
   if (!P.ok.length) h += `<div class="muted">この場のレースの予想がありません。</div>`;
   else {
-    h += `<div class="scroll" style="max-height:560px;overflow-y:auto"><table><tr><th>レース</th><th>買い方</th><th>券種</th><th>買い目</th><th class="n">金額</th><th class="n">払戻</th><th class="n">レースの収支</th></tr>`;
+    h += `<div class="scroll" style="max-height:560px;overflow-y:auto"><table><tr><th>レース</th><th class="n" title="見込みの回収率と期待値の平均の順">順位</th><th class="n">見込み</th><th class="n">期待値</th><th>買い方</th><th>券種</th><th>買い目</th><th class="n">金額</th><th class="n">払戻</th><th class="n">レースの収支</th></tr>`;
     for (const r of rows) {
       if (r.skip || r.none) {
-        h += `<tr class="dim"><td>${raceLink(r.x.rid)}</td><td colspan="6">${r.skip ? "見送り(" + esc(r.x.autoWhy || "") + ")" : "推奨買い目が無い(買えない)"}</td></tr>`;
+        const rk = rank.get(r.x.rid);
+        h += `<tr class="dim"><td>${raceLink(r.x.rid)}</td><td class="n">${rk ? rk.i : "-"}</td><td class="n">${rk ? fix(rk.est) + "%" : "-"}</td><td class="n">${rk?.ev != null ? fix(rk.ev) + "%" : "-"}</td>` +
+          `<td colspan="6">${r.out ? "優先順位の外(選んだ数に入らない)" : r.skip ? "見送り(" + esc(r.x.autoWhy || "") + ")" : "推奨買い目が無い(買えない)"}</td></tr>`;
         continue;
       }
       r.ts.forEach((t, i) => {
         const sep = (t.kind === "馬単" || t.kind === "3連単") ? "→" : "-";
         h += `<tr class="${t.back ? "hit" : ""}">` +
-          (i ? "" : `<td rowspan="${r.ts.length}">${raceLink(r.x.rid)}</td><td rowspan="${r.ts.length}">${esc(r.x.opt?.how || "")}</td>`) +
+          (i ? "" : `<td rowspan="${r.ts.length}">${raceLink(r.x.rid)}</td>` +
+            [rank.get(r.x.rid)?.i ?? "-", rank.get(r.x.rid) ? fix(rank.get(r.x.rid).est) + "%" : "-", rank.get(r.x.rid)?.ev != null ? fix(rank.get(r.x.rid).ev) + "%" : "-"]
+              .map(v => `<td class="n" rowspan="${r.ts.length}">${v}</td>`).join("") +
+            `<td rowspan="${r.ts.length}">${esc(r.x.opt?.how || "")}<div class="dim" style="font-size:11px">${r.rc.toLocaleString()}円</div></td>`) +
           `<td>${esc(t.kind)}</td><td><b>${esc(t.t.join(sep))}</b></td><td class="n">${t.amount.toLocaleString()}円</td>` +
           `<td class="n">${!r.settled ? `<span class="dim">結果待ち</span>` : t.back ? `<b class="hi">${Math.round(t.back).toLocaleString()}円</b>` : `<span class="dim">はずれ</span>`}</td>` +
           (i ? "" : `<td class="n" rowspan="${r.ts.length}">${r.settled ? `<b class="${r.rb >= r.rc ? "hi" : ""}">${sign(r.rb - r.rc)}</b>` : `<span class="dim">${r.rc.toLocaleString()}円 結果待ち</span>`}</td>`) + `</tr>`;
@@ -2717,8 +2739,9 @@ function renderDaySim(date, raceLink) {
     }
     h += `</table></div>`;
   }
-  return h + `<div class="note">資金配分案と同じ決め方を、発走の前後を問わずこの日の全レース(選んだ場)に当てはめたもの: 見込みの回収率が ${FUND_RULE.skip}% 未満のレースは見送り、` +
-    `残りのレースに予算を100円単位で均等に配り、配分額の区分の推奨買い目(${fundMode() === "hit" ? "的中重視" : "回収率重視"}のモード)を1点ずつ均等に買う。` +
+  return h + `<div class="note">発走の前後を問わずこの日の全レース(選んだ場)で: 見込みの回収率が ${FUND_RULE.skip}% 未満のレースは見送り、` +
+    `残りの推奨レースに、見込みの回収率と期待値(期待値はオッズのあるレースだけ。無ければ見込みの回収率だけ)の平均で順位を付け、「買うレース」で選んだ数だけ上から買う。` +
+    `予算は選んだレースに、見込みの回収率が 80% を超えた分に比例して100円単位で配り(見込みの高いレースほど多い)、配分額の区分の推奨買い目(${fundMode() === "hit" ? "的中重視" : "回収率重視"}のモード)を1点ずつ均等に買う。` +
     `資金配分案の ✔ の付け外し・予算とは別で、ここでの選択は覚えておくだけ。推奨買い目は発走55分前ごろの版なので、実際に買えたものとは違うことがある。結果は表示だけで、モデルには使わない。</div></div>`;
 }
 function raceName(rid) { return rid ? `${JYO[rid.slice(8, 10)] || rid.slice(8, 10)} ${+rid.slice(14, 16)}R` : ""; }

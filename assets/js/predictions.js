@@ -2509,12 +2509,19 @@ function fundTierIndex(amount) { return BUDGET_TIERS.findIndex(([lim]) => amount
 // 資金配分案のモード(このブラウザに覚えておく)。roi = 回収率重視(区分のおすすめ)、hit = 的中重視(区分の候補のうち過去の的中率が一番高い買い方)
 // 的中重視は 2026-11-16 ユーザーの指示「資金配分案に的中重視モードをつけることはできる？」。検証期間での1日ごとの確かめはまだ(docs/fund-plan.md)
 let FUND_MODE_OVERRIDE = null;   // 「もし推奨馬券を〜」の計算のあいだだけ、その欄のモードにする(2026-11-21 ユーザーの指示: 資金配分案と別々に動く)
+// 2026-11-21 ユーザーの指示: 前の「的中重視」(hit)は「超的中重視」に名前を変え、「的中重視」(hit2)は 馬連・馬単・3連複・ワイド・枠連 の券種別の中で選ぶ
+const FUND_MODES = [["roi", "回収率重視", "配分額の区分の推奨買い目「おすすめ」を買う"],
+  ["hit2", "的中重視", "配分額の区分の券種別の候補のうち、馬連・馬単・3連複・ワイド・枠連 で点数が収まり過去の的中率が一番高い買い方を買う(無ければおすすめ)"],
+  ["hit", "超的中重視", "配分額の区分の候補(おすすめ・組み合わせ・券種別)のうち、点数が収まり過去の的中率が一番高い買い方を買う(複勝・ワイドが多くなる)"]];
+const HIT2_KINDS = new Set(["馬連", "馬単", "3連複", "ワイド", "枠連"]);
+const modeOk = m => FUND_MODES.some(([k]) => k === m) ? m : "roi";
+const modeName = m => (FUND_MODES.find(([k]) => k === m) || FUND_MODES[0])[1];
 function fundMode() {
   if (FUND_MODE_OVERRIDE) return FUND_MODE_OVERRIDE;
-  try { return localStorage.getItem("keiba-viewer:fundMode") === "hit" ? "hit" : "roi"; } catch (e) { return state.fundMode === "hit" ? "hit" : "roi"; }
+  try { return modeOk(localStorage.getItem("keiba-viewer:fundMode")); } catch (e) { return modeOk(state.fundMode); }
 }
 function simMode() {
-  try { return localStorage.getItem("keiba-viewer:simMode") === "hit" ? "hit" : "roi"; } catch (e) { return state.simMode === "hit" ? "hit" : "roi"; }
+  try { return modeOk(localStorage.getItem("keiba-viewer:simMode")); } catch (e) { return modeOk(state.simMode); }
 }
 function setSimMode(m) {
   try { localStorage.setItem("keiba-viewer:simMode", m); } catch (e) { state.simMode = m; }
@@ -2537,7 +2544,7 @@ function fundOptions(rid) {
   // 回収率重視は区分ごとにおすすめの1つ。的中重視は、おすすめ・組み合わせ(合わせて1つ)・券種別(1行ずつ)を全部候補にする
   const all = state.plans.get(rid) || [];
   const kindOf = x => x["種類"] || "おすすめ";
-  const hitMode = fundMode() === "hit";
+  const hitMode = fundMode() !== "roi";
   const make = (tier, name, label, parts) => ({ tier, name, label, how: parts.map(x => x["買い方"]).join(" + "),
     n: parts.reduce((s, x) => s + (num(x["点数"]) || 0), 0), honest: num(parts[0]["確かめの回収率"]), hit: num(parts[0]["過去の的中率"]), parts });
   return BUDGET_TIERS.flatMap(([, name], tier) => {
@@ -2556,6 +2563,18 @@ function fundOptions(rid) {
 function fundChoose(opts, amount) {
   // 配分額の区分の買い方。点数 × 100円 が配分額を超えるなら、収まる下の区分(どれも収まらなければ一番下)。
   // 回収率重視はおすすめ。的中重視は、収まる候補のうち過去の的中率が一番高いもの(同じなら確かめの回収率が高いもの)
+  const byHit = xs => [...xs].sort((a, b) => (b.hit ?? -1) - (a.hit ?? -1) || (b.honest ?? -1) - (a.honest ?? -1))[0];
+  if (fundMode() === "hit2") {
+    // 的中重視: 券種別のうち 馬連・馬単・3連複・ワイド・枠連 だけ。収まる区分に無ければ下の区分、どこにも無ければおすすめ
+    const ok2 = x => x.label !== "おすすめ" && x.label !== "組み合わせ" && x.parts.every(p => HIT2_KINDS.has(p["券種"]));
+    const t2 = fundTierIndex(amount);
+    for (let k = t2; k >= 0; k--) {
+      const fit = opts.filter(x => x.tier === k && x.n > 0 && x.n * 100 <= amount && ok2(x));
+      if (fit.length) return byHit(fit);
+    }
+    const low2 = opts.filter(x => x.tier === 0 && ok2(x));
+    if (low2.length) return byHit(low2);
+  }
   const best = xs => fundMode() === "hit" ?
     [...xs].sort((a, b) => (b.hit ?? -1) - (a.hit ?? -1) || (b.honest ?? -1) - (a.honest ?? -1))[0] :
     (xs.find(x => fundLabel(x) === "おすすめ") || xs[0]);
@@ -2718,7 +2737,7 @@ function renderDaySim(date, raceLink) {
     SELS.map(([k, l]) => btn("simSel", k, l, k === sel)).join("") +
     `<span class="muted" style="align-self:center;margin-left:6px">推奨 ${cand.length}レースのうち ${chosen.length}レース</span></div>` +
     `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">買い方:</span>` +
-    btn("simMode", "roi", "回収率重視", mode === "roi") + btn("simMode", "hit", "的中重視", mode === "hit") +
+    FUND_MODES.map(([k, l]) => btn("simMode", k, l, mode === k)).join("") +
     `<span class="muted" style="align-self:center;margin-left:6px">(資金配分案のモードとは別)</span></div>`;
   const rows = [];
   let cost = 0, back = 0, setCost = 0, hitRaces = 0, setRaces = 0, waitRaces = 0;
@@ -2771,7 +2790,7 @@ function renderDaySim(date, raceLink) {
   }
   return h + `<div class="note">発走の前後を問わずこの日の全レース(選んだ場)で: 見込みの回収率が ${FUND_RULE.skip}% 未満のレースは見送り、` +
     `残りの推奨レースに、見込みの回収率と期待値(期待値はオッズのあるレースだけ。無ければ見込みの回収率だけ)の平均で順位を付け、「買うレース」で選んだ数だけ上から買う。` +
-    `予算は選んだレースに、見込みの回収率が 80% を超えた分に比例して100円単位で配り(見込みの高いレースほど多い)、配分額の区分の推奨買い目(この欄の${mode === "hit" ? "的中重視" : "回収率重視"}のモード)を1点ずつ均等に買う。` +
+    `予算は選んだレースに、見込みの回収率が 80% を超えた分に比例して100円単位で配り(見込みの高いレースほど多い)、配分額の区分の推奨買い目(この欄の${modeName(mode)}のモード)を1点ずつ均等に買う。` +
     `資金配分案の ✔ の付け外し・予算とは別で、ここでの選択は覚えておくだけ。推奨買い目は発走55分前ごろの版なので、実際に買えたものとは違うことがある。結果は表示だけで、モデルには使わない。</div></div>`;
 }
 function raceName(rid) { return rid ? `${JYO[rid.slice(8, 10)] || rid.slice(8, 10)} ${+rid.slice(14, 16)}R` : ""; }
@@ -2786,7 +2805,7 @@ function renderFund(date, raceLink) {
     `<div class="calc" style="margin-bottom:8px"><label>この日の予算 <input id="fundBudget" class="odds" inputmode="numeric" style="width:110px" value="${f.budget ?? ""}" placeholder="例 10000"> 円</label>` +
     `<button id="fundAuto" title="✔ を最初の自動の選定(購入推奨に ✔、見送り推奨は ✔ なし)に戻す">✔ を自動の選定に戻す</button>` +
     `<span class="tabs fundMode" style="margin:0" title="レースごとに買う買い方の選び方(このブラウザに覚えておく)">` +
-    [["roi", "回収率重視", "配分額の区分の推奨買い目「おすすめ」を買う"], ["hit", "的中重視", "配分額の区分の候補(おすすめ・組み合わせ・券種別)のうち、点数が収まり過去の的中率が一番高い買い方を買う"]]
+    FUND_MODES
       .map(([m, t, tip]) => `<button data-m="${m}" class="${fundMode() === m ? "on" : ""}" title="${tip}">${t}</button>`).join("") + `</span>` +
     `<label title="前の日付の振り返りや、発走済みのレースも入れて見たいとき"><input type="checkbox" id="fundPast" ${f.past ? "checked" : ""}> 発走済み・結果の出たレースも入れる</label></div>`;
   if (!P.inJyo.length) return h + `<div class="muted">${P.rids.length ? "対象の場が選ばれていません。上の「対象の場」に ✔ を入れるか「全場選択」を押す。" : "この日のレースがありません。"}</div></div>`;
@@ -2814,7 +2833,7 @@ function renderFund(date, raceLink) {
         `${esc(JYO[j] || j)} <span class="muted">✔${xs.filter(x => x.pick).length}/${xs.length}${P.budget ? `・${amt.toLocaleString()}円` : ""}</span></button>`;
     }).join("") + `</div>` : "") + `</div>`;
   h += `<div class="scroll"><table class="fund-table"><tr class="f-head"><th title="買う(✔)/見送り">✔</th><th>レース</th><th>発走</th><th class="n" title="自信は100段階、混戦は10段階">自信<small>/100</small></th><th class="n">混戦<small>/10</small></th>` +
-    `<th>自動の判定</th><th class="n" title="購入推奨・見送り推奨の判定に使った値(予算 ÷ 対象のレース数 の額が入る区分のおすすめの確かめの回収率)。配分額の区分の値が違えば下に小さく出す">見込みの回収率</th><th class="n">期待値</th><th class="n">配分額</th><th>${fundMode() === "hit" ? "的中重視の買い目" : "おすすめの買い目"}</th></tr>`;
+    `<th>自動の判定</th><th class="n" title="購入推奨・見送り推奨の判定に使った値(予算 ÷ 対象のレース数 の額が入る区分のおすすめの確かめの回収率)。配分額の区分の値が違えば下に小さく出す">見込みの回収率</th><th class="n">期待値</th><th class="n">配分額</th><th>${fundMode() === "roi" ? "おすすめの買い目" : modeName(fundMode()) + "の買い目"}</th></tr>`;
   for (const x of shown) {
     const r0 = state.races.get(x.rid)[0], c = confLevel(state.races.get(x.rid));
     const changed = x.pick !== x.autoBuy;
@@ -2824,7 +2843,7 @@ function renderFund(date, raceLink) {
       `<div class="dim" title="配分額 ${x.amount.toLocaleString()}円 の区分(${esc(x.opt?.name || "")})のおすすめの確かめの回収率。判定には使わない">配分後 ${fix(x.honestUsed)}%</div>` : "";
     const tk = x.tickets?.filter(y => y.amount) || [];
     const sep = y => y.kind === "馬単" || y.kind === "3連単" ? "→" : "-";
-    const list = tk.length ? `<div><b>${esc(x.opt.how)}</b> <span class="muted">(${esc(x.opt.name)}・${fundMode() === "hit" ? `${esc(fundLabel(x.opt))}・的中 ${x.opt.hit != null ? fix(x.opt.hit) + "%" : "-"}・` : ""}${tk.length}点)</span></div>` +
+    const list = tk.length ? `<div><b>${esc(x.opt.how)}</b> <span class="muted">(${esc(x.opt.name)}・${fundMode() !== "roi" ? `${esc(fundLabel(x.opt))}・的中 ${x.opt.hit != null ? fix(x.opt.hit) + "%" : "-"}・` : ""}${tk.length}点)</span></div>` +
       `<div class="fund-tickets">${tk.map(y => `${esc(y.kind)} <b>${esc(y.t.join(sep(y)))}</b> ${y.amount.toLocaleString()}円`).join("<br>")}</div>` +
       (x.oddsNote || /枠順/.test(x.stage) ? `<div class="fund-odds">${x.oddsNote ? `<span class="chip gray" title="期待値に使ったオッズの発表・取得の日時">オッズ: ${esc(x.oddsNote)}</span>` : ""}` +
         (/枠順/.test(x.stage) ? ` <span class="chip warn" title="馬体重が出る前(枠順確定の版)の予想で作った推奨買い目。馬体重が入ると作り直す">${esc(x.stage)}</span>` : "") + `</div>` : "") :
@@ -2850,7 +2869,8 @@ function renderFund(date, raceLink) {
       `③ ✔ のレースに均等に100円単位で配る(割り切れない分は発走の早いレースから100円ずつ。予算がレース数 × 100円 に足りなければ、発走の早いレースから100円ずつ)。` +
       `検証期間では、見込みの回収率(自信・混戦の組ごとの値)で重みを付けても均等より良くならなかった(見込みの回収率の高いレースが、別の年で実際に良いとは限らなかった)ので均等にしている。`) +
     `④レースごとに、配分額が入る区分のおすすめを買う(点数 × 100円 が配分額より多ければ、収まる下の区分)。` +
-    `<b>的中重視</b>にすると、①④で使う買い方を、その区分の候補(おすすめ・組み合わせ・券種別)のうち点数が収まり過去の的中率が一番高いものにする(複勝・ワイドが多くなる。見込みの回収率もその買い方の確かめの回収率。検証期間での1日ごとの確かめはまだ)。` +
+    `<b>的中重視</b>にすると、①④で使う買い方を、その区分の券種別のうち 馬連・馬単・3連複・ワイド・枠連 で点数が収まり過去の的中率が一番高いものにする(無ければおすすめ)。` +
+    `<b>超的中重視</b>にすると、その区分の候補(おすすめ・組み合わせ・券種別)のうち点数が収まり過去の的中率が一番高いものにする(複勝・ワイドが多くなる。見込みの回収率もその買い方の確かめの回収率。検証期間での1日ごとの確かめはまだ)。` +
     `1点の金額は均等で、余りは確率の高い買い目から100円ずつ。` +
     `✔ は手で付け外しでき、そのときは ✔ のレースだけで配り直す(✔ と予算はこのブラウザに日付ごとに覚えておく)。` +
     `<b>期待値</b>は、オッズのある買い目の 確率 × オッズ の配分額での平均(参考。配分には使わない)。オッズは変わるので、使ったオッズの日時を買い目の下に出す(「オッズ: … 時点・… 取得」)。` +

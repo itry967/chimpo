@@ -517,3 +517,9 @@ a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
 @media (max-width: 430px) {
   #noticeOpen { font-size: 10px; padding-right: 4px; padding-left: 4px; }
 }
+
+/* 自動更新のランプ(2026-11-21) */
+#autoLamp { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted, #888); white-space: nowrap; cursor: help; }
+#autoLamp i { width: 10px; height: 10px; border-radius: 50%; background: #9e9e9e; display: inline-block; }
+#autoLamp.on i { background: #2ecc40; box-shadow: 0 0 6px #2ecc40; }
+#autoLamp.on { color: inherit; }

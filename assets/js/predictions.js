@@ -997,17 +997,20 @@ function setupCardFolds(root, sel = ".card") {
   root.querySelectorAll(sel).forEach(card => {
     const head = card.querySelector("h2, h3");
     if (!head) return;
-    const key = "card:" + head.textContent.replace(/\s+/g, "").replace(/^[▾▸]/, "").replace(/？$/, "").slice(0, 20);   // ? ボタンの字は入れない
+    // 見出しの「更新 HH:MM」・ボタン・かっこの中(並び順・件数など)は入れない。更新やレースの切り替えで変わらないように(2026-11-21 ユーザーの指示)
+    const hc = head.cloneNode(true);
+    hc.querySelectorAll(".sec-upd, button, .fold-mark").forEach(x => x.remove());
+    const key = "card:" + hc.textContent.replace(/\s+/g, "").replace(/[(（][^)）]*[)）]/g, "").replace(/^[▾▸]/, "").replace(/？$/, "").slice(0, 20);
     // 携帯: 展開予想・馬場傾向予想は、レースを開いたときはたたんでおく(開いたのはそのレースを見ているあいだだけ。2026-11-15 ユーザーの指示)
     const mob = MOBILE_SHUT.test(key) && window.matchMedia("(max-width: 760px)").matches;
-    const isShut = () => mob ? !state.mobileOpen.has(key) : folded(key);
+    // 携帯でも開いたことを覚えておき、どのレースでも同じにする(2026-11-21 ユーザーの指示。前はそのレースを見ているあいだだけ)
+    const isShut = () => mob ? !folded("mopen:" + key) : folded(key);
     head.classList.add("fold-card");
     head.insertAdjacentHTML("afterbegin", `<span class="fold-mark">${isShut() ? "▸" : "▾"}</span>`);
     card.classList.toggle("folded", isShut());
     head.onclick = e => {
       e.stopPropagation();
-      if (mob) state.mobileOpen.has(key) ? state.mobileOpen.delete(key) : state.mobileOpen.add(key);
-      else toggleFold(key);
+      toggleFold(mob ? "mopen:" + key : key);
       card.classList.toggle("folded", isShut());
       head.querySelector(".fold-mark").textContent = isShut() ? "▸" : "▾";
     };
@@ -3359,3 +3362,23 @@ document.getElementById("theme").onclick = () => {
   const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
   root.dataset.theme = dark ? "light" : "dark";
 };
+
+// 自動更新のランプ(2026-11-21 ユーザーの指示): ヘッダの右側。緑=自動更新が有効、灰=無効(理由はランプにのせると出る)
+const autoLamp = document.createElement("span");
+autoLamp.id = "autoLamp";
+autoLamp.innerHTML = '<i></i><span class="lbl-l">自動更新</span>';
+document.getElementById("driveReload").before(autoLamp);
+function updateAutoLamp() {
+  const today = jstTodayYmd();
+  const hasToday = [...state.races.keys()].some(rid => rid.slice(0, 8) === today);
+  let on = false, why;
+  if (driveNeedsLogin) why = "再ログインが必要なため止まっています";
+  else if (!hasToday) why = "今日のレースのデータを読み込んでいないため止まっています";
+  else if (document.visibilityState !== "visible") why = "画面が隠れているあいだは止まっています";
+  else { on = true; why = "数分おきに新しいデータを確かめて自動で更新します"; }
+  autoLamp.className = on ? "on" : "off";
+  autoLamp.title = `自動更新: ${on ? "有効" : "無効"}。${why}`;
+}
+setInterval(updateAutoLamp, 5000);
+document.addEventListener("visibilitychange", updateAutoLamp);
+updateAutoLamp();

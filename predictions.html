@@ -169,15 +169,18 @@ async function loadNotices(table, url) {
   try {
     const r = await fetch(url + "?t=" + Date.now(), { cache: "no-store" });
     if (!r.ok) return;
-    const text = (await r.text()).replace(/^﻿/, "");
-    const rows = [], re = /("([^"]|"")*"|[^,
-]*)(,|?
-|$)/g;
-    let row = [], m;
-    while ((m = re.exec(text)) && m[0] !== "") {
-      let v = m[1]; if (v.startsWith('"')) v = v.slice(1, -1).replace(/""/g, '"');
-      row.push(v); if (m[3] !== ",") { rows.push(row); row = []; }
+    const text = (await r.text()).replace(/^\uFEFF/, "");
+    const rows = [];
+    let row = [], v = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { v += '"'; i++; } else q = false; } else v += c; }
+      else if (c === '"') q = true;
+      else if (c === ",") { row.push(v); v = ""; }
+      else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(v); rows.push(row); row = []; v = ""; }
+      else v += c;
     }
+    if (v || row.length) { row.push(v); rows.push(row); }
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const body = rows.slice(1).filter(x => x.length >= 2 && (x[0] || x[1]));
     if (!body.length) return;

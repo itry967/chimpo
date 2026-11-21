@@ -1888,7 +1888,9 @@ function renderPlan(rid) {
   }
   const kinds = [...new Set(parts.map(x => x["券種"]))];
   const roi = num(r?.["過去の回収率"]), honest = num(r?.["確かめの回収率"]);
-  let h = `<div class="card"><h3>推奨買い目と資金配分${updTag(["推奨買い目", "オッズ"], rid)}</h3>` +
+  const fs = favSame(rid);
+  let h = `<div class="card"><h3>推奨買い目と資金配分${updTag(["推奨買い目", "オッズ"], rid)}` +
+    (fs == null ? "" : ` <span class="chip ${fs ? "gray" : "up"}" title="モデルの1位(平均の勝率)と単勝の1番人気(今のオッズ)。日別ページの「1位≠1番人気だけ」では、同じレースは買わない">${fs ? "1位＝1番人気" : "1位≠1番人気"}</span>`) + `</h3>` +
     `<div class="tabs psel" style="margin-bottom:6px"><span class="muted" style="align-self:center;margin-right:6px">選び方:</span>` +
     [["manual", "手動で選ぶ", "下のタブで買い方を選ぶ"], ...FUND_MODES].map(([k, l, tip]) =>
       `<button data-t="${k}" class="${k === psel ? "on" : ""}" title="${esc(tip)}">${l}</button>`).join("") +
@@ -2403,9 +2405,11 @@ function renderDayPage(date) {
   const tierName = tierNames.join("・") || "〜500円";
   // 優先順位で絞る(2026-11-21 ユーザーの指示): 推奨レースのうち、この日(全場)の順位で選んだ数に入らないレースも見送りにする
   const skSel = prioSel("skipSel", "all");   // 最初は「全部」(今までと同じ)
-  const skRank = prioRank(fundPlan(date, { ...fundOf(date), budget: fundOf(date).budget || 5000, picks: {}, past: true, offJyo: [] }));
+  const skDiff = diffOn("diffSkip");
+  const skRank = prioRank(fundPlan(date, { ...fundOf(date), budget: fundOf(date).budget || 5000, picks: {}, past: true, offJyo: [], diffOnly: skDiff }));
   const skKeep = new Set(skRank.slice(0, prioCount(skSel, skRank.length)).map(x => x.rid));
   const skPos = new Map(skRank.map((x, i) => [x.rid, i + 1]));
+  for (const j of judged) if (j[1] && !j[1].skip && skDiff && favSame(j[0]) === true) j[1] = { ...j[1], skip: true, outFav: true };
   for (const j of judged) if (j[1] && !j[1].skip && skPos.has(j[0]) && !skKeep.has(j[0])) j[1] = { ...j[1], skip: true, outRank: skPos.get(j[0]) };
   const skips = judged.filter(([, x]) => x?.skip), unknown = judged.filter(([, x]) => !x);
   const fromCsv = judged.some(([, x]) => x?.src === "csv");
@@ -2413,6 +2417,7 @@ function renderDayPage(date) {
     `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">買うレース:</span>` +
     PRIO_SELS.map(([k, l]) => `<button class="simBtn${k === skSel ? " on" : ""}" data-k="skipSel" data-v="${k}">${l}</button>`).join("") +
     `<span class="muted" style="align-self:center;margin-left:6px">この日の推奨 ${skRank.length}レースのうち ${skKeep.size}レースを買い、ほかは見送り</span></div>` +
+    `<div class="tabs" style="margin-bottom:8px">${diffBtns("diffSkip")}</div>` +
     `<div class="kpis" style="margin:0 0 8px">${kpi(`${skips.length} / ${sRids.length}`, "見送り推奨（仮） / この場のレース")}` +
     (unknown.length ? kpi(unknown.length, "推奨買い目がまだ無い(判定できない)") : "") + `</div>`;
   if (skips.length) {
@@ -2422,7 +2427,7 @@ function renderDayPage(date) {
       const r0 = state.races.get(rid)[0], inf = state.info.get(rid) || {}, c = confLevel(state.races.get(rid));
       h += `<tr><td>${raceLink(rid)}</td><td>${hhmm(r0.hasso_time)}</td><td>${esc((inf["芝ダ"] || "") + (inf["距離"] || ""))}</td><td>${esc(inf["レース名"] || "")}</td>` +
         `<td class="n" title="10段階で ${c?.lv ?? "-"}">${c?.score ?? "-"}</td><td class="n">${esc(r0["混戦の段階"] || "-")}</td>` +
-        (x.outRank ? `<td colspan="${fromCsv ? 1 : 3}">優先順位の外(この日の ${x.outRank}位)</td>` : fromCsv ? `<td>${esc(x.why || "")}</td>` : `<td>${esc(x.how || "")}${x.pending ? ` <span class="chip gray" title="推奨買い目がまだ無いので、同じ自信・混戦の組の ${esc(raceName(x.borrowed))} の値">仮</span>` : ""}</td>` +
+        (x.outFav ? `<td colspan="${fromCsv ? 1 : 3}">${DIFF_WHY}</td>` : x.outRank ? `<td colspan="${fromCsv ? 1 : 3}">優先順位の外(この日の ${x.outRank}位)</td>` : fromCsv ? `<td>${esc(x.why || "")}</td>` : `<td>${esc(x.how || "")}${x.pending ? ` <span class="chip gray" title="推奨買い目がまだ無いので、同じ自信・混戦の組の ${esc(raceName(x.borrowed))} の値">仮</span>` : ""}</td>` +
           `<td class="n">${x.past ?? "-"}%</td><td class="n"><span class="down">${x.honest}%</span></td>`) + `</tr>`;
     }
     h += `</table></div>`;
@@ -2498,6 +2503,7 @@ function renderDayPage(date) {
   bindFund(date);
   main.querySelectorAll(".simBtn").forEach(b => b.onclick = () => {
     if (b.dataset.k === "simMode") setSimMode(b.dataset.v);
+    else if (b.dataset.k.startsWith("diff")) setDiff(b.dataset.k, b.dataset.v === "1");
     else state[b.dataset.k] = b.dataset.v;
     const y = window.scrollY; renderDayPage(date); window.scrollTo(0, y);
   });
@@ -2642,6 +2648,33 @@ function prioRank(P0) {
   for (const x of cand) x.score = x.ev != null ? (x.est0 + x.ev) / 2 : x.est0;
   return cand.sort((a, b) => b.score - a.score);
 }
+// 「1位≠1番人気だけ」(2026-11-22 ユーザーの指示、docs/model-todo.md P2): モデルの1位(平均の勝率が一番高い馬)が単勝の1番人気と同じレースは買わない。
+// 1番人気は予想 CSV の今の単勝オッズ(発走20分前からは1分ごと、発走後は確定)。同じオッズの1番人気が2頭以上なら、そのどれかなら「同じ」。オッズが無ければ判定しない(絞らない)
+function favSame(rid) {
+  const rows = state.races.get(rid);
+  if (!rows?.length) return null;
+  // 単勝オッズは 予想 CSV → オッズ CSV の単勝 → 結果の単勝オッズ(確定) の順で使う
+  const res = new Map((state.results.get(rid) || []).map(x => [String(+x["馬番"]), num(x["単勝オッズ"])]));
+  const oddsOf = r => getOdds(rid, r.umaban, r) ?? state.odds.get(rid)?.get(ticketKey("単勝", [String(+r.umaban)])) ?? res.get(String(+r.umaban)) ?? null;
+  const xs = rows.map(r => ({ p: num(r["平均_勝率"]), o: oddsOf(r) }));
+  const ps = xs.filter(x => x.p != null), os = xs.filter(x => x.o != null && x.o > 0);
+  if (!ps.length || os.length < 2) return null;
+  const top = ps.reduce((a, b) => b.p > a.p ? b : a), mo = Math.min(...os.map(x => x.o));
+  return top.o != null && top.o === mo;
+}
+const DIFF_WHY = "モデルの1位が1番人気と同じ(「1位≠1番人気だけ」で外した)";
+function diffOn(k) {
+  try { return localStorage.getItem("keiba-viewer:" + k) === "1"; } catch (e) { return !!state[k]; }
+}
+function setDiff(k, v) {
+  try { localStorage.setItem("keiba-viewer:" + k, v ? "1" : "0"); } catch (e) { state[k] = v; }
+}
+function diffBtns(k, cls = "simBtn") {
+  const on = diffOn(k);
+  return `<span class="muted" style="align-self:center;margin-right:6px">レース:</span>` +
+    `<button class="${cls}${on ? "" : " on"}" data-k="${k}" data-v="0">全部</button>` +
+    `<button class="${cls}${on ? " on" : ""}" data-k="${k}" data-v="1" title="モデルの1位が単勝の1番人気と違うレースだけ買う(検証 2019〜2023年で回収率 +0.03〜+0.07。1番人気は確定オッズで決めたので少し甘い)">1位≠1番人気だけ</button>`;
+}
 function setFundMode(m) {
   try { localStorage.setItem("keiba-viewer:fundMode", m); } catch (e) { state.fundMode = m; }
 }
@@ -2773,6 +2806,9 @@ function fundPlan(date, fOver = null) {
       x.autoWhy = `見込みの回収率 ${fix(x.est0)}%(${o0.name}の${fundLabel(o0)}${x.pending ? "。推奨買い目がまだ無いので、同じ自信・混戦の組の " +
         raceName(o0.borrowed) + " の値" : ""})${x.autoBuy ? "" : ` < ${FUND_RULE.skip}%`}`;
     }
+    if ((f.diffOnly ?? diffOn("diffFund")) && x.autoBuy && favSame(x.rid) === true) {
+      x.autoBuy = false; x.wait = false; x.diffOut = true; x.autoWhy = DIFF_WHY;
+    }
     x.pick = f.only ? f.only.has(x.rid) : x.rid in f.picks ? !!f.picks[x.rid] : x.autoBuy;
   }
   // 重み(power > 0 のとき)は、✔ のレースの数で均等に割ったときの額の区分の見込みの回収率から
@@ -2821,7 +2857,7 @@ function renderDaySim(date, raceLink) {
   const jyos = [...new Set(rids.map(rid => rid.slice(8, 10)))];
   const budget = SIM_BUDGETS.includes(+state.simBudget) ? +state.simBudget : 5000;
   const jyo = state.simJyo === "all" || jyos.includes(state.simJyo) ? state.simJyo : "all";
-  const base = { budget, picks: {}, past: true, byJyo: false, jyo: null, offJyo: jyo === "all" ? [] : jyos.filter(j => j !== jyo) };
+  const base = { budget, picks: {}, past: true, byJyo: false, jyo: null, offJyo: jyo === "all" ? [] : jyos.filter(j => j !== jyo), diffOnly: diffOn("diffSim") };
   // 優先順位(2026-11-21 ユーザーの指示): 推奨(見送りでない)レースを、見込みの回収率と期待値で並べ、上から選ぶ。
   // 点数 = 見込みの回収率と期待値の平均(期待値はオッズのあるレースだけ。無ければ見込みの回収率だけ)
   const mode = simMode();
@@ -2844,6 +2880,7 @@ function renderDaySim(date, raceLink) {
     `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">買うレース:</span>` +
     SELS.map(([k, l]) => btn("simSel", k, l, k === sel)).join("") +
     `<span class="muted" style="align-self:center;margin-left:6px">推奨 ${cand.length}レースのうち ${chosen.length}レース</span></div>` +
+    `<div class="tabs" style="margin-bottom:8px">${diffBtns("diffSim")}</div>` +
     `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">買い方:</span>` +
     FUND_MODES.map(([k, l]) => btn("simMode", k, l, mode === k)).join("") +
     `<span class="muted" style="align-self:center;margin-left:6px">(資金配分案のモードとは別)</span></div>`;
@@ -2915,6 +2952,7 @@ function renderFund(date, raceLink) {
     `<span class="tabs fundMode" style="margin:0" title="レースごとに買う買い方の選び方(このブラウザに覚えておく)">` +
     FUND_MODES
       .map(([m, t, tip]) => `<button data-m="${m}" class="${fundMode() === m ? "on" : ""}" title="${tip}">${t}</button>`).join("") + `</span>` +
+    `<span class="tabs fundDiff" style="margin:0">${diffBtns("diffFund", "")}</span>` +
     `<label title="前の日付の振り返りや、発走済みのレースも入れて見たいとき"><input type="checkbox" id="fundPast" ${f.past ? "checked" : ""}> 発走済み・結果の出たレースも入れる</label></div>`;
   if (!P.inJyo.length) return h + `<div class="muted">${P.rids.length ? "対象の場が選ばれていません。上の「対象の場」に ✔ を入れるか「全場選択」を押す。" : "この日のレースがありません。"}</div></div>`;
   if (!P.open.length) return h + `<div class="muted">${P.rids.length ? `発走前のレースがありません(この日の ${P.rids.length}レースはどれも発走済み・結果あり)。振り返るときは「発走済み・結果の出たレースも入れる」に ✔ を入れる。` : "この日のレースがありません。"}</div></div>`;
@@ -3036,6 +3074,7 @@ function bindFund(date) {
   const byJyo = document.getElementById("fundByJyo");
   if (byJyo) byJyo.onchange = () => { f.byJyo = byJyo.checked; saveFund(date); again(); };
   document.querySelectorAll(".fundMode button").forEach(b => b.onclick = () => { setFundMode(b.dataset.m); again(); });
+  document.querySelectorAll(".fundDiff button").forEach(b => b.onclick = () => { setDiff("diffFund", b.dataset.v === "1"); again(); });
   document.querySelectorAll(".fundJyo button").forEach(b => b.onclick = () => { f.jyo = b.dataset.j; saveFund(date); again(); });
   const help = document.getElementById("fundHelp");
   if (help) help.onclick = e => { e.stopPropagation(); openHelp("keiba-viewer-fund", "資金配分案の説明", "資金配分案（仮）の使い方と決め方", fundHelpHTML()); };

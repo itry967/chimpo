@@ -69,10 +69,10 @@ button:hover, label.btn:hover { border-color: var(--accent); }
 @media (min-width: 761px) {
   /* 中央配置の現在レース表示が、右側の操作ボタンへのクリックを妨げないようにする */
   #status.race-context {
-    pointer-events: none;
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+    /* ボタンに重ならないよう、浮かせずに並びの中に置く(2026-11-21 ユーザーの指示)。狭いときは省略して縮む */
+    flex: 0 1 auto;
+    min-width: 0;
+    margin: 0 auto;
     max-width: 40vw;
     white-space: nowrap;
     overflow: hidden;

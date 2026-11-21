@@ -804,3 +804,9 @@ header { padding-right: 58px; }
   header > #status.race-context { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   header > #status.race-context:active { filter: brightness(1.15); }
 }
+
+/* 自動更新のランプは携帯でも右側(明るさボタンの左)に(2026-11-21) */
+@media (max-width: 760px) {
+  header #autoLamp { order: 4; margin-left: auto; }
+  header #autoLamp ~ #theme { margin-left: 6px; }
+}

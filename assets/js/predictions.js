@@ -3219,6 +3219,7 @@ function startBackgroundFrame(params) {
 }
 // リロードのたびに、裏で更新の有無を確かめる。開催日は、開いている間も数分おきと、ほかのアプリから戻ったときに確かめる
 const DRIVE_CHECK_EVERY = 5 * 60000;     // 開催日に、開いている間に確かめる間隔
+const DRIVE_CHECK_NEAR_POST = 60000;     // 発走20分前〜発走のレースがあるあいだの間隔(2026-11-21)
 const DRIVE_CHECK_ON_RETURN = 60000;     // ほかのアプリから戻ったとき、前の確認からこれだけ経っていれば確かめる
 let driveLastCheck = 0;                  // 最後に確認か取得を始めた時刻
 let driveCheckPeriodic = false;          // いまの確認が、リロード以外(数分おき・戻ったとき)のものか
@@ -3239,9 +3240,23 @@ function canCheckDriveNow() {
   const today = jstTodayYmd();
   return [...state.races.keys()].some(rid => rid.slice(0, 8) === today);
 }
+// 発走20分前〜発走2分後のレースがあれば、1分ごとに確かめる(単複オッズを20分前から1分ごとに取っているため。2026-11-21 ユーザーの指示)
+function nearPostTime() {
+  const [hh, mm] = new Intl.DateTimeFormat("en-GB", {timeZone:"Asia/Tokyo", hour:"2-digit", minute:"2-digit", hourCycle:"h23"}).format(new Date()).split(":").map(Number);
+  const now = hh * 60 + mm, today = jstTodayYmd();
+  for (const [rid, rows] of state.races) {
+    if (rid.slice(0, 8) !== today) continue;
+    const t = String(rows[0]?.hasso_time || "").padStart(4, "0");
+    if (!/^\d{4}$/.test(t)) continue;
+    const post = Number(t.slice(0, 2)) * 60 + Number(t.slice(2));
+    if (now >= post - 21 && now <= post + 2) return true;
+  }
+  return false;
+}
 setInterval(() => {
-  if (canCheckDriveNow() && Date.now() - driveLastCheck >= DRIVE_CHECK_EVERY) checkDriveUpdate(true);
-}, 30000);
+  const every = nearPostTime() ? DRIVE_CHECK_NEAR_POST : DRIVE_CHECK_EVERY;
+  if (canCheckDriveNow() && Date.now() - driveLastCheck >= every) checkDriveUpdate(true);
+}, 15000);
 document.addEventListener("visibilitychange", () => {
   if (canCheckDriveNow() && Date.now() - driveLastCheck >= DRIVE_CHECK_ON_RETURN) checkDriveUpdate(true);
 });

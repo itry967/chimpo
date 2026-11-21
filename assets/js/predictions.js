@@ -2296,9 +2296,18 @@ function renderDayPage(date) {
   const judged = sRids.map(rid => [rid, skipJ(rid)]);
   const tierNames = [...new Set(judged.map(([, x]) => x?.tier).filter(Boolean))];
   const tierName = tierNames.join("・") || "〜500円";
+  // 優先順位で絞る(2026-11-21 ユーザーの指示): 推奨レースのうち、この日(全場)の順位で選んだ数に入らないレースも見送りにする
+  const skSel = prioSel("skipSel", "all");   // 最初は「全部」(今までと同じ)
+  const skRank = prioRank(fundPlan(date, { ...fundOf(date), budget: fundOf(date).budget || 5000, picks: {}, past: true, offJyo: [] }));
+  const skKeep = new Set(skRank.slice(0, prioCount(skSel, skRank.length)).map(x => x.rid));
+  const skPos = new Map(skRank.map((x, i) => [x.rid, i + 1]));
+  for (const j of judged) if (j[1] && !j[1].skip && skPos.has(j[0]) && !skKeep.has(j[0])) j[1] = { ...j[1], skip: true, outRank: skPos.get(j[0]) };
   const skips = judged.filter(([, x]) => x?.skip), unknown = judged.filter(([, x]) => !x);
   const fromCsv = judged.some(([, x]) => x?.src === "csv");
   h += `<div class="card day-fold"><h3>見送り推奨のレース（仮）${updTag(["推奨買い目", "予想"], rids)}</h3>` + jyoTabs("daySkipJyo", sj) +
+    `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">買うレース:</span>` +
+    PRIO_SELS.map(([k, l]) => `<button class="simBtn${k === skSel ? " on" : ""}" data-k="skipSel" data-v="${k}">${l}</button>`).join("") +
+    `<span class="muted" style="align-self:center;margin-left:6px">この日の推奨 ${skRank.length}レースのうち ${skKeep.size}レースを買い、ほかは見送り</span></div>` +
     `<div class="kpis" style="margin:0 0 8px">${kpi(`${skips.length} / ${sRids.length}`, "見送り推奨（仮） / この場のレース")}` +
     (unknown.length ? kpi(unknown.length, "推奨買い目がまだ無い(判定できない)") : "") + `</div>`;
   if (skips.length) {
@@ -2308,7 +2317,7 @@ function renderDayPage(date) {
       const r0 = state.races.get(rid)[0], inf = state.info.get(rid) || {}, c = confLevel(state.races.get(rid));
       h += `<tr><td>${raceLink(rid)}</td><td>${hhmm(r0.hasso_time)}</td><td>${esc((inf["芝ダ"] || "") + (inf["距離"] || ""))}</td><td>${esc(inf["レース名"] || "")}</td>` +
         `<td class="n" title="10段階で ${c?.lv ?? "-"}">${c?.score ?? "-"}</td><td class="n">${esc(r0["混戦の段階"] || "-")}</td>` +
-        (fromCsv ? `<td>${esc(x.why || "")}</td>` : `<td>${esc(x.how || "")}${x.pending ? ` <span class="chip gray" title="推奨買い目がまだ無いので、同じ自信・混戦の組の ${esc(raceName(x.borrowed))} の値">仮</span>` : ""}</td>` +
+        (x.outRank ? `<td colspan="${fromCsv ? 1 : 3}">優先順位の外(この日の ${x.outRank}位)</td>` : fromCsv ? `<td>${esc(x.why || "")}</td>` : `<td>${esc(x.how || "")}${x.pending ? ` <span class="chip gray" title="推奨買い目がまだ無いので、同じ自信・混戦の組の ${esc(raceName(x.borrowed))} の値">仮</span>` : ""}</td>` +
           `<td class="n">${x.past ?? "-"}%</td><td class="n"><span class="down">${x.honest}%</span></td>`) + `</tr>`;
     }
     h += `</table></div>`;
@@ -2316,7 +2325,8 @@ function renderDayPage(date) {
   h += `<div class="note">${fromCsv ? "予想 CSV の「見送り」の列で決めたもの。" :
     `<b>暫定の決め方</b>: 下の資金配分案と同じ。この日の予算 ÷ 対象のレース数 の額が入る区分(いまは ${esc(tierName)}。予算が空なら 〜500円)の推奨買い目「おすすめ」の、` +
     `4年で選んで残りの1年で確かめた回収率(確かめの回収率)が ${SKIP_ROI}% 未満のレースを見送りにしている。推奨買い目がまだ無いレースは、同じ自信・混戦の組の別のレースの値で仮に判定する(「仮」)。` +
-    `予想 CSV に「見送り」の列(と「見送りの理由」)ができたら、そちらを使う。`}</div></div>`;
+    `予想 CSV に「見送り」の列(と「見送りの理由」)ができたら、そちらを使う。`}` +
+    `「買うレース」で絞ると、残りの推奨レースに見込みの回収率と期待値の平均で順位を付け(この日の全場で)、選んだ数に入らないレースも見送りにする。</div></div>`;
 
   // 3. 資金配分案（仮）(発走前のレースに予算を配る)
   h += renderFund(date, raceLink);
@@ -2382,7 +2392,8 @@ function renderDayPage(date) {
   });
   bindFund(date);
   main.querySelectorAll(".simBtn").forEach(b => b.onclick = () => {
-    state[b.dataset.k] = b.dataset.v;
+    if (b.dataset.k === "simMode") setSimMode(b.dataset.v);
+    else state[b.dataset.k] = b.dataset.v;
     const y = window.scrollY; renderDayPage(date); window.scrollTo(0, y);
   });
   main.querySelectorAll("button.boughtDel").forEach(b => b.onclick = () => { boughtOf(date).splice(+b.dataset.i, 1); saveBought(date); renderDayPage(date); });
@@ -2497,8 +2508,25 @@ function raceStarted(rid) {
 function fundTierIndex(amount) { return BUDGET_TIERS.findIndex(([lim]) => amount <= lim); }
 // 資金配分案のモード(このブラウザに覚えておく)。roi = 回収率重視(区分のおすすめ)、hit = 的中重視(区分の候補のうち過去の的中率が一番高い買い方)
 // 的中重視は 2026-11-16 ユーザーの指示「資金配分案に的中重視モードをつけることはできる？」。検証期間での1日ごとの確かめはまだ(docs/fund-plan.md)
+let FUND_MODE_OVERRIDE = null;   // 「もし推奨馬券を〜」の計算のあいだだけ、その欄のモードにする(2026-11-21 ユーザーの指示: 資金配分案と別々に動く)
 function fundMode() {
+  if (FUND_MODE_OVERRIDE) return FUND_MODE_OVERRIDE;
   try { return localStorage.getItem("keiba-viewer:fundMode") === "hit" ? "hit" : "roi"; } catch (e) { return state.fundMode === "hit" ? "hit" : "roi"; }
+}
+function simMode() {
+  try { return localStorage.getItem("keiba-viewer:simMode") === "hit" ? "hit" : "roi"; } catch (e) { return state.simMode === "hit" ? "hit" : "roi"; }
+}
+function setSimMode(m) {
+  try { localStorage.setItem("keiba-viewer:simMode", m); } catch (e) { state.simMode = m; }
+}
+// 推奨レースの優先順位(2026-11-21 ユーザーの指示): 見送りでないレースを、見込みの回収率と期待値の平均で並べる(期待値はオッズのあるレースだけ)
+const PRIO_SELS = [["n3", "上位3"], ["n5", "上位5"], ["n8", "上位8"], ["p30", "上位30%"], ["p50", "上位50%"], ["all", "全部"]];
+function prioSel(k, d = "n5") { return PRIO_SELS.some(([x]) => x === state[k]) ? state[k] : d; }
+function prioCount(sel, n) { return sel === "all" ? n : sel[0] === "n" ? Math.min(n, +sel.slice(1)) : Math.max(1, Math.round(n * +sel.slice(1) / 100)); }
+function prioRank(P0) {
+  const cand = P0.ok.filter(x => x.autoBuy && !x.wait && x.est0 != null);
+  for (const x of cand) x.score = x.ev != null ? (x.est0 + x.ev) / 2 : x.est0;
+  return cand.sort((a, b) => b.score - a.score);
 }
 function setFundMode(m) {
   try { localStorage.setItem("keiba-viewer:fundMode", m); } catch (e) { state.fundMode = m; }
@@ -2669,17 +2697,16 @@ function renderDaySim(date, raceLink) {
   const base = { budget, picks: {}, past: true, byJyo: false, jyo: null, offJyo: jyo === "all" ? [] : jyos.filter(j => j !== jyo) };
   // 優先順位(2026-11-21 ユーザーの指示): 推奨(見送りでない)レースを、見込みの回収率と期待値で並べ、上から選ぶ。
   // 点数 = 見込みの回収率と期待値の平均(期待値はオッズのあるレースだけ。無ければ見込みの回収率だけ)
+  const mode = simMode();
+  FUND_MODE_OVERRIDE = mode;
   const P0 = fundPlan(date, base);
-  const cand = P0.ok.filter(x => x.autoBuy && !x.wait && x.est0 != null);
-  for (const x of cand) x.score = x.ev != null ? (x.est0 + x.ev) / 2 : x.est0;
-  cand.sort((a, b) => b.score - a.score);
-  const SELS = [["n3", "上位3"], ["n5", "上位5"], ["n8", "上位8"], ["p30", "上位30%"], ["p50", "上位50%"], ["all", "全部"]];
-  const sel = SELS.some(([k]) => k === state.simSel) ? state.simSel : "n5";
-  const nSel = sel === "all" ? cand.length : sel[0] === "n" ? +sel.slice(1) : Math.max(1, Math.round(cand.length * +sel.slice(1) / 100));
-  const chosen = cand.slice(0, nSel);
+  const cand = prioRank(P0);
+  const SELS = PRIO_SELS, sel = prioSel("simSel");
+  const chosen = cand.slice(0, prioCount(sel, cand.length));
   const rank = new Map(cand.map((x, i) => [x.rid, { i: i + 1, score: x.score, ev: x.ev, est: x.est0 }]));
   // 配分: 見込みの回収率が高いほど多く(80% を超えた分に比例)
   const P = fundPlan(date, { ...base, only: new Set(chosen.map(x => x.rid)), weightOf: x => Math.max((x.est0 ?? 0) - 80, 5) });
+  FUND_MODE_OVERRIDE = null;
   P.ok.sort((a, b) => (rank.get(a.rid)?.i ?? 999) - (rank.get(b.rid)?.i ?? 999));
   const btn = (k, v, label, on) => `<button class="simBtn${on ? " on" : ""}" data-k="${k}" data-v="${v}">${label}</button>`;
   let h = `<div class="card day-fold"><h3>もし推奨馬券を一日の予算 ${budget.toLocaleString()}円で買ったら${updTag(["推奨買い目", "払戻"], rids)}</h3>` +
@@ -2689,7 +2716,10 @@ function renderDaySim(date, raceLink) {
     btn("simJyo", "all", "全場", jyo === "all") + jyos.map(j => btn("simJyo", j, esc(JYO[j] || j), j === jyo)).join("") + `</div>` +
     `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">買うレース:</span>` +
     SELS.map(([k, l]) => btn("simSel", k, l, k === sel)).join("") +
-    `<span class="muted" style="align-self:center;margin-left:6px">推奨 ${cand.length}レースのうち ${chosen.length}レース</span></div>`;
+    `<span class="muted" style="align-self:center;margin-left:6px">推奨 ${cand.length}レースのうち ${chosen.length}レース</span></div>` +
+    `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">買い方:</span>` +
+    btn("simMode", "roi", "回収率重視", mode === "roi") + btn("simMode", "hit", "的中重視", mode === "hit") +
+    `<span class="muted" style="align-self:center;margin-left:6px">(資金配分案のモードとは別)</span></div>`;
   const rows = [];
   let cost = 0, back = 0, setCost = 0, hitRaces = 0, setRaces = 0, waitRaces = 0;
   for (const x of P.ok) {
@@ -2741,7 +2771,7 @@ function renderDaySim(date, raceLink) {
   }
   return h + `<div class="note">発走の前後を問わずこの日の全レース(選んだ場)で: 見込みの回収率が ${FUND_RULE.skip}% 未満のレースは見送り、` +
     `残りの推奨レースに、見込みの回収率と期待値(期待値はオッズのあるレースだけ。無ければ見込みの回収率だけ)の平均で順位を付け、「買うレース」で選んだ数だけ上から買う。` +
-    `予算は選んだレースに、見込みの回収率が 80% を超えた分に比例して100円単位で配り(見込みの高いレースほど多い)、配分額の区分の推奨買い目(${fundMode() === "hit" ? "的中重視" : "回収率重視"}のモード)を1点ずつ均等に買う。` +
+    `予算は選んだレースに、見込みの回収率が 80% を超えた分に比例して100円単位で配り(見込みの高いレースほど多い)、配分額の区分の推奨買い目(この欄の${mode === "hit" ? "的中重視" : "回収率重視"}のモード)を1点ずつ均等に買う。` +
     `資金配分案の ✔ の付け外し・予算とは別で、ここでの選択は覚えておくだけ。推奨買い目は発走55分前ごろの版なので、実際に買えたものとは違うことがある。結果は表示だけで、モデルには使わない。</div></div>`;
 }
 function raceName(rid) { return rid ? `${JYO[rid.slice(8, 10)] || rid.slice(8, 10)} ${+rid.slice(14, 16)}R` : ""; }

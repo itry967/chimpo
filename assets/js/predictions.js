@@ -839,8 +839,65 @@ function renderReview(rid, rows) {
     `検証期間(2019〜2023年)の全レースの中で上から何%かの点(0〜100)にして平均したもの。50 がふつうのレース。` +
     `ペースのずれは前半1000m の実際 − 予想(マイナスは予想より速い。±0.3秒以内は「ほぼ予想どおり」、1.0秒を超えると「大きく」)。` +
     `基準は同じ競馬場・芝ダ・距離の過去3年(前日まで)のレース。差は予想順位 − 着順で、緑は予想より5つ以上上、赤は5つ以上下。` +
-    `回顧は表示だけで、モデルの学習・評価・選択には使わない。</div></div>`;
+    `回顧は表示だけで、モデルの学習・評価・選択には使わない。</div>` + hitWhy(rows, res, rv, n) + `</div>`;
   return h;
+}
+// 当たった・外れた理由(仮)(2026-11-21 ユーザーの指示)。予想と結果の CSV・回顧から、当てはまるものを短い文で並べる(表示だけ。モデルには使わない)
+function hitWhy(rows, res, rv, n) {
+  const fin = res.filter(r => num(r["着順"]) != null);
+  const rowOf = u => res.find(r => +r["馬番"] === +u);
+  const p1 = rows.find(r => num(r["平均_順位"]) === 1);
+  const p1r = p1 && rowOf(p1.umaban), p1k = p1r ? num(p1r["着順"]) : null;
+  const winner = fin.find(r => num(r["着順"]) === 1);
+  const wp = winner && rows.find(r => +r.umaban === +winner["馬番"]);
+  const top3 = fin.filter(r => num(r["着順"]) <= 3);
+  const in3 = rows.filter(r => num(r["平均_順位"]) <= 3).filter(r => { const x = rowOf(r.umaban); return x && num(x["着順"]) <= 3; }).length;
+  const why = [];
+  // 結論
+  const verdict = p1k === 1 ? ["当たり", "hi", "予想1位が1着"] : p1k != null && p1k <= 3 ? ["一部当たり", "", `予想1位は${p1k}着`] :
+    ["外れ", "down", `予想1位は${p1k != null ? p1k + "着" : "着外"}`];
+  // 展開(前半1000m の予想と実際)
+  const t1000p = num(rows[0]?.["前半1000mの予想"]), t1000 = num(rv["前半1000m"]);
+  const front = top3.map(lastPos).filter(v => v != null).filter(v => v <= Math.max(3, Math.round(n * 0.25))).length;
+  const shape = !top3.length ? "" : front >= 2 ? "前残り" : front === 0 ? "差し・追込" : "";
+  if (t1000p != null && t1000 != null) {
+    const d = t1000 - t1000p;
+    if (Math.abs(d) >= 1.0) why.push(`ペースが予想より${d < 0 ? "速かった" : "遅かった"}(前半1000m 予想 ${t1000p.toFixed(1)}秒 → 実際 ${t1000.toFixed(1)}秒)` +
+      (shape === "差し・追込" && d < 0 ? "。速い流れで後ろの馬が届いた" : shape === "前残り" && d > 0 ? "。遅い流れで前の馬が残った" : ""));
+    else if (p1k === 1) why.push(`ペースはほぼ予想どおり(前半1000m 予想 ${t1000p.toFixed(1)}秒 → 実際 ${t1000.toFixed(1)}秒)`);
+  }
+  // 予想1位の走り(位置取り・上がり・展開との相性・馬番)
+  if (p1 && p1r) {
+    const pos0 = num(p1["4角の番手"]), pos1 = lastPos(p1r), l30 = num(p1["上がり3Fの予想"]), l31 = num(p1r["上がり3F"]);
+    if (p1k !== 1) {
+      if (pos0 != null && pos1 != null && pos1 - pos0 >= Math.max(3, n * 0.3)) why.push(`予想1位は4角で予想より後ろ(予想 ${Math.round(pos0)}番手 → 実際 ${pos1}番手)。位置取りが響いた可能性`);
+      else if (l30 != null && l31 != null && l31 - l30 >= 0.5) why.push(`予想1位は位置はおおむね予想どおりだが、上がりが予想より遅かった(予想 ${l30.toFixed(1)} → 実際 ${l31.toFixed(1)})`);
+      if (pos1 != null && shape === "前残り" && pos1 > n / 2) why.push(`前残りの決着で、後ろから行った予想1位(4角 ${pos1}番手)には向かなかった`);
+      if (pos1 != null && shape === "差し・追込" && pos1 <= Math.max(3, n * 0.25)) why.push(`差し・追込の決着で、前で運んだ予想1位(4角 ${pos1}番手)には厳しかった`);
+    } else if (pos0 != null && pos1 != null && Math.abs(pos1 - pos0) <= 2) why.push(`予想1位は予想どおりの位置(4角 ${pos1}番手)で運べた`);
+    const w = num(p1r["増減"]) ?? num(p1["増減"]);
+    if (w != null && Math.abs(w) >= 10) why.push(`予想1位の馬体重が大きく変わっていた(${w > 0 ? "+" : ""}${w}kg)`);
+  }
+  // 馬番の偏り
+  const umaPos = top3.map(r => num(r["馬番"]) / n).filter(v => v != null);
+  const lane = umaPos.length ? umaPos.reduce((a, b) => a + b) / umaPos.length : null;
+  if (lane != null && p1 && p1k !== 1) {
+    const mine = +p1.umaban / n;
+    if (lane < 0.4 && mine > 0.65) why.push(`内の馬番が上位を占めた中で、予想1位は外の馬番(${p1.umaban}番)だった`);
+    if (lane > 0.65 && mine < 0.4) why.push(`外の馬番が上位を占めた中で、予想1位は内の馬番(${p1.umaban}番)だった`);
+  }
+  // 勝ち馬
+  if (winner && wp && p1k !== 1) {
+    const wr = num(wp["平均_順位"]), wpr = num(wp["平均_勝率"]);
+    if (wpr != null && wpr < 0.05) why.push(`勝ち馬 ${winner["馬名"]} は予想 ${wr ?? "-"}位(勝率 ${pct(wpr)})の穴馬で、予想の上では荒れたレース`);
+    else if (wr != null && wr <= 3) why.push(`勝ち馬 ${winner["馬名"]} は予想 ${wr}位で、予想の上位の範囲内`);
+  }
+  why.push(`予想の上位3頭のうち ${in3}頭が3着以内`);
+  return `<div class="rvwhy" style="margin-top:10px"><h4>当たった・外れた理由（仮）</h4>` +
+    `<div style="margin-bottom:4px"><span class="chip ${verdict[1]}">${verdict[0]}</span> <span class="muted">${esc(verdict[2])}</span></div>` +
+    `<ul style="margin:4px 0 0;padding-left:1.4em">${why.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` +
+    `<div class="note">予想と結果(着順・通過順・上がり・馬体重)と回顧のペースを比べて、当てはまりそうなものを並べた仮の理由。` +
+    `<b>出遅れ・道中の不利は記録が無いので反映していない</b>(位置取りは通過順から推し量っただけ)。表示だけで、モデルの学習・評価・選択には使わない。</div></div>`;
 }
 
 // 右側の結果の欄(結果の CSV があるレースだけ)

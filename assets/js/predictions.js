@@ -1870,7 +1870,7 @@ function renderPlan(rid) {
   state.planTickets = state.planTickets || {};
   state.planTickets[rid] = tickets.map((x, i) => ({ kind: x.kind, t: x.t, amount: amt[i] || 0 }));
   h += `<div class="scroll"><table><tr><th><input type="checkbox" class="planAll" title="全部選ぶ"></th>${many ? "<th>券種</th>" : ""}<th>買い目</th><th class="n">確率</th><th class="n">妥当なオッズ</th><th class="n">オッズ</th>` +
-    `<th class="n">期待値</th><th class="n">金額</th><th class="n">当たったときの払戻</th></tr>`;
+    `<th class="n">期待値</th><th class="n">金額</th><th class="n">当たったときの払戻</th><th class="n" title="結果(払戻の CSV)が出たレースの当たり・はずれ。当たりは今の金額での払戻">結果</th></tr>`;
   tickets.forEach((x, i) => {
     const o = oddsOf(x), p = probs[i], lower = x.kind === "複勝" || x.kind === "ワイド";
     const backI = amt[i] && o ? `${Math.round(amt[i] * o).toLocaleString()}円` + (lower ? "〜" : "") : `<span class="dim">-</span>`;
@@ -1878,7 +1878,9 @@ function renderPlan(rid) {
     h += `<tr class="${amt[i] ? "" : "dim"}${hp != null ? " hit" : ""}"${hp != null ? ` title="的中(100円あたり ${hp.toLocaleString()}円)"` : ""}><td><input type="checkbox" class="planPick" data-i="${i}"></td>${many ? `<td>${esc(x.kind)}</td>` : ""}<td><b>${esc(x.t.join(x.kind === "馬単" || x.kind === "3連単" ? "→" : "-"))}</b></td>` +
       `<td class="n">${pct(p)}</td><td class="n">${p > 0 ? fix(1 / p) + gapMark(o, 1 / p, x.kind + (lower ? "(下限)" : "")) : ""}</td>` +
       `<td class="n">${o ? fix(o) + (lower ? "〜" : "") : `<span class="dim">オッズなし</span>`}</td><td class="n">${o && p ? evCell(o, 1 / p) : ""}</td>` +
-      `<td class="n">${amt[i] ? amt[i].toLocaleString() + "円" : "買わない"}</td><td class="n">${backI}</td></tr>`;
+      `<td class="n">${amt[i] ? amt[i].toLocaleString() + "円" : "買わない"}</td><td class="n">${backI}</td>` +
+      // 当たり・はずれ(2026-11-21 ユーザーの指示)
+      `<td class="n">${!state.pays.has(rid) ? `<span class="dim">結果待ち</span>` : hp != null ? `<b class="hi">的中</b>${amt[i] ? ` ${Math.round(hp * amt[i] / 100).toLocaleString()}円` : ""}` : `<span class="dim">はずれ</span>`}</td></tr>`;
   });
   h += `</table></div><div class="calc" style="margin-top:8px"><button id="planSendAll">↓ 全部を買い目候補に送る</button>` +
     `<button id="planSendPick">↓ 選んだものを買い目候補に送る</button>` +

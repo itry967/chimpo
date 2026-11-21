@@ -83,7 +83,7 @@
 <dialog id="noticeDialog" aria-labelledby="noticeTitle">
   <div class="gh"><h2 id="noticeTitle">📢 お知らせ</h2><button id="noticeClose">閉じる</button></div>
   <div class="gb">
-    <!-- お知らせは新しいものを上に足す(1行 = 日付・内容) -->
+    <!-- お知らせは notices.csv(日付,内容。新しいものを上)から作る。CSV が読めないときはこの表のまま。編集はローカルの「競馬 本番タスク」の画面から(2026-11-21) -->
     <table class="notice-table">
       <tr><th>日付</th><th>内容</th></tr>
       <tr><td class="nd">2026/11/21</td><td>6モデルのうち LightGBM を差し替えました（2〜4着にも点を付けて学び、過去5走を1走ずつ並べた項目も使う版。2・3着や馬連・3連系の確率の当たり方が良くなります。今日の予想から使います）</td></tr>
@@ -163,12 +163,34 @@
 })();
 </script>
 <script>
-(() => {
+// notices.csv(日付,内容)を読んでお知らせの表を作り直す(2026-11-21 ユーザーの指示「お知らせの内容をCSVに切り出して変更しやすいようにしたい」)
+async function loadNotices(table, url) {
+  if (!table) return;
+  try {
+    const r = await fetch(url + "?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return;
+    const text = (await r.text()).replace(/^﻿/, "");
+    const rows = [], re = /("([^"]|"")*"|[^,
+]*)(,|?
+|$)/g;
+    let row = [], m;
+    while ((m = re.exec(text)) && m[0] !== "") {
+      let v = m[1]; if (v.startsWith('"')) v = v.slice(1, -1).replace(/""/g, '"');
+      row.push(v); if (m[3] !== ",") { rows.push(row); row = []; }
+    }
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const body = rows.slice(1).filter(x => x.length >= 2 && (x[0] || x[1]));
+    if (!body.length) return;
+    table.innerHTML = "<tr><th>日付</th><th>内容</th></tr>" + body.map(x => `<tr><td class="nd">${esc(x[0])}</td><td>${esc(x[1])}</td></tr>`).join("");
+  } catch (e) { /* 読めなければ今の表のまま */ }
+}
+(async () => {
   // お知らせ: ボタンでモーダルを開く。まだ見ていないお知らせがあればボタンに赤い印(見たものはこのブラウザに覚えておく)
   const dialog = document.getElementById("noticeDialog");
   const open = document.getElementById("noticeOpen");
   const close = document.getElementById("noticeClose");
   if (!dialog || !open || !close) return;
+  await loadNotices(dialog.querySelector(".notice-table"), "notices.csv");
   const latest = [...dialog.querySelectorAll(".notice-table tr")].slice(1).map(r => r.textContent.trim()).join("|");
   let seen = null;
   try { seen = localStorage.getItem("keiba-viewer:notice-seen"); } catch (e) {}

@@ -524,3 +524,8 @@ a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
 #autoLamp i { width: 10px; height: 10px; border-radius: 50%; background: #9e9e9e; display: inline-block; }
 #autoLamp.on i { background: #2ecc40; box-shadow: 0 0 6px #2ecc40; }
 #autoLamp.on { color: inherit; }
+
+/* 注意点・お知らせはヘッダの右側(自動更新のランプ・データを更新の左。2026-11-21 ユーザーの指示)。携帯は今の並びのまま */
+@media (min-width: 761px) {
+  #cautionOpen, #noticeOpen { order: 7; }
+}

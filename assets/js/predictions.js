@@ -1237,6 +1237,10 @@ function renderRace(rid) {
   document.querySelectorAll(".tabs.plan button[data-t]").forEach(b => b.onclick = () => { state.planTab = b.dataset.t; saveBudget(null); saveRaceBudget(rid, null); renderRace(rid); });
   document.getElementById("budgetReset")?.addEventListener("click", () => { saveRaceBudget(rid, null); renderRace(rid); });
   document.querySelectorAll(".tabs.pmode button").forEach(b => b.onclick = () => { state.planMode = b.dataset.t; renderRace(rid); });
+  document.querySelectorAll(".tabs.psel button").forEach(b => b.onclick = () => {
+    try { localStorage.setItem("keiba-viewer:planSel", b.dataset.t); } catch (e) { state.planSel = b.dataset.t; }
+    renderRace(rid);
+  });
   document.querySelectorAll(".tabs.pgroup button").forEach(b => b.onclick = () => { state.planGroup = b.dataset.t; renderRace(rid); });
   const bud = document.getElementById("budget");
   if (bud) {
@@ -1750,6 +1754,10 @@ function allocate(budget, probs, mode, odds = []) {
   return amt.map(u => u * 100);
 }
 
+function planSel() {
+  const ok = v => v === "manual" || FUND_MODES.some(([k]) => k === v) ? v : "manual";
+  try { return ok(localStorage.getItem("keiba-viewer:planSel")); } catch (e) { return ok(state.planSel); }
+}
 function renderPlan(rid) {
   const all = state.plans.get(rid);
   if (!all) return state.plans.size ? "" : `<div class="card muted">推奨買い目は、<code>推奨買い目</code> フォルダの CSV も落とすと出ます。</div>`;
@@ -1776,7 +1784,18 @@ function renderPlan(rid) {
   // 手入力の予算があればその金額が入る区分の買い方を使う(区分のボタンは選ばない)。無ければ選んだ区分
   const tab = tierName && tiers.includes(tierName) ? tierName : tiers.includes(state.planTab) ? state.planTab : tiers[0];
   const tierOn = t => !budget && t === tab;
-  const parts = rowsG.filter(x => x["予算"] === tab);       // 1つ(組み合わせは2つ)の買い方
+  let parts = rowsG.filter(x => x["予算"] === tab);       // 1つ(組み合わせは2つ)の買い方
+  // 買い方の選び方のモード(2026-11-21 ユーザーの指示): 手動(上のタブで選ぶ)のほか、日別ページと同じ 回収率重視・的中重視(ワイド抜き)・ワイド・超的中重視 で自動で選ぶ
+  const psel = planSel();
+  let autoOpt = null;
+  if (psel !== "manual") {
+    FUND_MODE_OVERRIDE = psel;
+    const opts = fundOptions(rid);
+    const amount = budget ?? (BUDGET_TIERS.find(([, n]) => n === tab)?.[0] ?? 500);
+    autoOpt = opts.length ? fundChoose(opts, Number.isFinite(amount) ? amount : 100000) : null;
+    FUND_MODE_OVERRIDE = null;
+    if (autoOpt) parts = autoOpt.parts;
+  }
   const r = parts[0];
   const raceRows = state.races.get(rid) || [];
   const tosu = raceRows.length, places = tosu <= 7 ? 2 : 3;
@@ -1790,10 +1809,14 @@ function renderPlan(rid) {
   const kinds = [...new Set(parts.map(x => x["券種"]))];
   const roi = num(r?.["過去の回収率"]), honest = num(r?.["確かめの回収率"]);
   let h = `<div class="card"><h3>推奨買い目と資金配分${updTag(["推奨買い目", "オッズ"], rid)}</h3>` +
-`<div class="tabs pmode" style="margin-bottom:6px">` + modes.map(m => `<button data-t="${m}" class="${m === pmode ? "on" : ""}" title="${
+    `<div class="tabs psel" style="margin-bottom:6px"><span class="muted" style="align-self:center;margin-right:6px">選び方:</span>` +
+    [["manual", "手動で選ぶ", "下のタブで買い方を選ぶ"], ...FUND_MODES].map(([k, l, tip]) =>
+      `<button data-t="${k}" class="${k === psel ? "on" : ""}" title="${esc(tip)}">${l}</button>`).join("") +
+    (autoOpt ? `<span class="muted" style="align-self:center;margin-left:6px">→ ${esc(autoOpt.name)}の${esc(fundLabel(autoOpt))}${autoOpt.hit != null ? `(過去の的中率 ${fix(autoOpt.hit)}%)` : ""}</span>` : "") + `</div>` +
+    (psel !== "manual" ? "" : `<div class="tabs pmode" style="margin-bottom:6px">` + modes.map(m => `<button data-t="${m}" class="${m === pmode ? "on" : ""}" title="${
       { "おすすめ": "1つの買い方で一番良かったもの", "組み合わせ": "券種の違う2つの買い方を合わせて一番良かったもの", "券種別": "券種ごとに一番良かった買い方" }[m]}">${
-      { "おすすめ": "おすすめ(1券種)", "組み合わせ": "券種を組み合わせ", "券種別": "券種別" }[m]}</button>`).join("") + `</div>` +
-    (pmode === "券種別" ? `<div class="tabs pgroup" style="margin-bottom:6px">` +
+      { "おすすめ": "おすすめ(1券種)", "組み合わせ": "券種を組み合わせ", "券種別": "券種別" }[m]}</button>`).join("") + `</div>`) +
+    (psel === "manual" && pmode === "券種別" ? `<div class="tabs pgroup" style="margin-bottom:6px">` +
       groups.map(g => `<button data-t="${esc(g)}" class="${g === pgroup ? "on" : ""}">${esc(g)}</button>`).join("") + `</div>` : "") +
     // 予算: 固定の区分と手入力を同じ列に。手入力を使うと区分の選択は外れる
     `<div class="tabs plan" style="align-items:center">` + tiers.map(t => `<button data-t="${esc(t)}" class="${tierOn(t) ? "on" : ""}">${esc(t)}</button>`).join("") +

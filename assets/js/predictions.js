@@ -893,10 +893,33 @@ function hitWhy(rows, res, rv, n) {
     else if (wr != null && wr <= 3) why.push(`勝ち馬 ${winner["馬名"]} は予想 ${wr}位で、予想の上位の範囲内`);
   }
   why.push(`予想の上位3頭のうち ${in3}頭が3着以内`);
+  // 予想順位と着順が大きくずれた馬(5つ以上)の理由(2026-11-21 ユーザーの指示)
+  const gaps = [];
+  for (const r of fin) {
+    const pr = rows.find(x => +x.umaban === +r["馬番"]);
+    const k = num(r["着順"]), rank = pr ? num(pr["平均_順位"]) : null;
+    if (k == null || rank == null || Math.abs(rank - k) < 5) continue;
+    const up = rank > k, rs = [];
+    const pos0 = num(pr["4角の番手"]), pos1 = lastPos(r), l30 = num(pr["上がり3Fの予想"]), l31 = num(r["上がり3F"]);
+    if (pos0 != null && pos1 != null && Math.abs(pos1 - pos0) >= Math.max(3, n * 0.3))
+      rs.push(`4角が予想より${pos1 < pos0 ? "前" : "後ろ"}(予想 ${Math.round(pos0)}番手 → 実際 ${pos1}番手)`);
+    if (l30 != null && l31 != null && Math.abs(l31 - l30) >= 0.5)
+      rs.push(`上がりが予想より${l31 < l30 ? "速い" : "遅い"}(予想 ${l30.toFixed(1)} → 実際 ${l31.toFixed(1)})`);
+    if (pos1 != null && shape === "前残り") rs.push(pos1 <= Math.max(3, n * 0.25) ? (up ? "前残りの決着で前にいた" : "") : pos1 > n / 2 ? (up ? "" : "前残りの決着で後ろにいた") : "");
+    if (pos1 != null && shape === "差し・追込") rs.push(pos1 > n / 2 ? (up ? "差し・追込の決着で後ろにいた" : "") : pos1 <= Math.max(3, n * 0.25) ? (up ? "" : "差し・追込の決着で前にいた") : "");
+    const w = num(r["増減"]);
+    if (w != null && Math.abs(w) >= 10) rs.push(`馬体重 ${w > 0 ? "+" : ""}${w}kg`);
+    const list = rs.filter(Boolean);
+    gaps.push({ name: r["馬名"], umaban: r["馬番"], rank, k, up, text: list.length ? list.join("・") : "はっきりした理由は見当たらない(出遅れ・不利など記録に無い要因の可能性)" });
+  }
+  gaps.sort((a, b) => Math.abs(b.rank - b.k) - Math.abs(a.rank - a.k));
+  const gapHtml = !gaps.length ? "" : `<h4 style="margin-top:10px">予想と着順が大きくずれた馬（仮）</h4>` +
+    `<ul style="margin:4px 0 0;padding-left:1.4em">${gaps.map(g => `<li><b>${esc(g.name)}</b>(${esc(g.umaban)}番)` +
+      ` 予想 ${g.rank}位 → <span class="${g.up ? "up" : "down"}">${g.k}着</span>: ${esc(g.text)}</li>`).join("")}</ul>`;
   return `<div class="rvwhy" style="margin-top:10px"><h4>当たった・外れた理由（仮）</h4>` +
     `<div style="margin-bottom:4px"><span class="chip ${verdict[1]}">${verdict[0]}</span> <span class="muted">${esc(verdict[2])}</span></div>` +
-    `<ul style="margin:4px 0 0;padding-left:1.4em">${why.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` +
-    `<div class="note">予想と結果(着順・通過順・上がり・馬体重)と回顧のペースを比べて、当てはまりそうなものを並べた仮の理由。` +
+    `<ul style="margin:4px 0 0;padding-left:1.4em">${why.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` + gapHtml +
+    `<div class="note">予想と結果(着順・通過順・上がり・馬体重)と回顧のペースを比べて、当てはまりそうなものを並べた仮の理由。大きくずれた馬は、予想順位と着順が5つ以上違った馬。` +
     `<b>出遅れ・道中の不利は記録が無いので反映していない</b>(位置取りは通過順から推し量っただけ)。表示だけで、モデルの学習・評価・選択には使わない。</div></div>`;
 }
 

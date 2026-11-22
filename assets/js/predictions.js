@@ -1260,12 +1260,13 @@ function renderRace(rid) {
       `<td class="n">${odds != null ? `${fix(odds)}<span class="dim ninki">${ninki.get(String(r.umaban))}人気</span>` : `<span class="dim">—</span>`}</td>` +
       `<td class="n ev" data-uma="${esc(r.umaban)}">${evCell(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]))}${evMove(getOdds(rid, r.umaban, r), r, "妥当オッズ_単勝")}</td>` +
       `<td class="n">${placeOdds(r)}</td><td class="n">${evCell(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]))}${evMove(num(r["複勝オッズ_下限"]), r, "妥当オッズ_複勝")}</td><td>${finBar(r)}</td>` +
-      `<td class="n">${fix(num(r["予想着順"]))}${colMove(r, "予想着順", 1, true)}${cdot(r, "予想")}</td><td>${esc(styleOf(r))}${cdot(r, "脚質")}</td>` +
+      `<td class="n">${fix(num(r["予想着順"]))}${colMove(r, "予想着順", 1, true)}${cdot(r, "予想")}</td>` +
+      `<td class="n">${bandStr(rankBand(rid, "平均", r.umaban, state.favActive ? rows : null))}</td><td>${esc(styleOf(r))}${cdot(r, "脚質")}</td>` +
       `<td class="n">${passing(r)}${colMove(r, "前半の番手", 0, true)}${colMove(r, "4角の番手", 0, true)}${cdot(r, "通過予想")}</td><td class="n">${lastThree(r)}${colMove(r, "上がり3Fの予想", 1, true)}${cdot(r, "上がり予想")}</td>` +
       `<td class="n hide-sm">${w == null ? "" : w + (z == null ? "" : `<span class="dim">(${z > 0 ? "+" : ""}${z})</span>`)}</td>` +
       `<td class="hide-sm">${split ? `<span class="chip warn" title="モデルの順位の幅 ${spread}">割れ</span>` : ""}</td></tr>`;
-    if (why && (!simpleView() || state.whyOpen?.has(key))) html += `<tr class="why"><td></td><td colspan="17">${why}</td></tr>`;
-    if (state.open.has(key)) html += `<tr class="detail"><td colspan="18">${detail(r, ms)}</td></tr>`;
+    if (why && (!simpleView() || state.whyOpen?.has(key))) html += `<tr class="why"><td></td><td colspan="18">${why}</td></tr>`;
+    if (state.open.has(key)) html += `<tr class="detail"><td colspan="19">${detail(r, ms)}</td></tr>`;
   }
   html += `</table></div>${favNote}<div class="note">勝率・3着内は6モデルの平均。妥当オッズの横の印は実際のオッズとの差(▲▲ 1.5倍以上・▲ 1.2倍以上高い、▼ 0.8倍未満・▼▼ 0.5倍未満に低い。上にのせると比)。期待値 = オッズ ÷ 妥当オッズ(1 を超えると予想の上では得。緑は 1.0 以上、太字は 1.2 以上。複勝は下限のオッズで計算)。単勝オッズの横は人気(オッズの低い順)。「割れ」はモデルの順位の幅が4以上。馬名・予想着順・脚質・通過予想・上がり予想の横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。色は緑 = 高・灰 = 中・橙 = 低。上にのせると0〜100の点と、検証期間の同じ条件での平均のずれ)。馬名の横は勝率・3着内・期待値を含む予想全体の確度。通過予想は前半(最初のコーナー)→ 4コーナーの番手、上がり予想は秒(かっこ内はレースで速い順、緑は3位まで)。根拠は説明用の LightGBM で、▲が評価を上げた項目、▼が下げた項目。数字は点数の差(レースの平均と比べた分)と、勝つ見込みのおおよその倍率(×)。総合・能力・適性・調子・人・展開は、根拠の項目を分類ごとに足したもの(総合は全部の合計)。1行目の「相対値」はこのレースの中の順位から星(点は1位が100・最下位が0)、2行目の「絶対値」は検証期間 2019〜2023年の全出走馬の中の位置(点は上位何%かで、80以上が★5)。横の高・中・低は確度(元になった出走数・調教などのデータの量。総合は能力・適性・調子のうち一番低いもの)で、低いものは薄く出す。</div></div>`;
 
@@ -1419,6 +1420,8 @@ function horseCols(rid) {
     ["複勝<br>期待値", r => ratio(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"])), -1, "n", ""],
     ["1〜5着", r => upTo(r, 3), -1, "", "3着以内の確率で並べる"],
     ["予想<br>着順", r => num(r["予想着順"]), 1, "n", ""],
+    // 着順の見込み(2026-11-22 ユーザーの指示「予想着順列の右に列を追加して出したい」): 平均の勝率から作った着順の分布の真ん中の半分
+    ["着順の<br>見込み", r => -(num(r["平均_勝率"]) ?? 0), 1, "n", "平均の勝率から作った着順の分布の、真ん中の半分(25%〜75%)。実際の着順が半々でこの範囲に入る見込み。勝率の高い順に並べる"],
     ["脚質", r => STYLE_ORDER[styleOf(r)] ?? 9, 1, "", "逃・先行・差・追込・自在・不明の順"],
     ["通過<br>予想", r => num(r["4角の番手"]), 1, "n", "前半(最初のコーナー)→ 4コーナーの予想の番手。4コーナーの番手で並べる"],
     ["上がり<br>予想", r => num(r["上がり3Fの予想"]), 1, "n", "上がり3F の予想(かっこ内はレースの中で速い順)"],
@@ -1715,10 +1718,11 @@ function pctMove(r, col) {
 // そのモデルの全頭の勝率から、勝率の高い馬から順に残りの馬の勝率の比で着順を決めるくり返し(Plackett-Luce)で着順の分布を作り、
 // 25%点〜75%点(真ん中の半分)を出す。乱数は種を固定して、開くたびに同じ値にする。モデルの勝率だけから作った見込みの範囲
 const RANK_BAND = new Map();
-function rankBand(rid, m, umaban) {
-  const key = rid + "|" + m;
+function rankBand(rid, m, umaban, given = null) {
+  // given: 表に出している行(得意モデルだけの平均のときは出し直した行)。無ければ CSV の行
+  const key = rid + "|" + m + (given && state.favActive ? "|fav" : "");
   if (!RANK_BAND.has(key)) {
-    const rows = state.races.get(rid) || [];
+    const rows = given || state.races.get(rid) || [];
     const p = rows.map(x => Math.max(num(x[`${m}_勝率`]) ?? 0, 1e-6)), n = p.length, N = 4000;
     const cnt = rows.map(() => new Array(n).fill(0));
     let seed = 12345;
@@ -1740,10 +1744,11 @@ function rankBand(rid, m, umaban) {
   }
   return RANK_BAND.get(key).get(String(umaban));
 }
+function bandStr(b) { return b && b[0] != null ? (b[0] === b[1] ? `${b[0]}` : `${b[0]}〜${b[1]}`) : "-"; }
 function detail(r, ms) {
   const rankMv = m => { const a = num(r[preCol(`${m}_順位`)]), b = num(r[`${m}_順位`]); return changeView() && a != null && b != null ? moveMark(a - b) : ""; };   // ↑ は順位が上がった
   let t = `<div class="grid2"><div class="scroll"><table><tr><th>モデル</th><th class="n">順位</th><th class="n" title="そのモデルの全頭の勝率から作った着順の分布の、真ん中の半分(25%〜75%)の範囲。実際の着順が半々でこの範囲に入る見込み">着順の見込み</th><th class="n">勝率</th><th class="n">2着内</th><th class="n">3着内</th></tr>`;
-  const bandTxt = m => { const b = rankBand(r.race_id, m, r.umaban); return b && b[0] != null ? (b[0] === b[1] ? `${b[0]}` : `${b[0]}〜${b[1]}`) : "-"; };
+  const bandTxt = m => bandStr(rankBand(r.race_id, m, r.umaban));
   for (const m of ms) t += `<tr><td>${esc(m)}</td><td class="n">${esc(r[`${m}_順位`])}${rankMv(m)}</td><td class="n">${bandTxt(m)}</td>` +
     `<td class="n">${pct(num(r[`${m}_勝率`]))}${pctMove(r, `${m}_勝率`)}</td>` +
     `<td class="n">${pct(num(r[`${m}_2着内`]))}${pctMove(r, `${m}_2着内`)}</td><td class="n">${pct(num(r[`${m}_3着内`]))}${pctMove(r, `${m}_3着内`)}</td></tr>`;

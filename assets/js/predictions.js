@@ -656,6 +656,7 @@ function todayChangeCard(rows) {
 // ボタン → 確認のダイアログ → netkeiba の出馬表を開く(印は URL の # の後ろに入れて渡す)→ 開いたページでブックマークレット「印転記」を押す。
 // ブックマークレットは netkeiba の印の▼のリストの項目を押して付ける(保存は netkeiba 自身の仕組み)。渡した印の無い馬は「--」に戻す
 const NK_MARK = { "◎": "◎", "〇": "◯", "▲": "▲", "△": "△", "★": "☆", "✓": "✓", "消": "消" };   // ビューアの印 → netkeiba の印
+const NK_EXT_ZIP = "https://itry967.github.io/chimpo/assets/ext/netkeiba-marks.zip";   // 拡張機能(公開用のサイトに置いた zip。2026-11-22)
 const NK_BOOKMARKLET = `javascript:(function(){var m=location.hash.match(/kbm=([^&]+)/);if(!m){alert('ビューアの「netkeiba に印を転記」から開いたページで押してください');return;}` +
   `var d;try{d=JSON.parse(decodeURIComponent(m[1]));}catch(e){alert('印を読めませんでした');return;}` +
   `var rid=(location.search.match(/race_id=(\d+)/)||[])[1];if(d.r&&rid&&d.r!==rid){alert('レースが違います(ビューア '+d.r+' / このページ '+rid+')');return;}` +
@@ -681,20 +682,31 @@ ${txt}` +
 
 netkeiba で元々付けていた印は消えます(このページの印に置き換わります)。
 
-OK を押すと netkeiba の出馬表を開きます。開いたページでブックマーク「印転記」を押すと転記します。`);
+OK を押すと netkeiba の出馬表を開きます。拡張機能「予想ビューア 印転記」を入れていれば、開いたページで自動で転記します(入れていなければ、開いたページでブックマーク「印転記」を押す)。`);
   if (!ok) return;
   const m = Object.fromEntries(list.filter(([, x]) => NK_MARK[x]).map(([u, x]) => [u, NK_MARK[x]]));
   const data = encodeURIComponent(JSON.stringify({ r: nkRaceId(rid), m }));
   window.open(`https://race.netkeiba.com/race/shutuba.html?race_id=${nkRaceId(rid)}#kbm=${data}`, "_blank");
 }
 function nkHelpHTML() {
-  return `<p>このビューアで付けた印を、netkeiba の同じレースの印に転記する。</p><h3>はじめに一度だけ: ブックマークの登録</h3>` +
+  // 2026-11-22 ユーザーの指示: PC は拡張機能(自動で転記)を主に、ブックマークは補助。拡張機能の説明は PC の幅のときだけ出す
+  const pc = !window.matchMedia("(max-width: 760px)").matches;
+  const ext = `<h3>おすすめ(PC の Chrome): 拡張機能を入れる</h3>` +
+    `<p>入れておくと、「netkeiba に印を転記」→ OK で開いた netkeiba のページで、<b>自動で</b>印が付き、終わるとタブが閉じてこの画面に戻る(ブックマークを押す手間が無い)。` +
+    `ビューアから開いたページのときだけ動き、ふだんの netkeiba の閲覧では何もしない。</p>` +
+    `<p style="margin:10px 0"><a class="nk-bm" href="${NK_EXT_ZIP}" download>拡張機能をダウンロード(zip)</a></p>` +
+    `<ol><li>ダウンロードした zip を右クリック →「すべて展開」で展開する(中に netkeiba-marks というフォルダができる)。</li>` +
+    `<li>Chrome のアドレスバーに <code>chrome://extensions</code> と入力して開く(リンクからは開けないので、下の枠を押してコピーして貼る)。` +
+    `<input readonly value="chrome://extensions" onclick="this.select()" style="width:12em;margin-left:6px"></li>` +
+    `<li>右上の「デベロッパー モード」をオンにする。</li><li>「パッケージ化されていない拡張機能を読み込む」を押し、展開した netkeiba-marks のフォルダを選ぶ。</li>` +
+    `<li>一覧に「予想ビューア 印転記」が出れば完了。展開したフォルダは消さずに置いておく(消すと拡張機能が動かなくなる)。</li></ol>`;
+  return `<p>このビューアで付けた印を、netkeiba の同じレースの印に転記する。</p>${pc ? ext : ""}<h3>${pc ? "補助: " : ""}ブックマーク(ブックマークレット)の登録${pc ? "(拡張機能を入れられないとき・携帯)" : ""}</h3>` +
     `<p><b>PC:</b> 下の「印転記」をブックマークバーへドラッグする(ブックマークバーが出ていなければ Ctrl+Shift+B)。</p>` +
     `<p style="margin:10px 0"><a class="nk-bm" href="${esc(NK_BOOKMARKLET)}" onclick="alert('ブックマークバーへドラッグして登録してください');return false;">印転記</a> <span class="muted">← これをブックマークバーへドラッグ</span></p>` +
     `<p class="muted">ドラッグできないときは、何かのページをブックマークに登録してから編集し、名前を「印転記」、URL に下の文をまるごと貼る。</p>` +
     `<textarea readonly style="width:100%;height:80px;font-size:11px" onclick="this.select()">${esc(NK_BOOKMARKLET)}</textarea>` +
     `<h3>使い方</h3><ol><li>レースのページの「netkeiba に印を転記」を押す。</li><li>確認のダイアログで、送る印と、netkeiba で元々付けていた印が消えることを確かめて OK を押す(キャンセルなら何もしない)。</li>` +
-    `<li>netkeiba の出馬表が新しいタブで開く(netkeiba にログインしておく)。</li><li>開いたページで、ブックマークの「印転記」を押す。印が付いて「転記しました」と出て、OK を押すとそのタブが閉じて、元の予想ビューアのタブに戻る(保存が終わるまで少し待ってから閉じる)。</li></ol><p class="muted">2026-11-22 にタブを閉じる動きを足した。それより前に登録したブックマークは古いままなので、ブックマークの URL を上の文に入れ替える(または登録し直す)。</p>` +
+    `<li>netkeiba の出馬表が新しいタブで開く(netkeiba にログインしておく)。</li><li>拡張機能を入れていれば、そのまま自動で転記される。入れていなければ、開いたページでブックマークの「印転記」を押す。印が付いて「転記しました」と出て、OK を押すとそのタブが閉じて、元の予想ビューアのタブに戻る(保存が終わるまで少し待ってから閉じる)。</li></ol><p class="muted">2026-11-22 にタブを閉じる動きを足した。それより前に登録したブックマークは古いままなので、ブックマークの URL を上の文に入れ替える(または登録し直す)。</p>` +
     `<p>印の対応: ◎ → ◎、〇 → ◯、▲ → ▲、△ → △、★ → ☆、✓ → ✓、消 → 消。このページで印の無い馬は、netkeiba でも「--」(印なし)にする。</p>`;
 }
 function simpleView() {

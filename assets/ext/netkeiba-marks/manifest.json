@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "予想ビューア 印転記",
+  "version": "1.0.0",
+  "description": "予想ビューアの「netkeiba に印を転記」から開いた netkeiba の出馬表に、ビューアの印を自動で付ける(PC の Chrome 用)。",
+  "icons": { "32": "icon32.png", "128": "icon128.png" },
+  "content_scripts": [
+    {
+      "matches": ["https://race.netkeiba.com/race/shutuba.html*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

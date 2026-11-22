@@ -667,18 +667,90 @@ const NK_BOOKMARKLET = `javascript:(function(){var m=location.hash.match(/kbm=([
   `var k=0;(function next(){if(k>=q.length){alert('netkeiba に印を転記しました(変えた馬 '+q.length+'頭)。OK でこのタブを閉じます');history.replaceState(null,'',location.pathname+location.search);setTimeout(function(){try{if(window.opener&&!window.opener.closed)window.opener.focus();}catch(e){}window.close();},800);return;}` +
   `var x=q[k++];if(window.jQuery)jQuery(x[0]).trigger('click');else x[0].click();setTimeout(next,400);})();})();`;
 function nkRaceId(rid) { return rid.slice(0, 4) + rid.slice(8, 16); }
+// ---------- netkeiba(IPAT 連動馬券購入)への買い目の転記(2026-11-22 ユーザーの指示) ----------
+// 「買い目候補」の買い目を、netkeiba の IPAT 連動馬券購入の画面に入れる(券種のタブ → 馬 → 金額 → 追加)。最後の「IPAT投票」(購入)は押さない。
+// 拡張機能(1.2 以降)が入っていれば開いた画面で自動で入れる。無ければ開いた画面でブックマーク「買い目転記」を押す。中身は拡張機能の bets.js と同じ
+const NK_BET_CODE = "(function () { var m = location.hash.match(/kbb=([^&]+)/); if (!m) return; var d; try { d = JSON.parse(decodeURIComponent(m[1])); } catch (e) { alert(\"買い目転記: 買い目を読めませんでした\"); return; } var rid = (location.search.match(/race_id=(\\d+)/) || [])[1]; if (d.r && rid && d.r !== rid) { alert(\"買い目転記: レースが違います(ビューア \" + d.r + \" / このページ \" + rid + \")\"); return; } var q = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); }; var tab = function (n) { return q(\"dl.shikibetu dd a\").filter(function (a) { return a.textContent.trim() === n; })[0]; }; var addBtn = function () { return q(\"button\").filter(function (x) { return x.textContent.trim() === \"追加\"; })[0]; }; var i = 0, ok = 0, yen = 0, ng = [], okNames = [], tries = 0; function clearSel() { q(\"td.Horse_Select input:checked\").forEach(function (x) { (x.parentNode.querySelector(\"label\") || x).click(); }); } function step() { if (i >= d.b.length) return done(); var b = d.b[i++], kind = b[0], t = b[1], amt = b[2], name = kind + \" \" + t.join(kind === \"馬単\" || kind === \"3連単\" ? \"→\" : \"-\"); var tb = tab(kind); if (!tb) { ng.push(name + \"(券種が無い)\"); return step(); } tb.click(); setTimeout(function () { var rows = q(\"tr.HorseList\").filter(function (tr) { return tr.getClientRects().length && tr.querySelector(\"td.Horse_Select\"); }); var byU = {}; rows.forEach(function (tr) { byU[String(+tr.cells[1].textContent.trim())] = tr; }); var miss = false; t.forEach(function (u, k) { var tr = byU[String(+u)]; if (!tr) { miss = true; return; } var cells = tr.querySelectorAll(\"td.Horse_Select\"), c = cells.length > 1 ? cells[k] : cells[0]; var inp = c && c.querySelector(\"input\"); if (!inp || inp.disabled) { miss = true; return; } if (!inp.checked) (c.querySelector(\"label\") || inp).click(); }); var money = document.querySelector(\"input[name=money]\"); if (money) { money.value = String(Math.max(1, Math.round(amt / 100))); [\"input\", \"keyup\", \"change\"].forEach(function (ev) { money.dispatchEvent(new Event(ev, { bubbles: true })); }); } setTimeout(function () { var add = addBtn(); if (miss || !money || !add || /disabled/.test(add.className)) { ng.push(name + (miss ? \"(馬を選べない)\" : \"(追加できない)\")); clearSel(); return setTimeout(step, 500); } add.click(); ok++; yen += Math.max(1, Math.round(amt / 100)) * 100; okNames.push(name); setTimeout(step, 900); }, 500); }, 900); } function done() { history.replaceState(null, \"\", location.pathname + location.search); try { if (typeof chrome !== \"undefined\" && chrome.runtime && chrome.runtime.id) chrome.runtime.sendMessage({ type: \"kbb-done\", ok: ok > 0, n: ok, yen: yen, ng: ng, okNames: okNames, id: d.id || \"\" }); } catch (e) {} alert(\"netkeiba の購入画面に買い目を \" + ok + \" 点入れました(合計 \" + yen.toLocaleString() + \" 円)。\" + (ng.length ? \"\\n入れられなかった買い目: \" + ng.join(\"、\") : \"\") + \"\\n\\n右の「投票内容」で買い目と金額を確かめてから、ご自分で「IPAT投票」を押してください(このプログラムは購入を押しません)。\"); } (function wait() { if (!tab(\"単勝\") || !document.querySelector(\"input[name=money]\")) { if (++tries > 30) { alert(\"買い目転記: 購入画面が出ませんでした(netkeiba にログインしているか・IPAT 連動の設定を確かめてください)\"); return; } return setTimeout(wait, 500); } step(); })(); })();";
+const NK_BET_BOOKMARKLET = "javascript:" + encodeURIComponent(NK_BET_CODE);
+const NK_BET_KINDS = ["単勝", "複勝", "馬連", "ワイド", "馬単", "3連複", "3連単"];
+function nkBetSentOf(rid) { try { return JSON.parse(localStorage.getItem("keiba-viewer:nkBetSent:" + rid) || "null"); } catch (e) { return null; } }
+function nkBetSentTag(rid) {
+  const v = nkBetSentOf(rid);
+  return `<span class="nk-sent muted nk-bet-sent" title="netkeiba の購入画面に買い目を送った時刻(購入したかどうかは分からない)">${v ? `送信 ${esc(v.at)}(${v.n}点・${v.yen.toLocaleString()}円)` : "未送信"}</span>`;
+}
+async function sendBetsToNetkeiba(rid) {
+  const all = basketOf(rid).filter(x => (+x.amount || 0) > 0);
+  const ok = all.filter(x => NK_BET_KINDS.includes(x.kind)), bad = all.filter(x => !NK_BET_KINDS.includes(x.kind));
+  if (!ok.length) { alert("送れる買い目がありません(金額が 0 円の買い目は送らない)"); return; }
+  const sep = k => k === "馬単" || k === "3連単" ? "→" : "-";
+  const yen = ok.reduce((a, x) => a + Math.max(100, Math.round(x.amount / 100) * 100), 0);
+  const list = ok.map(x => `${x.kind} ${x.t.join(sep(x.kind))} ${Math.max(100, Math.round(x.amount / 100) * 100).toLocaleString()}円`).join("\n");
+  const msg = `「買い目候補」の買い目を、netkeiba の IPAT 連動馬券購入の画面(${title(rid)})に入れます。
+
+${list}
+
+合計 ${ok.length}点・${yen.toLocaleString()}円` +
+    (bad.length ? `
+(送れない券種は送りません: ${bad.map(x => x.kind).join("・")})` : "") +
+    `
+
+※ 購入(「IPAT投票」)は押しません。入ったあと、netkeiba の画面で買い目と金額を確かめて、ご自分で「IPAT投票」を押してください。` +
+    `
+※ 拡張機能「予想ビューア 印・買い目転記」(1.2 以降)を入れていれば自動で入ります。入れていなければ、開いた画面でブックマーク「買い目転記」を押してください。` +
+    `
+※ ${NK_POPUP_NOTE}`;
+  if (!(await nkConfirm(msg, false))) return;
+  const data = encodeURIComponent(JSON.stringify({ r: nkRaceId(rid), id: rid, b: ok.map(x => [x.kind, x.t.map(String), +x.amount]) }));
+  const w = window.open(`https://race.netkeiba.com/ipat/ipat.html?date=${rid.slice(0, 8)}&race_id=${nkRaceId(rid)}#kbb=${data}`, "_blank");
+  if (!w) { nkPopupBlocked(); return; }
+  const d = new Date();
+  const items = ok.map(x => ({ kind: x.kind, t: x.t.map(String), amount: Math.max(100, Math.round(x.amount / 100) * 100), name: x.kind + " " + x.t.join(sep(x.kind)) }));
+  try { localStorage.setItem("keiba-viewer:nkBetSent:" + rid, JSON.stringify({ at: `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`, n: ok.length, yen, items })); } catch (e) {}
+  document.querySelectorAll(".nk-bet-sent").forEach(x => x.outerHTML = nkBetSentTag(rid));
+}
+// 買い目転記が成功したら、日別ページの「購入した馬券」に入れる(2026-11-22 ユーザーの指示。？から外せる。拡張機能 1.3 以降のときだけ。ブックマークでは結果が分からない)
+function nkBetToBought() { try { return localStorage.getItem("keiba-viewer:nkBetToBought") !== "0"; } catch (e) { return true; } }
+function setNkBetToBought(v) { try { localStorage.setItem("keiba-viewer:nkBetToBought", v ? "1" : "0"); } catch (e) {} }
+function nkBetResult(r) {
+  const sent = r.id ? nkBetSentOf(r.id) : null;
+  let note = "";
+  if (r.ok && r.id && sent?.items && nkBetToBought()) {
+    const done = sent.items.filter(x => (r.okNames || []).includes(x.name));
+    if (done.length) { sendToBought(r.id, done); note = ` 日別ページの「購入した馬券」に ${done.length}点入れました。`; }
+  }
+  nkToast(r.ok ? `✔ netkeiba の購入画面に買い目を ${r.n}点(${(r.yen || 0).toLocaleString()}円)入れました。netkeiba の画面で確かめて「IPAT投票」を押してください。${note}` +
+    (r.ng?.length ? `(入れられなかった: ${r.ng.join("、")})` : "") : `✖ 買い目を入れられませんでした: ${(r.ng || []).join("、")}`, r.ok ? "ok" : "ng");
+  if (state.dayPage) render();
+}
+function nkBetHelpHTML() {
+  const pc = !window.matchMedia("(max-width: 760px)").matches;
+  return `<p>「買い目候補」の買い目(金額が 0 円より大きいもの)を、netkeiba の IPAT 連動馬券購入の画面に入れる。<b>購入(「IPAT投票」)は押さない</b>ので、入ったあと netkeiba の画面で買い目と合計金額を確かめて、ご自分で押す。</p>` +
+    `<p style="margin:8px 0"><label><input type="checkbox" ${nkBetToBought() ? "checked" : ""} onchange="setNkBetToBought(this.checked)"> 買い目を入れられたら、日別ページの「購入した馬券」にも入れる</label>` +
+    `<br><span class="muted">拡張機能(1.3 以降)のときだけ。「入れられた」は netkeiba の購入画面に入ったことで、実際に「IPAT投票」で買ったかどうかは分からない。買わなかったときは「購入した馬券」から消す。</span></p>` +
+    `<p>送れる券種: ${NK_BET_KINDS.join("・")}(枠連は送らない)。金額は 100円単位にそろえる。netkeiba にログインし、IPAT 連動の設定(IPAT の加入者番号などの登録)を済ませておく。</p>` +
+    (pc ? `<h3>おすすめ(PC の Chrome): 拡張機能</h3><p>印転記と同じ拡張機能「予想ビューア 印・買い目転記」(1.2 以降)を入れておくと、開いた購入の画面で自動で買い目が入る。入れ方は、出走馬の欄の「netkeiba に印を転記」の ？ を見る(同じ zip)。` +
+      `今の状態: ${document.documentElement.dataset.kbmExt ? `拡張機能 ${esc(document.documentElement.dataset.kbmExt)}${parseFloat(document.documentElement.dataset.kbmExt) < 1.2 ? "(古い版。買い目転記には 1.2 への更新が要る)" : ""}` : "拡張機能は見つからない"}</p>` : "") +
+    `<h3>${pc ? "補助: " : ""}ブックマーク「買い目転記」の登録</h3>` +
+    `<p style="margin:10px 0"><a class="nk-bm" href="${esc(NK_BET_BOOKMARKLET)}" onclick="alert('ブックマークバーへドラッグして登録してください');return false;">買い目転記</a> <span class="muted">← これをブックマークバーへドラッグ</span></p>` +
+    `<p class="muted">ドラッグできないときは、何かのページをブックマークに登録してから編集し、名前を「買い目転記」、URL に下の文をまるごと貼る。</p>` +
+    `<textarea readonly style="width:100%;height:80px;font-size:11px" onclick="this.select()">${esc(NK_BET_BOOKMARKLET)}</textarea>` +
+    `<h3>使い方</h3><ol><li>「買い目候補」に買い目を溜め、金額を決める。</li><li>「netkeiba(IPAT)に買い目を送る」を押し、確認で送る買い目と合計金額を確かめて OK。</li>` +
+    `<li>netkeiba の IPAT 連動馬券購入の画面が新しいタブで開く。拡張機能があれば自動で、無ければブックマーク「買い目転記」を押すと、買い目が1点ずつ入る。</li>` +
+    `<li>終わると「買い目を ○点入れました」と出る。右の「投票内容」で確かめて、ご自分で「IPAT投票」を押す。</li></ol>` +
+    `<p>${NK_POPUP_NOTE}</p>`;
+}
 function nkConfirmOff() { try { return localStorage.getItem("keiba-viewer:nkNoConfirm") === "1"; } catch (e) { return false; } }
 function setNkConfirmOff(v) { try { localStorage.setItem("keiba-viewer:nkNoConfirm", v ? "1" : "0"); } catch (e) {} }
 // 印転記の確認(ブラウザの confirm の代わり。「次から表示しない」のチェック付き)
-function nkConfirm(text) {
+function nkConfirm(text, allowSkip = true) {
   return new Promise(resolve => {
     const d = document.createElement("dialog");
     d.className = "nk-confirm";
     d.innerHTML = `<div style="white-space:pre-wrap;line-height:1.6">${esc(text)}</div>` +
-      `<label style="display:block;margin:12px 0 4px"><input type="checkbox" class="nkNoAsk"> 次から確認を表示しない(？の説明からいつでも戻せる)</label>` +
+      (allowSkip ? `<label style="display:block;margin:12px 0 4px"><input type="checkbox" class="nkNoAsk"> 次から確認を表示しない(？の説明からいつでも戻せる)</label>` : "") +
       `<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px"><button class="nkNo">キャンセル</button><button class="nkYes on">OK(転記する)</button></div>`;
     document.body.appendChild(d);
-    const end = v => { if (v && d.querySelector(".nkNoAsk").checked) setNkConfirmOff(true); d.close(); d.remove(); resolve(v); };
+    const end = v => { if (v && d.querySelector(".nkNoAsk")?.checked) setNkConfirmOff(true); d.close(); d.remove(); resolve(v); };
     d.querySelector(".nkYes").onclick = () => end(true);
     d.querySelector(".nkNo").onclick = () => end(false);
     d.addEventListener("cancel", e => { e.preventDefault(); end(false); });
@@ -756,6 +828,7 @@ function nkToast(text, kind) {
 }
 window.addEventListener("message", e => {   // 拡張機能からの転記の結果
   if (e.source !== window || !e.data || e.data.type !== "kbm-result") return;
+  if (e.data.kind === "bets") return nkBetResult(e.data);   // 買い目転記の結果(拡張機能 1.3 以降)
   if (e.data.ok && e.data.id) setNkSent(e.data.id, "ext");
   nkToast(e.data.ok ? `✔ 転記できました: ${e.data.message || ""}` : `✖ 転記できませんでした: ${e.data.message || ""}`, e.data.ok ? "ok" : "ng");
 });
@@ -1536,6 +1609,13 @@ function renderRace(rid) {
     try { localStorage.setItem("keiba-viewer:fav", e.target.checked ? "1" : "0"); } catch (err) { state.fav = e.target.checked; }
     renderRace(rid);
   }));
+  document.querySelectorAll(".nkBetsBtn").forEach(b => b.onclick = e => { e.stopPropagation(); sendBetsToNetkeiba(rid); });
+  document.querySelectorAll(".nkBetHelp").forEach(h => h.onclick = e => {
+    e.stopPropagation();
+    document.getElementById("guideTitle").textContent = "netkeiba(IPAT)への買い目の転記";
+    document.getElementById("guideBody").innerHTML = nkBetHelpHTML();
+    const d = document.getElementById("guide"); if (!d.open) d.showModal();
+  });
   document.querySelectorAll(".nkMarksBtn").forEach(b => b.onclick = e => { e.stopPropagation(); sendMarksToNetkeiba(rid); });   // 出走馬の欄とビジュアライズ予想の両方(11/22)
   document.querySelectorAll("#nkHelp, .nkHelpBtn").forEach(h => h.addEventListener("click", e => {
     e.stopPropagation();
@@ -2513,7 +2593,8 @@ function ticketValue(rid, kind, t, triCache) {
 }
 function renderBasket(rid, tri, places, odds, raceRows) {
   const b = basketOf(rid);
-  let h = `<h3>買い目候補</h3>`;
+  let h = `<h3>買い目候補</h3>` + (b.length ? `<div class="calc" style="margin:0 0 8px"><button class="nkBetsBtn" title="この買い目を netkeiba の IPAT 連動馬券購入の画面に入れる(購入は押さない)">netkeiba(IPAT)に買い目を送る</button>` +
+    `<button class="help nkBetHelp" title="netkeiba(IPAT)への買い目の転記の使い方">？</button>${nkBetSentTag(rid)}</div>` : "");
   if (!b.length) return h + `<div class="muted">上の「推奨買い目と資金配分」や「買い目を入れて計算」から送ると、ここに溜まります。券種やフォーメーションを変えて何回でも足せます。` +
     `溜めた買い目は「→ 購入した馬券に送る」で日別ページの「購入した馬券」に送れます。</div>`;
   let cost = 0, back = 0, priced = 0;

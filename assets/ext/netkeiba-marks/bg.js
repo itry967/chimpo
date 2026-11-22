@@ -15,6 +15,10 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
       jobs[tab.id] = { viewer: sender.tab.id, id: msg.id,
         timer: setTimeout(() => finish(tab.id, { ok: false, message: "60 秒たっても終わらなかったので止めました(netkeiba が開けない・遅いなど)" }), 60000) };
     });
+  } else if (msg.type === "kbb-done") {   // 買い目転記の結果を、開いている予想ビューアのタブに知らせる
+    chrome.tabs.query({ url: ["http://localhost:8770/*", "http://127.0.0.1:8770/*", "https://itry967.github.io/chimpo/*"] }, tabs => {
+      for (const t of tabs) chrome.tabs.sendMessage(t.id, { type: "kbm-result", kind: "bets", ...msg }).catch(() => {});
+    });
   } else if (msg.type === "kbm-done" && sender.tab) {
     finish(sender.tab.id, { ok: msg.ok, message: msg.message });
   }

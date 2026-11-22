@@ -1350,7 +1350,7 @@ function renderRace(rid) {
     renderRace(rid);
   }));
   document.getElementById("vizPre")?.addEventListener("change", e => { state.vizPre = e.target.checked; renderRace(rid); });
-  document.querySelectorAll("button.vizSort").forEach(b => b.onclick = () => { state.vizSort = b.dataset.k; renderRace(rid); });
+  document.querySelectorAll(".vizSort").forEach(b => b.onclick = () => { state.vizSort = b.dataset.k; renderRace(rid); });
   document.getElementById("simpleView")?.addEventListener("change", e => {
     try { localStorage.setItem("keiba-viewer:detail", e.target.checked ? "1" : "0"); } catch (err) { state.detail = e.target.checked; }
     renderRace(rid);
@@ -1811,12 +1811,13 @@ function renderViz(rid, rows) {
   if (sort === "res") items.sort((a, b) => (a.k ?? big) - (b.k ?? big) || a.b[4] - b.b[4]);
   else if (sort === "uma") items.sort((a, b) => +a.r.umaban - +b.r.umaban);
   else if (pre) items.sort((a, b) => (num(a.r["枠順時_順位"]) ?? big) - (num(b.r["枠順時_順位"]) ?? big));
-  const sb = (k, l) => `<button class="vizSort${sort === k ? " on" : ""}" data-k="${k}">${l}</button>`;
+  // 並べ替えは列の見出しを押す(2026-11-22 ユーザーの指示「行のタイトルを押したらソートされる方式にして」)
+  const sb = (k, l, tip) => `<span class="vizSort${sort === k ? " on" : ""}" data-k="${k}" title="${tip}で並べる">${l}${sort === k ? " ▲" : ""}</span>`;
   let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想<button class="help" data-help="viz" title="ビジュアライズ予想の各項目の説明">？</button>${updTag(["予想"], rid)}</h3>` +
     `<div class="calc" style="margin-bottom:6px;gap:10px">` +
     (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
-    `<span class="tabs" style="margin:0"><span class="muted" style="align-self:center;margin-right:4px">並び:</span>${sb("pred", "予想着順")}${sb("res", "結果")}${sb("uma", "馬番")}</span></div>` +
-    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-name"></div><div class="viz-n">予想着順</div><div class="viz-n">結果</div><div class="viz-track">` +
+    `<span class="muted" style="font-size:12px">列の見出し(馬番・予想着順・結果)を押すと並べ替え</span></div>` +
+    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
     ticks.map(t => `<span class="viz-tick" style="left:${x(t)}">${t}着</span>`).join("") + `</div><div></div></div>`;
   for (const { r, b, k } of items) {
     const [lo, hi, p10, p90, mean] = b, inB = k != null && k >= lo && k <= hi;
@@ -1845,7 +1846,8 @@ function vizHelpHTML() {
     `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。出走馬の表の「予」の列と同じ。</td></tr>` +
     `<tr><th>結果</th><td>実際の着順(結果が出たレースだけ)。着順の見込みの帯の中なら緑の字。</td></tr></table>` +
     `<h3>並び</h3><table>` +
-    `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。「予想着順」の列と同じで、最初の並び。</td></tr>` +
+    `<tr><th>並べ替え</th><td>列の見出し(馬番・馬名、予想着順、結果)を押すと、その順に並ぶ(▲が今の並び)。最初は予想着順の順。</td></tr>` +
+    `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。</td></tr>` +
     `<tr><th>結果</th><td>実際の着順の順(結果の無い馬は下)。</td></tr>` +
     `<tr><th>馬番</th><td>馬番の順。</td></tr></table>` +
     `<h3>馬体重確定前の予想</h3><p>✓を入れると、馬体重が出る前(枠順確定の時点)の予想の勝率で描き直す。馬体重や当日の馬場傾向で見込みがどう変わったかを比べられる。枠順確定の時点の値が無いレースでは出ない。</p>` +

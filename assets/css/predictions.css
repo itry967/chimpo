@@ -162,14 +162,18 @@ header { min-width: 100%; }
 .kpi .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .kpi .l { font-size: 12px; color: var(--muted); }
 /* ビジュアライズ予想(2026-11-22) */
-.viz { display: flex; flex-direction: column; gap: 2px; }
+.viz { display: flex; flex-direction: column; gap: 0; }
 .viz-n { font-size: 12px; text-align: right; white-space: nowrap; }
-.viz-row { display: grid; grid-template-columns: minmax(110px, 190px) 52px 34px 1fr 52px; align-items: center; gap: 8px; min-height: 24px; }
+.viz-row { display: grid; grid-template-columns: minmax(110px, 190px) 52px 34px 1fr 52px; align-items: center; gap: 8px; min-height: 26px; border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.viz-axis { border-bottom: 1px solid var(--line); }
+.vizSort { cursor: pointer; color: var(--muted); white-space: nowrap; user-select: none; }
+.vizSort:hover { color: var(--text); text-decoration: underline; }
+.vizSort.on { color: var(--accent); font-weight: 600; }
 .viz-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
 .viz-track { position: relative; height: 18px; }
 .viz-axis .viz-track { height: 16px; }
-.viz-tick { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--muted); }
-.viz-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.viz-tick { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.viz-grid { position: absolute; top: -4px; bottom: -4px; width: 0; border-left: 1px dashed var(--muted); opacity: .55; }
 .viz-w { position: absolute; top: 8px; height: 2px; background: var(--muted); opacity: .6; border-radius: 1px; }
 .viz-b { position: absolute; top: 3px; height: 12px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 6px; box-sizing: border-box; }
 .viz-dot { position: absolute; top: 4px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--accent); }

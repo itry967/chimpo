@@ -675,16 +675,17 @@ const NK_BET_BOOKMARKLET = "javascript:" + encodeURIComponent(NK_BET_CODE);
 const NK_BET_KINDS = ["単勝", "複勝", "馬連", "ワイド", "馬単", "3連複", "3連単"];
 // 買い目ごとの IPAT 送信の記録: { "馬連 4-14": { at, st: "sent" | "ok" | "ng" } }
 function nkBetItemsOf(rid) { try { return JSON.parse(localStorage.getItem("keiba-viewer:nkBetItems:" + rid) || "{}"); } catch (e) { return {}; } }
-function setNkBetItems(rid, names, st, at) {
+function setNkBetItems(rid, names, st, at, amounts) {
   const m = nkBetItemsOf(rid);
-  for (const n of names) m[n] = { at: at || m[n]?.at || "", st };
+  for (const n of names) m[n] = { at: at || m[n]?.at || "", st, amt: amounts?.[n] ?? m[n]?.amt };
   try { localStorage.setItem("keiba-viewer:nkBetItems:" + rid, JSON.stringify(m)); } catch (e) {}
 }
 function nkBetCell(v) {
   if (!v) return `<span class="dim">-</span>`;
-  if (v.st === "ok") return `<span class="hi" title="拡張機能で購入画面に入ったことを確かめた(${esc(v.at)} に送信。購入したかは分からない)">✔ ${esc(v.at)}</span>`;
-  if (v.st === "ng") return `<span class="down" title="購入画面に入れられなかった(${esc(v.at)} に送信)">✖ ${esc(v.at)}</span>`;
-  return `<span class="muted" title="購入画面に送った(入ったかはブックマークの方式では分からない)">送信 ${esc(v.at)}</span>`;
+  const am = v.amt ? `・${(+v.amt).toLocaleString()}円` : "";   // 送った金額も出す(2026-11-22 ユーザーの指示)
+  if (v.st === "ok") return `<span class="hi" title="拡張機能で購入画面に入ったことを確かめた(${esc(v.at)} に送信。購入したかは分からない)">✔ ${esc(v.at)}${am}</span>`;
+  if (v.st === "ng") return `<span class="down" title="購入画面に入れられなかった(${esc(v.at)} に送信)">✖ ${esc(v.at)}${am}</span>`;
+  return `<span class="muted" title="購入画面に送った(入ったかはブックマークの方式では分からない)">送信 ${esc(v.at)}${am}</span>`;
 }
 function nkBetSentOf(rid) { try { return JSON.parse(localStorage.getItem("keiba-viewer:nkBetSent:" + rid) || "null"); } catch (e) { return null; } }
 function nkBetSentTag(rid) {
@@ -718,7 +719,8 @@ ${list}
   if (!w) { nkPopupBlocked(); return; }
   const d = new Date();
   const items = ok.map(x => ({ kind: x.kind, t: x.t.map(String), amount: Math.max(100, Math.round(x.amount / 100) * 100), name: x.kind + " " + x.t.join(sep(x.kind)) }));
-  setNkBetItems(rid, items.map(x => x.name), "sent", `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
+  setNkBetItems(rid, items.map(x => x.name), "sent", `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
+    Object.fromEntries(items.map(x => [x.name, x.amount])));
   try { localStorage.setItem("keiba-viewer:nkBetSent:" + rid, JSON.stringify({ at: `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`, n: ok.length, yen, items })); } catch (e) {}
   document.querySelectorAll(".nk-bet-sent").forEach(x => x.outerHTML = nkBetSentTag(rid));
   if (!state.dayPage) renderRace(rid);   // 買い目候補の IPAT の列を新しくする
@@ -2673,7 +2675,9 @@ function renderBasket(rid, tri, places, odds, raceRows) {
       `<td class="n"><input class="odds amt" data-i="${r.i}" type="number" min="0" step="100" value="${r.amount}" style="width:90px"> 円</td>` +
       `<td class="n">${r.o && r.amount ? Math.round(r.amount * r.o).toLocaleString() + "円" + (lower ? "〜" : "") : r.amount ? "-" : "買わない"}</td>` +
       `<td>${nkBetCell(betLog[r.kind + " " + r.t.join(sep)])}</td>` +
-      `<td>${(() => { const bt = boughtList.find(y => y.kind === r.kind && y.t.join("-") === r.t.join("-")); return bt ? `<span class="hi" title="購入した馬券に入っている">✔ ${bt.amount.toLocaleString()}円</span>` : `<span class="dim">-</span>`; })()}</td>` +
+      `<td>${(() => { const bt = boughtList.find(y => y.kind === r.kind && y.t.join("-") === r.t.join("-")); if (!bt) return `<span class="dim">-</span>`;
+        const t = bt.at ? new Date(bt.at) : null, at = t && !isNaN(t) ? `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}・` : "";
+        return `<span class="hi" title="購入した馬券に入っている(時刻は最初に入れた時刻)">✔ ${at}${bt.amount.toLocaleString()}円</span>`; })()}</td>` +
       `<td><button class="del" data-i="${r.i}" title="この買い目を消す">×</button></td></tr>`;
   });
   const sent = boughtOf(rid.slice(0, 8)).filter(x => x.rid === rid);

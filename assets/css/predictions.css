@@ -179,6 +179,8 @@ header { min-width: 100%; }
 @keyframes lampblink { to { visibility: hidden; } }
 dialog.nk-confirm { max-width: min(560px, calc(100vw - 32px)); background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
 dialog.nk-confirm::backdrop { background: rgba(0,0,0,.45); }
+a.nk-link { font-size: 13px; font-weight: 600; margin-left: 8px; padding: 2px 10px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); text-decoration: none; vertical-align: middle; white-space: nowrap; }
+a.nk-link:hover { background: var(--accent); color: var(--panel); }
 .nk-toast { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 9999; max-width: min(560px, calc(100vw - 32px)); padding: 12px 18px; border-radius: 10px; background: var(--panel); color: var(--text); border: 2px solid var(--line); box-shadow: 0 6px 24px rgba(0,0,0,.35); font-size: 14px; font-weight: 600; cursor: pointer; }
 .nk-toast.ok { background: #1f9d55; border-color: #1f9d55; color: #fff; font-size: 16px; }
 .nk-toast.ng { background: #c53030; border-color: #c53030; color: #fff; }

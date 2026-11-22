@@ -1388,7 +1388,9 @@ function renderRace(rid) {
 
   // 見出し
   let html = `<div class="card"><h2>${title(rid)} <span class="muted" style="font-size:14px;font-weight:400">` +
-    `${ymdw(rid.slice(0, 8))} 発走 ${hhmm(r0.hasso_time)}・${rows.length}頭</span></h2>${overview(rid)}` +
+    `${ymdw(rid.slice(0, 8))} 発走 ${hhmm(r0.hasso_time)}・${rows.length}頭</span>` +
+    // netkeiba の同じレース(別のタブで開く。2026-11-22 ユーザーの指示)。見出しを押したときのたたむ動きはさせない
+    ` <a class="nk-link" href="https://race.netkeiba.com/race/${state.results.has(rid) ? "result" : "shutuba"}.html?race_id=${nkRaceId(rid)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="netkeiba の${state.results.has(rid) ? "結果" : "出馬表"}を別のタブで開く">netkeiba ↗</a></h2>${overview(rid)}` +
     `<div class="meters">${confMeter(rows)}${mixMeter(rows)}</div></div>` + renderReview(rid, rows);
 
   // モデルごとの自信

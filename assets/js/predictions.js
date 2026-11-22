@@ -1654,7 +1654,7 @@ function renderRace(rid) {
     state.calcSort[rid] = cur?.k === k ? { k, dir: -(cur.dir || (k === "t" ? 1 : -1)) } : { k }; renderRace(rid);
   });
   document.getElementById("bAllocGo")?.addEventListener("click", () => {
-    const budget = roundYen(document.getElementById("bAllocBudget").value), mode = document.getElementById("bAllocMode").value;
+    const budget = roundYen(document.getElementById("bAllocBudget").value), mode = document.querySelector('input[name="bAllocMode"]:checked')?.value || "均等";
     state.bAlloc = state.bAlloc || {}; state.bAlloc[rid] = { budget, mode };
     const b = basketOf(rid), info = new Map((state.basketRows?.[rid] || []).map(r => [r.i, r]));
     if (!b.length) return;
@@ -2674,7 +2674,10 @@ function renderBasket(rid, tri, places, odds, raceRows) {
     `<button class="help nkBetHelp" title="netkeiba(IPAT)への買い目の転記の使い方">？</button>${nkBetSentTag(rid)}</div>` +
     // 予算の自動配分(2026-11-23 ユーザーの指示。0円=買わない もあり)
     `<div class="calc" style="margin:0 0 8px"><label>このレースの予算 <input id="bAllocBudget" class="odds" type="number" min="0" step="100" style="width:100px" value="${state.bAlloc?.[rid]?.budget ?? ""}"> 円</label>` +
-    `<select id="bAllocMode">${[["均等", "均等"], ["確率比例", "確率に比例"], ["払戻均等化", "払戻均等化"], ["期待値追求型", "期待値追求"]].map(([v, l]) => `<option value="${v}" ${(state.bAlloc?.[rid]?.mode || "均等") === v ? "selected" : ""}>${l}</option>`).join("")}</select>` +
+    // 配り方はラジオボタン(選べるものがひと目で分かるように。2026-11-23 ユーザーの指示)
+    [["均等", "均等", "どの買い目にも同じだけ"], ["確率比例", "確率に比例", "当たる確率の高い買い目ほど多く"], ["払戻均等化", "払戻均等化", "どれが当たっても払戻がほぼ同じになるように(オッズの低い買い目ほど多く)"],
+      ["期待値追求型", "期待値追求", "期待値(確率 × オッズ)が1を超える分に比例。期待値の低い買い目は0円(買わない)"]]
+      .map(([v, l, tip]) => `<label title="${tip}"><input type="radio" name="bAllocMode" value="${v}" ${(state.bAlloc?.[rid]?.mode || "均等") === v ? "checked" : ""}> ${l}</label>`).join("") +
     `<button id="bAllocGo" title="予算を、選んだ決め方で買い目に配る(100円単位。買わない=0円になる買い目もある)">自動配分</button></div>` : "");
   if (!b.length) return h + `<div class="muted">上の「推奨買い目と資金配分」や「買い目を入れて計算」から送ると、ここに溜まります。券種やフォーメーションを変えて何回でも足せます。` +
     `溜めた買い目は「→ 購入した馬券に送る」で日別ページの「購入した馬券」に送れます。</div>`;

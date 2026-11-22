@@ -2870,7 +2870,12 @@ function renderDaySim(date, raceLink) {
   // 配分: 見込みの回収率が高いほど多く(80% を超えた分に比例)
   const P = fundPlan(date, { ...base, only: new Set(chosen.map(x => x.rid)), weightOf: x => Math.max((x.est0 ?? 0) - 80, 5) });
   FUND_MODE_OVERRIDE = null;
-  P.ok.sort((a, b) => (rank.get(a.rid)?.i ?? 999) - (rank.get(b.rid)?.i ?? 999));
+  // 並び(2026-11-22 ユーザーの指示): 順位順(既定)か、レース順(発走の順。同じ時刻なら場の順)
+  const simSort = state.simSort === "race" ? "race" : "rank";
+  const order = new Map(rids.map((r, i) => [r, i]));
+  const hs = rid => String(state.races.get(rid)?.[0]?.hasso_time ?? "").padStart(4, "0");
+  P.ok.sort(simSort === "race" ? (a, b) => hs(a.rid).localeCompare(hs(b.rid)) || order.get(a.rid) - order.get(b.rid) :
+    (a, b) => (rank.get(a.rid)?.i ?? 999) - (rank.get(b.rid)?.i ?? 999));
   const btn = (k, v, label, on) => `<button class="simBtn${on ? " on" : ""}" data-k="${k}" data-v="${v}">${label}</button>`;
   let h = `<div class="card day-fold"><h3>もし推奨馬券を一日の予算 ${budget.toLocaleString()}円で買ったら${updTag(["推奨買い目", "払戻"], rids)}</h3>` +
     `<div class="tabs" style="margin-bottom:6px"><span class="muted" style="align-self:center;margin-right:6px">予算:</span>` +
@@ -2883,7 +2888,9 @@ function renderDaySim(date, raceLink) {
     `<div class="tabs" style="margin-bottom:8px">${diffBtns("diffSim")}</div>` +
     `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">買い方:</span>` +
     FUND_MODES.map(([k, l]) => btn("simMode", k, l, mode === k)).join("") +
-    `<span class="muted" style="align-self:center;margin-left:6px">(資金配分案のモードとは別)</span></div>`;
+    `<span class="muted" style="align-self:center;margin-left:6px">(資金配分案のモードとは別)</span></div>` +
+    `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">並び:</span>` +
+    btn("simSort", "rank", "順位順", simSort === "rank") + btn("simSort", "race", "レース順(発走順)", simSort === "race") + `</div>`;
   const rows = [];
   let cost = 0, back = 0, setCost = 0, hitRaces = 0, setRaces = 0, waitRaces = 0;
   for (const x of P.ok) {
@@ -2979,7 +2986,7 @@ function renderFund(date, raceLink) {
         `${esc(JYO[j] || j)} <span class="muted">✔${xs.filter(x => x.pick).length}/${xs.length}${P.budget ? `・${amt.toLocaleString()}円` : ""}</span></button>`;
     }).join("") + `</div>` : "") + `</div>`;
   h += `<div class="scroll"><table class="fund-table"><tr class="f-head"><th title="買う(✔)/見送り">✔</th><th>レース</th><th>発走</th><th class="n" title="自信は100段階、混戦は10段階">自信<small>/100</small></th><th class="n">混戦<small>/10</small></th>` +
-    `<th>自動の判定</th><th class="n" title="購入推奨・見送り推奨の判定に使った値(予算 ÷ 対象のレース数 の額が入る区分のおすすめの確かめの回収率)。配分額の区分の値が違えば下に小さく出す">見込みの回収率</th><th class="n">期待値</th><th class="n">配分額</th><th>${fundMode() === "roi" ? "おすすめの買い目" : modeName(fundMode()) + "の買い目"}</th></tr>`;
+    `<th>自動の判定</th><th class="n" title="購入推奨・見送り推奨の判定に使った値(予算 ÷ 対象のレース数 の額が入る区分のおすすめの確かめの回収率)。配分額の区分の値が違えば下に小さく出す">見込みの回収率</th><th class="n">期待値</th><th class="n">配分額</th><th class="n" title="結果(払戻の CSV)が出たレースの、配分案の買い目の払戻(当たった買い目の 100円あたりの払戻 × 金額 ÷ 100)">払戻</th><th>${fundMode() === "roi" ? "おすすめの買い目" : modeName(fundMode()) + "の買い目"}</th></tr>`;
   for (const x of shown) {
     const r0 = state.races.get(x.rid)[0], c = confLevel(state.races.get(x.rid));
     const changed = x.pick !== x.autoBuy;
@@ -3001,6 +3008,7 @@ function renderFund(date, raceLink) {
       `<td class="n f-i" data-l="期待値">${x.ev != null ? `<span class="${x.ev >= 100 ? "hi" : ""}">${fix(x.ev)}%</span>${x.evPart ? `<span class="dim" title="オッズのある買い目だけ">*</span>` : ""}` : `<span class="dim">-</span>`}</td>` +
       `<td class="n f-amt">${x.amount ? `<b>${x.spent.toLocaleString()}円</b>${x.pending ? `<div class="dim">取っておく</div>` : ""}${x.spent < x.amount ? `<div class="dim" title="100円単位・点数に合わせた余り">配分 ${x.amount.toLocaleString()}円</div>` : ""}` : x.pick && P.budget ? `<span class="dim">0円</span>` : `<span class="dim">-</span>`}` +
         fundCopyCell(x) + `</td>` +
+      `<td class="n f-i" data-l="払戻">${fundPayCell(x, tk)}</td>` +
       `<td class="f-tk">${list}</td></tr>`;
   }
   h += `</table></div>`;
@@ -3023,6 +3031,15 @@ function renderFund(date, raceLink) {
     `<b>期待値</b>は、オッズのある買い目の 確率 × オッズ の配分額での平均(参考。配分には使わない)。オッズは変わるので、使ったオッズの日時を買い目の下に出す(「オッズ: … 時点・… 取得」)。` +
     `検証期間での確かめ(1日ずつ配ったときの回収率・最大の連敗など)は docs/fund-plan.md。過去の回収率は100%を下回るものが多く、儲かることを約束するものではない。</div></div>`;
   return h;
+}
+function fundPayCell(x, tk) {
+  // 払戻の列(2026-11-22 ユーザーの指示)。結果(払戻の CSV)が出たレースだけ
+  if (!state.pays.has(x.rid)) return `<span class="dim">${tk.length ? "結果待ち" : "-"}</span>`;
+  if (!tk.length) return `<span class="dim">-</span>`;
+  const cost = tk.reduce((a, y) => a + y.amount, 0);
+  const back = tk.reduce((a, y) => a + (hitPayout(x.rid, y.kind, y.t) || 0) * y.amount / 100, 0);
+  return back ? `<b class="${back >= cost ? "hi" : ""}">${Math.round(back).toLocaleString()}円</b><div class="dim">収支 ${back - cost >= 0 ? "+" : "−"}${Math.abs(Math.round(back - cost)).toLocaleString()}円</div>` :
+    `<span class="dim">はずれ</span>`;
 }
 function fundCopyCell(x) {
   // 個別レースページの推奨買い目の「手入力」へ送るボタンと、送ってある金額

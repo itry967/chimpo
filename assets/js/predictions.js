@@ -622,9 +622,8 @@ function changeCard(rows) {
 
 function simpleView() {
   // 出走馬の簡易表示(このブラウザに覚えておく)
-  // 携帯は、まだ選んでいなければ簡易表示にする(2026-11-15 ユーザーの指示)
-  const dflt = () => window.matchMedia("(max-width: 760px)").matches;
-  try { const v = localStorage.getItem("keiba-viewer:simple"); return v == null ? dflt() : v === "1"; } catch (e) { return state.simple ?? dflt(); }
+  // 2026-11-22 ユーザーの指示: PC も携帯も簡易表示を最初の表示にし、チェックは「詳細表示」(✓で前の PC の最初の表示)にした
+  try { return localStorage.getItem("keiba-viewer:detail") !== "1"; } catch (e) { return !state.detail; }
 }
 function hitPayout(rid, kind, t) {
   // 結果が出たレースで、その買い目が当たっていれば 100円あたりの払戻(当たっていなければ null)。馬単・3連単は順番どおり
@@ -1234,8 +1233,8 @@ function renderRace(rid) {
   // 出走馬
   html += `<div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">` +
     `<h3 style="margin:0">出走馬${updTag(["予想", "オッズ"], rid)}</h3>` + favBox +
-    `<label class="muted" style="font-size:13px" title="相対値・絶対値・理由をたたむ。馬の行を1回押すとそれが出て、2回目で詳細が出る">` +
-    `<input type="checkbox" id="simpleView" ${simpleView() ? "checked" : ""}> 簡易表示</label>` +
+    `<label class="muted" style="font-size:13px" title="相対値・絶対値・理由を全部の馬に出す。✓が無いとき(簡易表示)は、馬の行を1回押すとそれが出て、2回目で詳細が出る">` +
+    `<input type="checkbox" id="simpleView" ${simpleView() ? "" : "checked"}> 詳細表示</label>` +
     (hasPre(rows) ? `<label class="muted" style="font-size:13px" title="予想順位と勝率の横に枠順確定の時点からの変化を出す。レース一覧に、本命が変わったレースの印を出す">` +
       `<input type="checkbox" id="changeView" ${changeView() ? "checked" : ""}> 馬体重確定前からの変化</label>` : "") +
     (r0["オッズの時刻"] ? `<span class="chip gray" title="単複オッズの発表日時と、取った日時(過去のレースは確定オッズ)。オッズは発走まで変わる">${r0["オッズの時刻"] === "確定" ? "確定オッズ" : `オッズ ${esc(r0["オッズの時刻"])} 発表` + (r0["オッズの取得時刻"] ? `・${esc(r0["オッズの取得時刻"])} 取得` : "")}</span>` : "") +
@@ -1310,7 +1309,7 @@ function renderRace(rid) {
     renderRace(rid);
   }));
   document.getElementById("simpleView")?.addEventListener("change", e => {
-    try { localStorage.setItem("keiba-viewer:simple", e.target.checked ? "1" : "0"); } catch (err) { state.simple = e.target.checked; }
+    try { localStorage.setItem("keiba-viewer:detail", e.target.checked ? "1" : "0"); } catch (err) { state.detail = e.target.checked; }
     renderRace(rid);
   });
   document.querySelectorAll(".tabs.combo button").forEach(b => b.onclick = () => { state.comboTab = b.dataset.t; renderRace(rid); });

@@ -1591,6 +1591,11 @@ function renderRace(rid) {
     const all = (state.races.get(rid) || []).map(r => String(r.umaban));
     calc.rows[x.dataset.i - 1] = x.checked ? all : [];
   }));
+  document.querySelectorAll(".calcMarked").forEach(x => x.onclick = () => {
+    const marked = (state.races.get(rid) || []).map(r => String(r.umaban)).filter(u => { const m = markOf(rid, u); return m && m !== "消"; });
+    if (!marked.length) { alert("印の付いた馬がいません(出走馬の表かビジュアライズ予想で印を付ける)"); return; }
+    calcUpdate(() => { const row = calc.rows[x.dataset.i - 1]; for (const u of marked) if (!row.includes(u)) row.push(u); });
+  });
   document.getElementById("calcClear")?.addEventListener("click", () => calcUpdate(() => { calc.rows = [[], [], []]; }));
   document.getElementById("calcAddPick")?.addEventListener("click", () => {
     const picked = [...document.querySelectorAll(".prevPick:checked")].map(x => x.dataset.k.split("-"));
@@ -2384,20 +2389,22 @@ function renderCalc(rid) {
   const rowName = i => n === 1 ? "馬番" : ordered ? `${i}着` : `${i}頭目`;
   const nameOf = u => raceRows.find(r => String(r.umaban) === u)?.horse_name || "";
   h += `<div class="scroll"><table class="grid"><tr><th></th>` +
-    horses.map(u => `<th class="gc" title="${esc(nameOf(u))}">${u}</th>`).join("") + `<th class="gc">全通り</th></tr>` +
+    horses.map(u => `<th class="gc" title="${esc(nameOf(u))}">${u}</th>`).join("") + `<th class="gc">全通り</th><th class="gc" title="印(消 は除く)の付いた馬をその行に入れる">印の馬</th></tr>` +
     // 出走馬の表で付けた印(買い目を選ぶときの目安。印を変えるとここもすぐ変わる)
     `<tr class="gmarks"><th class="gr" title="出走馬の表で付けた印">印</th>` +
-    horses.map(u => { const m = markOf(rid, u); return `<td class="gc gmark" data-u="${u}" data-m="${m}" title="${esc(nameOf(u))}">${m || "-"}</td>`; }).join("") + `<td></td></tr>`;
+    horses.map(u => { const m = markOf(rid, u); return `<td class="gc gmark" data-u="${u}" data-m="${m}" title="${esc(nameOf(u))}">${m || "-"}</td>`; }).join("") + `<td></td><td></td></tr>`;
   for (let i = 1; i <= n; i++) {
     const row = c.rows[i - 1];
     const all = horses.length && horses.every(u => row.includes(u));
     h += `<tr><th class="gr">${rowName(i)}</th>` +
       horses.map(u => `<td class="gc"><input type="checkbox" class="calcBox" data-i="${i}" data-u="${u}" ${row.includes(u) ? "checked" : ""}></td>`).join("") +
-      `<td class="gc"><input type="checkbox" class="calcAll" data-i="${i}" ${all ? "checked" : ""}></td></tr>`;
+      `<td class="gc"><input type="checkbox" class="calcAll" data-i="${i}" ${all ? "checked" : ""}></td>` +
+      // 印の付いた馬を選ぶ(2026-11-22 ユーザーの指示。消 の馬は入れない。今の選びに足す)
+      `<td class="gc"><button class="calcMarked" data-i="${i}" title="印(消 は除く)の付いた馬をこの行に入れる">印を選択</button></td></tr>`;
   }
   h += `</table></div><div class="note">${n === 1 ? "買う馬にチェック。" : ordered ? "着順ごとに馬にチェック(1着の行が1着、2着の行が2着…)。" :
     "1頭目・2頭目…の行に馬をチェック。順番は問わず、同じ組は1点にまとめる。"}` +
-    `ボックスは1行目の馬を全部の行に入れる。流しは1行目に軸、2行目以降に相手をチェック。馬番にのせると馬名。</div>`;
+    `ボックスは1行目の馬を全部の行に入れる。流しは1行目に軸、2行目以降に相手をチェック。「印を選択」はその行に印(消 は除く)の付いた馬を足す。馬番にのせると馬名。</div>`;
   // 今の選び方の組(買い目候補に移す前の下見)
   h += `<h3 style="margin-top:14px">選んでいる馬券</h3>`;
   if (!tickets.length) {

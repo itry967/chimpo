@@ -39,6 +39,7 @@ header .sp { order: 6; }
 #resOpen { order: 9; }
 #theme { order: 10; }
 #autoLamp { order: 7; }   /* 自動更新のランプはヘッダの右側(2026-11-21) */
+#driveToast.in-header { order: 7; }   /* 更新の知らせ(再ログインなど)も右側の自動更新の隣に(2026-11-23) */
 header .sp { flex: 1; }
 button, label.btn { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text);
   border-radius: 6px; padding: 4px 10px; cursor: pointer; }

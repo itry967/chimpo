@@ -696,13 +696,24 @@ OK を押すと netkeiba の出馬表を開きます。拡張機能「予想ビ�
     return;
   }
   const w = window.open(url, "_blank");
-  if (!w) nkPopupBlocked();
+  if (!w) nkPopupBlocked(); else setNkSent(rid, "open");
 }
 // ポップアップがブロックされたとき(2026-11-22 ユーザーの指示: このサイトは解除するよう注意書き)
 const NK_POPUP_NOTE = "ポップアップがブロックされた場合は、アドレスバーの右端に出るアイコンを押して、このサイトのポップアップとリダイレクトを「常に許可」にしてください(許可したあと、もう一度「netkeiba に印を転記」を押す)。";
 function nkPopupBlocked() {
   nkToast("✖ netkeiba のタブが開けませんでした(ポップアップのブロック)。" + NK_POPUP_NOTE, "ng");
   alert("netkeiba のタブが開けませんでした。\n\n" + NK_POPUP_NOTE);
+}
+// 印を転記した時刻(レースごと。このブラウザに覚えておく。2026-11-22 ユーザーの指示「？の横に印を転記した時間を表示」)
+function nkSentOf(rid) { try { return JSON.parse(localStorage.getItem("keiba-viewer:nkSent:" + rid) || "null"); } catch (e) { return null; } }
+function setNkSent(rid, how) {
+  const d = new Date(), v = { at: `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`, how };
+  try { localStorage.setItem("keiba-viewer:nkSent:" + rid, JSON.stringify(v)); } catch (e) {}
+  document.querySelectorAll(".nk-sent").forEach(x => x.outerHTML = nkSentTag(rid));
+}
+function nkSentTag(rid) {
+  const v = nkSentOf(rid);
+  return `<span class="nk-sent muted" title="${v ? (v.how === "ext" ? "拡張機能で転記できた時刻" : "netkeiba の出馬表を開いた時刻(ブックマークでの転記)") : "まだ転記していない"}">${v ? (v.how === "ext" ? "転記 " : "開いた ") + esc(v.at) : "未転記"}</span>`;
 }
 function nkToast(text, kind) {
   // 転記中は画面の真ん中に「お待ちください」を出す(2026-11-22 ユーザーの指示)。結果が来たら消す
@@ -725,6 +736,7 @@ function nkToast(text, kind) {
 }
 window.addEventListener("message", e => {   // 拡張機能からの転記の結果
   if (e.source !== window || !e.data || e.data.type !== "kbm-result") return;
+  if (e.data.ok && e.data.id) setNkSent(e.data.id, "ext");
   nkToast(e.data.ok ? `✔ 転記できました: ${e.data.message || ""}` : `✖ 転記できませんでした: ${e.data.message || ""}`, e.data.ok ? "ok" : "ng");
 });
 function nkHelpHTML() {
@@ -1380,7 +1392,7 @@ function renderRace(rid) {
     `<h3 style="margin:0">出走馬${updTag(["予想", "オッズ"], rid)}</h3>` + favBox +
     `<label class="muted" style="font-size:13px" title="相対値・絶対値・理由を全部の馬に出す。✓が無いとき(簡易表示)は、馬の行を1回押すとそれが出て、2回目で詳細が出る">` +
     `<input type="checkbox" id="simpleView" ${simpleView() ? "" : "checked"}> 詳細表示</label>` +
-    `<button id="nkMarks" class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る)">netkeiba に印を転記</button><button class="help" id="nkHelp" title="netkeiba への印の転記の使い方(ブックマークの登録)">？</button>` +
+    `<button id="nkMarks" class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る)">netkeiba に印を転記</button><button class="help" id="nkHelp" title="netkeiba への印の転記の使い方(ブックマークの登録)">？</button>${nkSentTag(rid)}` +
     (hasPre(rows) ? `<label class="muted" style="font-size:13px" title="予想順位と勝率の横に枠順確定の時点からの変化を出す。レース一覧に、本命が変わったレースの印を出す">` +
       `<input type="checkbox" id="changeView" ${changeView() ? "checked" : ""}> 馬体重確定前からの変化</label>` : "") +
     (r0["オッズの時刻"] ? `<span class="chip gray" title="単複オッズの発表日時と、取った日時(過去のレースは確定オッズ)。オッズは発走まで変わる">${r0["オッズの時刻"] === "確定" ? "確定オッズ" : `オッズ ${esc(r0["オッズの時刻"])} 発表` + (r0["オッズの取得時刻"] ? `・${esc(r0["オッズの取得時刻"])} 取得` : "")}</span>` : "") +
@@ -1957,7 +1969,7 @@ function renderViz(rid, rows, favBox = "") {
     `<div class="calc" style="margin-bottom:6px;gap:10px">` +
     favBox + (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
     `<span class="muted" style="font-size:12px">列の見出し(馬番・人気・単勝・予想着順・結果)を押すと並べ替え</span>` +
-    `<button class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る。使い方は右の ？)">netkeiba に印を転記</button><button class="help nkHelpBtn" title="netkeiba への印の転記の使い方(ブックマークの登録)">？</button></div>` +
+    `<button class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る。使い方は右の ？)">netkeiba に印を転記</button><button class="help nkHelpBtn" title="netkeiba への印の転記の使い方(ブックマークの登録)">？</button>${nkSentTag(rid)}</div>` +
     `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-n">${sb("ninki", "人気", "人気")}</div><div class="viz-n">${sb("odds", "単勝", "単勝オッズ")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
     gridTicks.map(t => `<span class="viz-tick" style="left:${x(t)}">${ticks.includes(t) ? `${t}着` : t}</span>`).join("") + `</div><div></div></div>`;
   for (const { r, b, k, o, nk } of items) {

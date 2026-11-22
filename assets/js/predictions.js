@@ -1891,7 +1891,7 @@ function renderViz(rid, rows) {
   for (const { r, b, k } of items) {
     const [lo, hi, p10, p90, mean] = b, inB = k != null && k >= lo && k <= hi;
     h += `<div class="viz-row" title="${esc(r.horse_name)}: 着順の見込み ${bandStr(b)}(80% の範囲 ${p10}〜${p90}、平均 ${mean.toFixed(1)}着)${k != null ? `・結果 ${k}着` : ""}">` +
-      `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-n">${num(r[pre ? "枠順時_順位" : "平均_順位"]) ?? "-"}</div>` +
+      `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-n">${num(r[pre ? "枠順時_順位" : "平均_順位"]) ?? "-"}${cdot(r, "予想")}</div>` +
       `<div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${k}</b>` : `<span class="dim">-</span>`}</div><div class="viz-track">` +
       ticks.map(t => `<span class="viz-grid" style="left:${x(t)}"></span>`).join("") +
       `<span class="viz-w" style="left:${x(p10)};width:calc(${x(p90)} - ${x(p10)})"></span>` +
@@ -1917,7 +1917,7 @@ function vizHelpHTML() {
     `<h3>並び</h3><table>` +
     `<tr><th>並べ替え</th><td>列の見出し(馬番・馬名、予想着順、結果)を押すと、その順に並ぶ。同じ見出しをもう一度押すと逆の順(▲ 小さい順・▼ 大きい順)。最初は予想着順の小さい順。</td></tr>` +
     `<tr><th>印</th><td>左端の「印」の列で印(◎ 〇 ▲ △ ★ ✓ 消)を付けられる。出走馬の表の印と共通で、どちらで付けても両方に出る。</td></tr>` +
-    `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。</td></tr>` +
+    `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。出走馬の表の馬名の横と同じ)。</td></tr>` +
     `<tr><th>結果</th><td>実際の着順の順(結果の無い馬は下)。</td></tr>` +
     `<tr><th>馬番</th><td>馬番の順。</td></tr></table>` +
     `<h3>馬体重確定前の予想</h3><p>✓を入れると、馬体重が出る前(枠順確定の時点)の予想の勝率で描き直す。馬体重や当日の馬場傾向で見込みがどう変わったかを比べられる。枠順確定の時点の値が無いレースでは出ない。</p>` +

@@ -1292,8 +1292,8 @@ function renderRace(rid) {
     const split = spread != null && spread >= 4;
     const w = num(r["馬体重"]), z = num(r["増減"]);
     const why = catChips(r) + reasonChips(r);
-    html += `<tr class="horse${why ? " has-why" : ""}" data-key="${key}"><td class="rank">${esc(r["平均_順位"])}${changeView() ? moveMark(rankMove(r)) : ""}</td><td>${umaBadge(r.umaban, nUma)}</td>` +
-      `<td class="mark-col">${markSelect(rid, r.umaban)}</td><td class="name">${esc(r.horse_name)}${cdot(r, "予想")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}${changeView() ? winMove(r) : ""}</td><td>${placeBar(top2(r), top3(r), maxTop3)}${preTops(r, ms)}</td>` +
+    html += `<tr class="horse${why ? " has-why" : ""}" data-key="${key}"><td class="rank">${esc(r["平均_順位"])}${changeView() ? moveMark(rankMove(r)) : ""}</td><td class="mark-col">${markSelect(rid, r.umaban)}</td>` +
+      `<td>${umaBadge(r.umaban, nUma)}</td><td class="name">${esc(r.horse_name)}${cdot(r, "予想")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}${changeView() ? winMove(r) : ""}</td><td>${placeBar(top2(r), top3(r), maxTop3)}${preTops(r, ms)}</td>` +
       `<td class="n">${fix(num(r["妥当オッズ_単勝"]))}${gapMark(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]), "単勝")}${colMove(r, "妥当オッズ_単勝", 1, true)} / ` +
       `${fix(num(r["妥当オッズ_複勝"]))}${gapMark(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]), "複勝(下限)")}${colMove(r, "妥当オッズ_複勝", 1, true)}</td>` +
       `<td class="n">${odds != null ? `${fix(odds)}<span class="dim ninki">${ninki.get(String(r.umaban))}人気</span>` : `<span class="dim">—</span>`}</td>` +
@@ -1324,6 +1324,8 @@ function renderRace(rid) {
     s.onclick = e => e.stopPropagation();
     s.onchange = () => {
       setMark(rid, s.dataset.uma, s.value); s.dataset.m = s.value;
+      // 出走馬の表とビジュアライズ予想の印は共通(2026-11-22 ユーザーの指示)。同じ馬のもう片方の印も合わせる
+      document.querySelectorAll(`select.mark[data-uma="${s.dataset.uma}"]`).forEach(o => { if (o !== s) { o.value = s.value; o.dataset.m = s.value; } });
       // フォーメーションの馬番の下の印も合わせる
       document.querySelectorAll(`td.gmark[data-u="${s.dataset.uma}"]`).forEach(td => { td.dataset.m = s.value; td.textContent = s.value || "-"; });
     };
@@ -1350,7 +1352,10 @@ function renderRace(rid) {
     renderRace(rid);
   }));
   document.getElementById("vizPre")?.addEventListener("change", e => { state.vizPre = e.target.checked; renderRace(rid); });
-  document.querySelectorAll(".vizSort").forEach(b => b.onclick = () => { state.vizSort = b.dataset.k; renderRace(rid); });
+  document.querySelectorAll(".vizSort").forEach(b => b.onclick = () => {
+    const cur = ["res", "uma"].includes(state.vizSort) ? state.vizSort : "pred";
+    state.vizDir = cur === b.dataset.k && state.vizDir !== -1 ? -1 : 1; state.vizSort = b.dataset.k; renderRace(rid);
+  });
   document.getElementById("simpleView")?.addEventListener("change", e => {
     try { localStorage.setItem("keiba-viewer:detail", e.target.checked ? "1" : "0"); } catch (err) { state.detail = e.target.checked; }
     renderRace(rid);
@@ -1450,8 +1455,9 @@ function horseCols(rid) {
   const t3 = r => { const s = num(r["平均_3着内"]); if (s != null) return s; const v = MODELS_OF(r).map(m => num(r[`${m}_3着内`])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
   return [
     ["予", r => num(r["平均_順位"]), 1, "rank", "予想の順位"],
-    ["馬番", r => +r.umaban, 1, "", ""],
+    // 2026-11-22 ユーザーの指示: 印を馬番の左に
     ["印", r => { const m = markOf(rid, r.umaban); return m ? MARKS.indexOf(m) : null; }, 1, "mark-col", "自分で付ける印(◎ 〇 ▲ △ ★ ✓ 消)。印の順で並べる"],
+    ["馬番", r => +r.umaban, 1, "", ""],
     ["馬名", r => r.horse_name || "", 1, "", ""],
     ["勝率", r => num(r["平均_勝率"]), -1, "", ""],
     ["2・3着内", t3, -1, "", "3着内の確率で並べる"],
@@ -1808,21 +1814,27 @@ function renderViz(rid, rows) {
     .filter(o => o.b && o.b[0] != null);
   const sort = ["res", "uma"].includes(state.vizSort) ? state.vizSort : "pred";   // 11/22: 平均の着順の並びはやめた(予想着順とほぼ同じ)
   const big = 999;
+  const dir = state.vizDir === -1 ? -1 : 1;   // 同じ見出しをもう一度押すと逆の順(2026-11-22 ユーザーの指示)
   if (sort === "res") items.sort((a, b) => (a.k ?? big) - (b.k ?? big) || a.b[4] - b.b[4]);
   else if (sort === "uma") items.sort((a, b) => +a.r.umaban - +b.r.umaban);
   else if (pre) items.sort((a, b) => (num(a.r["枠順時_順位"]) ?? big) - (num(b.r["枠順時_順位"]) ?? big));
+  if (dir === -1) {   // 逆の順。結果の無い馬は逆にしても下のまま
+    const none = sort === "res" ? items.filter(o => o.k == null) : [];
+    const rest = items.filter(o => !none.includes(o)).reverse();
+    items.splice(0, items.length, ...rest, ...none);
+  }
   // 並べ替えは列の見出しを押す(2026-11-22 ユーザーの指示「行のタイトルを押したらソートされる方式にして」)
-  const sb = (k, l, tip) => `<span class="vizSort${sort === k ? " on" : ""}" data-k="${k}" title="${tip}で並べる">${l}${sort === k ? " ▲" : ""}</span>`;
+  const sb = (k, l, tip) => `<span class="vizSort${sort === k ? " on" : ""}" data-k="${k}" title="${tip}で並べる">${l}${sort === k ? (dir === 1 ? " ▲" : " ▼") : ""}</span>`;
   let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想<button class="help" data-help="viz" title="ビジュアライズ予想の各項目の説明">？</button>${updTag(["予想"], rid)}</h3>` +
     `<div class="calc" style="margin-bottom:6px;gap:10px">` +
     (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
     `<span class="muted" style="font-size:12px">列の見出し(馬番・予想着順・結果)を押すと並べ替え</span></div>` +
-    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
+    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
     ticks.map(t => `<span class="viz-tick" style="left:${x(t)}">${t}着</span>`).join("") + `</div><div></div></div>`;
   for (const { r, b, k } of items) {
     const [lo, hi, p10, p90, mean] = b, inB = k != null && k >= lo && k <= hi;
     h += `<div class="viz-row" title="${esc(r.horse_name)}: 着順の見込み ${bandStr(b)}(80% の範囲 ${p10}〜${p90}、平均 ${mean.toFixed(1)}着)${k != null ? `・結果 ${k}着` : ""}">` +
-      `<div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-n">${num(r[pre ? "枠順時_順位" : "平均_順位"]) ?? "-"}</div>` +
+      `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-n">${num(r[pre ? "枠順時_順位" : "平均_順位"]) ?? "-"}</div>` +
       `<div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${k}</b>` : `<span class="dim">-</span>`}</div><div class="viz-track">` +
       ticks.map(t => `<span class="viz-grid" style="left:${x(t)}"></span>`).join("") +
       `<span class="viz-w" style="left:${x(p10)};width:calc(${x(p90)} - ${x(p10)})"></span>` +
@@ -1846,7 +1858,8 @@ function vizHelpHTML() {
     `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。出走馬の表の「予」の列と同じ。</td></tr>` +
     `<tr><th>結果</th><td>実際の着順(結果が出たレースだけ)。着順の見込みの帯の中なら緑の字。</td></tr></table>` +
     `<h3>並び</h3><table>` +
-    `<tr><th>並べ替え</th><td>列の見出し(馬番・馬名、予想着順、結果)を押すと、その順に並ぶ(▲が今の並び)。最初は予想着順の順。</td></tr>` +
+    `<tr><th>並べ替え</th><td>列の見出し(馬番・馬名、予想着順、結果)を押すと、その順に並ぶ。同じ見出しをもう一度押すと逆の順(▲ 小さい順・▼ 大きい順)。最初は予想着順の小さい順。</td></tr>` +
+    `<tr><th>印</th><td>左端の「印」の列で印(◎ 〇 ▲ △ ★ ✓ 消)を付けられる。出走馬の表の印と共通で、どちらで付けても両方に出る。</td></tr>` +
     `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。</td></tr>` +
     `<tr><th>結果</th><td>実際の着順の順(結果の無い馬は下)。</td></tr>` +
     `<tr><th>馬番</th><td>馬番の順。</td></tr></table>` +

@@ -1367,7 +1367,7 @@ function setupCardFolds(root, sel = ".card", shutByDefault = false) {
     // 携帯: 展開予想・馬場傾向予想は、レースを開いたときはたたんでおく(開いたのはそのレースを見ているあいだだけ。2026-11-15 ユーザーの指示)
     const mob = MOBILE_SHUT.test(titleKey) && window.matchMedia("(max-width: 760px)").matches;
     // 携帯でも開いたことを覚えておき、どのレースでも同じにする(2026-11-21 ユーザーの指示。前はそのレースを見ているあいだだけ)
-    const dflt = mob || (shutByDefault && head.tagName !== "H2" && !/^card:(出走馬|ビジュアライズ予想|レース回顧)/.test(titleKey));
+    const dflt = card.dataset.shut === "1" || mob || (shutByDefault && head.tagName !== "H2" && !/^card:(出走馬|ビジュアライズ予想|レース回顧)/.test(titleKey));
     const isShut = () => dflt ? !folded("mopen:" + key) : folded(key);
     head.classList.add("fold-card");
     head.insertAdjacentHTML("afterbegin", `<span class="fold-mark">${isShut() ? "▸" : "▾"}</span>`);
@@ -2796,7 +2796,7 @@ function renderDayPage(date) {
 
   // 1. 1日を通した馬場傾向の予想(場ごと・芝ダ別)。予想 CSV の馬場傾向の列は同じ場・芝ダのレースで同じ値なので、芝ダごとにまとめて出す
   const bj = pick("dayBiasJyo");
-  h += `<div class="card"><h3>馬場傾向の予想(1日を通して)（仮）${updTag("予想", rids)}</h3>` + jyoTabs("dayBiasJyo", bj);
+  h += `<div class="card day-fold" data-shut="1" data-sec="baba"><h3>馬場傾向の予想(1日を通して)（仮）${updTag("予想", rids)}</h3>` + jyoTabs("dayBiasJyo", bj);
   const bRids = rids.filter(rid => rid.slice(8, 10) === bj);
   const surfaces = [...new Set(bRids.map(surf))].sort((a, b) => ["芝", "ダート", "障害"].indexOf(a) - ["芝", "ダート", "障害"].indexOf(b));
   // この場の全レース(最終レースまで)の結果がそろったら、実際の馬場傾向と予想の当否を出す
@@ -2904,7 +2904,7 @@ function renderDayPage(date) {
     if (settled && x.amount > 0) { setCost += x.amount; setBack += back; setRaces.add(x.rid); }
     return { ...x, i, p, o, settled, back };
   }).sort((a, b) => a.rid.localeCompare(b.rid) || a.i - b.i);
-  h += `<div class="card"><h3>購入した馬券</h3>`;
+  h += `<div class="card day-fold" data-sec="bought"><h3>購入した馬券</h3>`;
   if (!bought.length) h += `<div class="muted">まだありません。個別レースページの「買い目候補」の欄で「→ 購入した馬券に送る」を押すと、ここに出ます。</div>`;
   else {
     // 並び: 総投資金額 → 期待値(予想の上の見込み。結果ではない)→ 実際の結果(払戻の CSV)。期待値と結果は枠で分けて見出しを付ける
@@ -2940,6 +2940,8 @@ function renderDayPage(date) {
 
   const main = document.getElementById("main");
   main.innerHTML = h;
+  // 並び(2026-11-22 ユーザーの指示): 馬場傾向の予想のすぐ下に購入した馬券。馬場傾向は最初たたむ(data-shut)、購入した馬券は最初開く
+  { const bb = main.querySelector('[data-sec="baba"]'), bo = main.querySelector('[data-sec="bought"]'); if (bb && bo) bb.after(bo); }
   setupCardFolds(main, ".card.day-fold");     // 見送り推奨・資金配分案は見出しを押すとたためる(このブラウザに覚えておく)
   document.body.classList.add("day-page-active");
   main.querySelectorAll(".dayTabs button").forEach(b => b.onclick = () => { state[b.parentElement.dataset.k] = b.dataset.j; renderDayPage(date); });
@@ -4071,6 +4073,9 @@ const autoLamp = document.createElement("span");
 autoLamp.id = "autoLamp";
 autoLamp.innerHTML = '<i></i><span class="lbl-l">自動更新</span>';
 document.getElementById("driveReload").before(autoLamp);
+// データの更新の知らせ(再ログインなど)は、画面の右下ではなくヘッダの「自動更新」の右に出す(2026-11-22 ユーザーの指示)
+autoLamp.after(driveToastEl);
+driveToastEl.classList.add("in-header");
 function updateAutoLamp() {
   const today = jstTodayYmd();
   const hasToday = [...state.races.keys()].some(rid => rid.slice(0, 8) === today);

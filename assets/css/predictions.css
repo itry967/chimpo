@@ -533,6 +533,8 @@ a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
 .drive-confirm-actions button { min-width: 72px; padding: 6px 12px; }
 #driveToast { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 32px); padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); }
 #driveToast[hidden] { display: none; }
+#driveToast.in-header { position: static; box-shadow: none; padding: 2px 8px; margin: 0 6px; max-width: none; white-space: nowrap; }
+#driveToast.in-header button { padding: 2px 8px; }
 
 /* お知らせボタンとお知らせのモーダル(日付・内容の表。新しいお知らせがあればボタンに印) */
 #noticeOpen { order: 2; white-space: nowrap; position: relative; }

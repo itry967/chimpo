@@ -1806,17 +1806,16 @@ function renderViz(rid, rows) {
   const ticks = [...new Set([1, ...Array.from({ length: Math.floor(n / 5) }, (_, k) => (k + 1) * 5), n])].filter(v => v <= n);
   const items = rows.map((r, i) => ({ r, i, b: rankBand(rid, m, r.umaban, !pre && state.favActive ? rows : null), k: res.get(String(+r.umaban)) }))
     .filter(o => o.b && o.b[0] != null);
-  const sort = ["fin", "res", "uma"].includes(state.vizSort) ? state.vizSort : "pred";
+  const sort = ["res", "uma"].includes(state.vizSort) ? state.vizSort : "pred";   // 11/22: 平均の着順の並びはやめた(予想着順とほぼ同じ)
   const big = 999;
-  if (sort === "fin") items.sort((a, b) => a.b[4] - b.b[4]);
-  else if (sort === "res") items.sort((a, b) => (a.k ?? big) - (b.k ?? big) || a.b[4] - b.b[4]);
+  if (sort === "res") items.sort((a, b) => (a.k ?? big) - (b.k ?? big) || a.b[4] - b.b[4]);
   else if (sort === "uma") items.sort((a, b) => +a.r.umaban - +b.r.umaban);
   else if (pre) items.sort((a, b) => (num(a.r["枠順時_順位"]) ?? big) - (num(b.r["枠順時_順位"]) ?? big));
   const sb = (k, l) => `<button class="vizSort${sort === k ? " on" : ""}" data-k="${k}">${l}</button>`;
   let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想<button class="help" data-help="viz" title="ビジュアライズ予想の各項目の説明">？</button>${updTag(["予想"], rid)}</h3>` +
     `<div class="calc" style="margin-bottom:6px;gap:10px">` +
     (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
-    `<span class="tabs" style="margin:0"><span class="muted" style="align-self:center;margin-right:4px">並び:</span>${sb("pred", "勝率の順")}${sb("fin", "平均の着順")}${sb("res", "実際の着順")}${sb("uma", "馬番")}</span></div>` +
+    `<span class="tabs" style="margin:0"><span class="muted" style="align-self:center;margin-right:4px">並び:</span>${sb("pred", "予想着順")}${sb("res", "結果")}${sb("uma", "馬番")}</span></div>` +
     `<div class="viz"><div class="viz-row viz-axis"><div class="viz-name"></div><div class="viz-n">予想着順</div><div class="viz-n">結果</div><div class="viz-track">` +
     ticks.map(t => `<span class="viz-tick" style="left:${x(t)}">${t}着</span>`).join("") + `</div><div></div></div>`;
   for (const { r, b, k } of items) {
@@ -1846,10 +1845,8 @@ function vizHelpHTML() {
     `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。出走馬の表の「予」の列と同じ。</td></tr>` +
     `<tr><th>結果</th><td>実際の着順(結果が出たレースだけ)。着順の見込みの帯の中なら緑の字。</td></tr></table>` +
     `<h3>並び</h3><table>` +
-    `<tr><th>勝率の順</th><td>6モデルの平均の勝率(1着になる確率)が高い順。出走馬の表の「予」の列と同じで、最初の並び。</td></tr>` +
-    `<tr><th>平均の着順</th><td>平均の着順(図の丸い点)の小さい順。勝率は1着になれるかだけを見るが、平均の着順は2着以下も含めた全体の見込み。` +
-    `どちらも同じ勝率から作るので、ほとんど同じ並びになる。勝率が近い馬どうしで入れ替わることがある。</td></tr>` +
-    `<tr><th>実際の着順</th><td>結果の着順の順(結果の無い馬は下)。</td></tr>` +
+    `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。「予想着順」の列と同じで、最初の並び。</td></tr>` +
+    `<tr><th>結果</th><td>実際の着順の順(結果の無い馬は下)。</td></tr>` +
     `<tr><th>馬番</th><td>馬番の順。</td></tr></table>` +
     `<h3>馬体重確定前の予想</h3><p>✓を入れると、馬体重が出る前(枠順確定の時点)の予想の勝率で描き直す。馬体重や当日の馬場傾向で見込みがどう変わったかを比べられる。枠順確定の時点の値が無いレースでは出ない。</p>` +
     `<h3>作り方</h3><p>そのレースの全頭の勝率から、勝率の高い馬から順に、残った馬の勝率の比で次の着順を決める(1着を決めたら、残りの馬で2着を決める…)。` +

@@ -1711,7 +1711,7 @@ function pctMove(r, col) {
   const d = (b - a) * 100;
   return Math.abs(d) < 0.05 ? "" : `<span class="chg ${d > 0 ? "up" : "down"}">${d > 0 ? "+" : ""}${d.toFixed(1)}%</span>`;
 }
-// 順位の幅(2026-11-22 ユーザーの指示「１～５みたいな感じの幅のある順位も併記して出せる？」「50の表の併記だけで大丈夫」):
+// 着順の見込み(列の名前は 11/22 に「順位の幅」から変えた。右の欄の「順位の幅」= 6モデルの順位の差とは別。2026-11-22 ユーザーの指示「１～５みたいな感じの幅のある順位も併記して出せる？」「50の表の併記だけで大丈夫」):
 // そのモデルの全頭の勝率から、勝率の高い馬から順に残りの馬の勝率の比で着順を決めるくり返し(Plackett-Luce)で着順の分布を作り、
 // 25%点〜75%点(真ん中の半分)を出す。乱数は種を固定して、開くたびに同じ値にする。モデルの勝率だけから作った見込みの範囲
 const RANK_BAND = new Map();
@@ -1742,7 +1742,7 @@ function rankBand(rid, m, umaban) {
 }
 function detail(r, ms) {
   const rankMv = m => { const a = num(r[preCol(`${m}_順位`)]), b = num(r[`${m}_順位`]); return changeView() && a != null && b != null ? moveMark(a - b) : ""; };   // ↑ は順位が上がった
-  let t = `<div class="grid2"><div class="scroll"><table><tr><th>モデル</th><th class="n">順位</th><th class="n" title="そのモデルの全頭の勝率から作った着順の分布の、真ん中の半分(25%〜75%)の範囲">順位の幅</th><th class="n">勝率</th><th class="n">2着内</th><th class="n">3着内</th></tr>`;
+  let t = `<div class="grid2"><div class="scroll"><table><tr><th>モデル</th><th class="n">順位</th><th class="n" title="そのモデルの全頭の勝率から作った着順の分布の、真ん中の半分(25%〜75%)の範囲。実際の着順が半々でこの範囲に入る見込み">着順の見込み</th><th class="n">勝率</th><th class="n">2着内</th><th class="n">3着内</th></tr>`;
   const bandTxt = m => { const b = rankBand(r.race_id, m, r.umaban); return b && b[0] != null ? (b[0] === b[1] ? `${b[0]}` : `${b[0]}〜${b[1]}`) : "-"; };
   for (const m of ms) t += `<tr><td>${esc(m)}</td><td class="n">${esc(r[`${m}_順位`])}${rankMv(m)}</td><td class="n">${bandTxt(m)}</td>` +
     `<td class="n">${pct(num(r[`${m}_勝率`]))}${pctMove(r, `${m}_勝率`)}</td>` +

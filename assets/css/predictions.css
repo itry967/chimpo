@@ -164,7 +164,7 @@ header { min-width: 100%; }
 /* ビジュアライズ予想(2026-11-22) */
 .viz { display: flex; flex-direction: column; gap: 2px; }
 .viz-n { font-size: 12px; text-align: right; white-space: nowrap; }
-.viz-row { display: grid; grid-template-columns: minmax(110px, 190px) 34px 30px 1fr 52px; align-items: center; gap: 8px; min-height: 24px; }
+.viz-row { display: grid; grid-template-columns: minmax(110px, 190px) 52px 34px 1fr 52px; align-items: center; gap: 8px; min-height: 24px; }
 .viz-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
 .viz-track { position: relative; height: 18px; }
 .viz-axis .viz-track { height: 16px; }
@@ -176,7 +176,7 @@ header { min-width: 100%; }
 .viz-res { position: absolute; top: 2px; width: 12px; height: 12px; margin-left: -6px; transform: rotate(45deg); background: var(--warn); border: 1px solid var(--panel); box-sizing: border-box; }
 .viz-res.in { background: var(--up); }
 .viz-txt { font-size: 12px; color: var(--muted); text-align: right; white-space: nowrap; }
-@media (max-width: 640px) { .viz-row { grid-template-columns: 92px 30px 24px 1fr 40px; gap: 4px; } .viz-name { font-size: 12px; } }
+@media (max-width: 640px) { .viz-row { grid-template-columns: 88px 44px 28px 1fr 40px; gap: 4px; } .viz-name { font-size: 12px; } }
 .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--accent-soft);
   color: var(--accent); white-space: nowrap; }
 .chip.up { background: var(--up-soft); color: var(--up); }

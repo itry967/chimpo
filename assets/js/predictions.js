@@ -1817,12 +1817,12 @@ function renderViz(rid, rows) {
     `<div class="calc" style="margin-bottom:6px;gap:10px">` +
     (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
     `<span class="tabs" style="margin:0"><span class="muted" style="align-self:center;margin-right:4px">並び:</span>${sb("pred", "勝率の順")}${sb("fin", "平均の着順")}${sb("res", "実際の着順")}${sb("uma", "馬番")}</span></div>` +
-    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-name"></div><div class="viz-n">予想</div><div class="viz-n">着順</div><div class="viz-track">` +
+    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-name"></div><div class="viz-n">予想着順</div><div class="viz-n">結果</div><div class="viz-track">` +
     ticks.map(t => `<span class="viz-tick" style="left:${x(t)}">${t}着</span>`).join("") + `</div><div></div></div>`;
   for (const { r, b, k } of items) {
     const [lo, hi, p10, p90, mean] = b, inB = k != null && k >= lo && k <= hi;
     h += `<div class="viz-row" title="${esc(r.horse_name)}: 着順の見込み ${bandStr(b)}(80% の範囲 ${p10}〜${p90}、平均 ${mean.toFixed(1)}着)${k != null ? `・結果 ${k}着` : ""}">` +
-      `<div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-n">${mean.toFixed(1)}</div>` +
+      `<div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-n">${num(r[pre ? "枠順時_順位" : "平均_順位"]) ?? "-"}</div>` +
       `<div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${k}</b>` : `<span class="dim">-</span>`}</div><div class="viz-track">` +
       ticks.map(t => `<span class="viz-grid" style="left:${x(t)}"></span>`).join("") +
       `<span class="viz-w" style="left:${x(p10)};width:calc(${x(p90)} - ${x(p10)})"></span>` +
@@ -1832,7 +1832,7 @@ function renderViz(rid, rows) {
       `</div><div class="viz-txt">${bandStr(b)}</div></div>`;
   }
   return h + `</div><div class="note">${pre ? "馬体重確定前(枠順確定の時点)" : "今"}の平均の勝率から、勝率の高い馬から順に残りの馬の勝率の比で着順を決めるくり返しで作った着順の分布。` +
-    `「予想」はその平均の着順、「着順」は実際の着順。太い帯は実際の着順が半々で入る範囲(表の「着順の見込み」)、細い線は 80% の範囲、点は平均の着順。` +
+    `「予想着順」は予想の順位(勝率の順)、「結果」は実際の着順。太い帯は実際の着順が半々で入る範囲(表の「着順の見込み」)、細い線は 80% の範囲、点は平均の着順。` +
     `結果が出たレースは、実際の着順を ◆ で出す(帯の中なら緑、外なら橙)。帯が短いほど予想がはっきりしている。モデルの勝率だけから作った見込みで、当たり方はまだ確かめていない。</div></div>`;
 }
 function vizHelpHTML() {
@@ -1840,14 +1840,14 @@ function vizHelpHTML() {
     `<h3>図の見方</h3><table>` +
     `<tr><th>太い帯</th><td>着順の見込み。実際の着順が半々(50%)の確率でこの範囲に入る見込み。右端の「1〜4」などの数字と、出走馬の表の「着順の見込み」と同じ。帯が短いほど予想がはっきりしていて、長いほどどこに来てもおかしくない。</td></tr>` +
     `<tr><th>細い線</th><td>80% の確率で入る範囲(広めに見たとき)。</td></tr>` +
-    `<tr><th>丸い点</th><td>平均の着順(「予想」の列の数字)。</td></tr>` +
+    `<tr><th>丸い点</th><td>平均の着順(下の「作り方」のくり返しで出た着順の平均)。行にのせると数字でも出る。</td></tr>` +
     `<tr><th>◆</th><td>結果が出たレースの実際の着順。帯の中なら緑、外なら橙。</td></tr></table>` +
     `<h3>列</h3><table>` +
-    `<tr><th>予想</th><td>平均の着順。下の「作り方」のくり返しで出た着順の平均(例: 1.8 なら、だいたい1〜2着)。</td></tr>` +
-    `<tr><th>着順</th><td>実際の着順(結果が出たレースだけ)。着順の見込みの帯の中なら緑の字。</td></tr></table>` +
+    `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。出走馬の表の「予」の列と同じ。</td></tr>` +
+    `<tr><th>結果</th><td>実際の着順(結果が出たレースだけ)。着順の見込みの帯の中なら緑の字。</td></tr></table>` +
     `<h3>並び</h3><table>` +
     `<tr><th>勝率の順</th><td>6モデルの平均の勝率(1着になる確率)が高い順。出走馬の表の「予」の列と同じで、最初の並び。</td></tr>` +
-    `<tr><th>平均の着順</th><td>「予想」の列(平均の着順)の小さい順。勝率は1着になれるかだけを見るが、平均の着順は2着以下も含めた全体の見込み。` +
+    `<tr><th>平均の着順</th><td>平均の着順(図の丸い点)の小さい順。勝率は1着になれるかだけを見るが、平均の着順は2着以下も含めた全体の見込み。` +
     `どちらも同じ勝率から作るので、ほとんど同じ並びになる。勝率が近い馬どうしで入れ替わることがある。</td></tr>` +
     `<tr><th>実際の着順</th><td>結果の着順の順(結果の無い馬は下)。</td></tr>` +
     `<tr><th>馬番</th><td>馬番の順。</td></tr></table>` +

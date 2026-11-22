@@ -1171,7 +1171,7 @@ function setupCardFolds(root, sel = ".card", shutByDefault = false) {
     // 携帯: 展開予想・馬場傾向予想は、レースを開いたときはたたんでおく(開いたのはそのレースを見ているあいだだけ。2026-11-15 ユーザーの指示)
     const mob = MOBILE_SHUT.test(titleKey) && window.matchMedia("(max-width: 760px)").matches;
     // 携帯でも開いたことを覚えておき、どのレースでも同じにする(2026-11-21 ユーザーの指示。前はそのレースを見ているあいだだけ)
-    const dflt = mob || (shutByDefault && head.tagName !== "H2" && !/^card:(出走馬|ビジュアライズ予想)/.test(titleKey));
+    const dflt = mob || (shutByDefault && head.tagName !== "H2" && !/^card:(出走馬|ビジュアライズ予想|レース回顧)/.test(titleKey));
     const isShut = () => dflt ? !folded("mopen:" + key) : folded(key);
     head.classList.add("fold-card");
     head.insertAdjacentHTML("afterbegin", `<span class="fold-mark">${isShut() ? "▸" : "▾"}</span>`);
@@ -1368,12 +1368,14 @@ function renderRace(rid) {
   html += modelCard;
   document.getElementById("main").innerHTML = html;
   state.favActive = false;   // 変化の印を止めるのは出走馬の表を作るあいだだけ(レース一覧の印は止めない)
-  // 並び(2026-11-22 ユーザーの指示): レース概要 → ビジュアライズ予想 → 出走馬 → ほか
+  // 並び(2026-11-22 ユーザーの指示): レース概要 → (レース回顧)→ ビジュアライズ予想 → 出走馬 → ほか
   {
     const main = document.getElementById("main"), top = main.querySelector(".card");
     const viz = main.querySelector(".viz-card"), horse = main.querySelector("tr.horse")?.closest(".card");
-    if (top && viz) top.after(viz);
-    if (viz && horse) viz.after(horse); else if (top && horse) top.after(horse);
+    const review = main.querySelector(".card.review");   // レース回顧が出ていれば概要のすぐ下(2026-11-22 ユーザーの指示)
+    const anchor = review ? (top.after(review), review) : top;
+    if (anchor && viz) anchor.after(viz);
+    if (viz && horse) viz.after(horse); else if (anchor && horse) anchor.after(horse);
   }
   setupCardFolds(document.getElementById("main"), ".card", true);   // 個別レース: 概要・出走馬・ビジュアライズ予想のほかは最初たたむ
   setupHelpButtons(document.getElementById("main"));

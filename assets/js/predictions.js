@@ -1154,7 +1154,9 @@ function setupHelpButtons(root) {
   });
 }
 const MOBILE_SHUT = /^card:(展開予想|馬場傾向予想|枠順確定)/;   // 枠順確定 → 馬体重の変化 も(2026-11-16)
-function setupCardFolds(root, sel = ".card") {
+function setupCardFolds(root, sel = ".card", shutByDefault = false) {
+  // shutByDefault: 個別レースのページでは、レース概要(h2 の見出し)・出走馬・ビジュアライズ予想のほかは、PC も最初はたたんでおく
+  // (2026-11-22 ユーザーの指示)。開いたことは携帯と同じ「mopen:」で覚える
   if (!state.mobileOpen || state.mobileOpenRid !== state.current) { state.mobileOpen = new Set(); state.mobileOpenRid = state.current; }
   // カードの見出し(h2・h3)を押すとたたむ。たたんだ見出しはどのレースでも同じ(見出しの文字で覚える)。sel でたためるカードを絞れる
   root.querySelectorAll(sel).forEach(card => {
@@ -1169,14 +1171,15 @@ function setupCardFolds(root, sel = ".card") {
     // 携帯: 展開予想・馬場傾向予想は、レースを開いたときはたたんでおく(開いたのはそのレースを見ているあいだだけ。2026-11-15 ユーザーの指示)
     const mob = MOBILE_SHUT.test(titleKey) && window.matchMedia("(max-width: 760px)").matches;
     // 携帯でも開いたことを覚えておき、どのレースでも同じにする(2026-11-21 ユーザーの指示。前はそのレースを見ているあいだだけ)
-    const isShut = () => mob ? !folded("mopen:" + key) : folded(key);
+    const dflt = mob || (shutByDefault && head.tagName !== "H2" && !/^card:(出走馬|ビジュアライズ予想)/.test(titleKey));
+    const isShut = () => dflt ? !folded("mopen:" + key) : folded(key);
     head.classList.add("fold-card");
     head.insertAdjacentHTML("afterbegin", `<span class="fold-mark">${isShut() ? "▸" : "▾"}</span>`);
     card.classList.toggle("folded", isShut());
     card._foldRefresh = () => { card.classList.toggle("folded", isShut()); head.querySelector(".fold-mark").textContent = isShut() ? "▸" : "▾"; };
     head.onclick = e => {
       e.stopPropagation();
-      toggleFold(mob ? "mopen:" + key : key);
+      toggleFold(dflt ? "mopen:" + key : key);
       const same = card.dataset.fold ? [...root.querySelectorAll(`[data-fold="${card.dataset.fold}"]`)] : [card];
       same.forEach(c => c._foldRefresh ? c._foldRefresh() : null);
     };
@@ -1365,7 +1368,7 @@ function renderRace(rid) {
   html += modelCard;
   document.getElementById("main").innerHTML = html;
   state.favActive = false;   // 変化の印を止めるのは出走馬の表を作るあいだだけ(レース一覧の印は止めない)
-  setupCardFolds(document.getElementById("main"));
+  setupCardFolds(document.getElementById("main"), ".card", true);   // 個別レース: 概要・出走馬・ビジュアライズ予想のほかは最初たたむ
   setupHelpButtons(document.getElementById("main"));
   setupLapBase(document.getElementById("main"));
   setupHorseSort(document.getElementById("main"), rid);
@@ -1866,6 +1869,7 @@ function renderViz(rid, rows) {
   // 結果が出ていれば実際の着順の印(2026-11-22 ユーザーの指示「結果が出ていたら実結果を示す点をそれぞれの項目内に表示してほしい」)
   const res = new Map((state.results.get(rid) || []).map(x => [String(+x["馬番"]), num(x["着順"])]));
   const ticks = [...new Set([1, ...Array.from({ length: Math.floor(n / 5) }, (_, k) => (k + 1) * 5), n])].filter(v => v <= n);
+  const gridTicks = [...new Set([...ticks, 2, 3])].filter(v => v <= n).sort((a, b) => a - b);   // 2着・3着の縦の点線も(2026-11-22 ユーザーの指示)
   const items = rows.map((r, i) => ({ r, i, b: rankBand(rid, m, r.umaban, !pre && state.favActive ? rows : null), k: res.get(String(+r.umaban)) }))
     .filter(o => o.b && o.b[0] != null);
   const sort = ["res", "uma"].includes(state.vizSort) ? state.vizSort : "pred";   // 11/22: 平均の着順の並びはやめた(予想着順とほぼ同じ)
@@ -1887,13 +1891,13 @@ function renderViz(rid, rows) {
     `<span class="muted" style="font-size:12px">列の見出し(馬番・予想着順・結果)を押すと並べ替え</span>` +
     `<button class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る。使い方は出走馬の欄の ？)">netkeiba に印を転記</button></div>` +
     `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
-    ticks.map(t => `<span class="viz-tick" style="left:${x(t)}">${t}着</span>`).join("") + `</div><div></div></div>`;
+    gridTicks.map(t => `<span class="viz-tick" style="left:${x(t)}">${ticks.includes(t) ? `${t}着` : t}</span>`).join("") + `</div><div></div></div>`;
   for (const { r, b, k } of items) {
     const [lo, hi, p10, p90, mean] = b, inB = k != null && k >= lo && k <= hi;
     h += `<div class="viz-row" title="${esc(r.horse_name)}: 着順の見込み ${bandStr(b)}(80% の範囲 ${p10}〜${p90}、平均 ${mean.toFixed(1)}着)${k != null ? `・結果 ${k}着` : ""}">` +
       `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-n">${num(r[pre ? "枠順時_順位" : "平均_順位"]) ?? "-"}${cdot(r, "予想")}</div>` +
       `<div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${k}</b>` : `<span class="dim">-</span>`}</div><div class="viz-track">` +
-      ticks.map(t => `<span class="viz-grid" style="left:${x(t)}"></span>`).join("") +
+      gridTicks.map(t => `<span class="viz-grid" style="left:${x(t)}"></span>`).join("") +
       `<span class="viz-w" style="left:${x(p10)};width:calc(${x(p90)} - ${x(p10)})"></span>` +
       `<span class="viz-b" style="left:calc(${x(lo)} - 6px);width:calc(${x(hi)} - ${x(lo)} + 12px)"></span>` +
       `<span class="viz-dot" style="left:${x(mean)}"></span>` +

@@ -682,30 +682,50 @@ ${txt}` +
 
 netkeiba で元々付けていた印は消えます(このページの印に置き換わります)。
 
-OK を押すと netkeiba の出馬表を開きます。拡張機能「予想ビューア 印転記」を入れていれば、裏のタブで自動で転記して閉じ、この画面に結果を知らせます(入れていなければ、netkeiba の出馬表が開くので、そこでブックマーク「印転記」を押す)。`);
+OK を押すと netkeiba の出馬表を開きます。拡張機能「予想ビューア 印転記」を入れていれば、裏のタブで自動で転記して閉じ、この画面に結果を知らせます(入れていなければ、netkeiba の出馬表が開くので、そこでブックマーク「印転記」を押す)。
+
+※ ${NK_POPUP_NOTE}`);
   if (!ok) return;
   const m = Object.fromEntries(list.filter(([, x]) => NK_MARK[x]).map(([u, x]) => [u, NK_MARK[x]]));
   const data = encodeURIComponent(JSON.stringify({ r: nkRaceId(rid), m }));
   const url = `https://race.netkeiba.com/race/shutuba.html?race_id=${nkRaceId(rid)}#kbm=${data}`;
   // 拡張機能(1.1 以降)が入っていれば、裏のタブで転記して自動で閉じ、結果をこの画面に知らせる(2026-11-22 ユーザーの指示)
   if (document.documentElement.dataset.kbmExt && document.documentElement.dataset.kbmExt !== "1") {
-    nkToast(`netkeiba に印を転記しています(裏のタブで。${title(rid)})…`, "wait");
+    nkToast(`⏳ netkeiba に印を転記しています(裏のタブで。${title(rid)})…`, "wait");
     window.postMessage({ type: "kbm-send", url, id: rid }, "*");
     return;
   }
-  window.open(url, "_blank");
+  const w = window.open(url, "_blank");
+  if (!w) nkPopupBlocked();
+}
+// ポップアップがブロックされたとき(2026-11-22 ユーザーの指示: このサイトは解除するよう注意書き)
+const NK_POPUP_NOTE = "ポップアップがブロックされた場合は、アドレスバーの右端に出るアイコンを押して、このサイトのポップアップとリダイレクトを「常に許可」にしてください(許可したあと、もう一度「netkeiba に印を転記」を押す)。";
+function nkPopupBlocked() {
+  nkToast("✖ netkeiba のタブが開けませんでした(ポップアップのブロック)。" + NK_POPUP_NOTE, "ng");
+  alert("netkeiba のタブが開けませんでした。\n\n" + NK_POPUP_NOTE);
 }
 function nkToast(text, kind) {
+  // 転記中は画面の真ん中に「お待ちください」を出す(2026-11-22 ユーザーの指示)。結果が来たら消す
+  let w = document.getElementById("nkWait");
+  if (kind === "wait") {
+    if (!w) { w = document.createElement("div"); w.id = "nkWait"; document.body.appendChild(w); }
+    w.innerHTML = `<div class="nk-wait-box"><div class="nk-spin"></div><b>netkeiba に印を転記しています</b><div>しばらくお待ちください(ふつう 10〜20 秒)</div></div>`;
+    clearTimeout(w._timer);
+    w._timer = setTimeout(() => w.remove(), 70000);   // 拡張機能から返事が無いとき
+    return;
+  }
+  if (w) w.remove();
   let t = document.getElementById("nkToast");
   if (!t) { t = document.createElement("div"); t.id = "nkToast"; document.body.appendChild(t); }
   t.className = "nk-toast " + (kind || "");
-  t.textContent = text;
+  t.innerHTML = `<div>${esc(text)}</div>` + (kind === "wait" ? "" : `<div class="nk-toast-x">押すと閉じる</div>`);
+  t.onclick = () => { if (kind !== "wait") t.remove(); };
   clearTimeout(t._timer);
-  if (kind !== "wait") t._timer = setTimeout(() => t.remove(), 6000);
+  if (kind === "ok") t._timer = setTimeout(() => t.remove(), 15000);   // 失敗の知らせは押すまで消さない
 }
 window.addEventListener("message", e => {   // 拡張機能からの転記の結果
   if (e.source !== window || !e.data || e.data.type !== "kbm-result") return;
-  nkToast(`${e.data.ok ? "✔" : "✖"} ${e.data.message || ""}`, e.data.ok ? "ok" : "ng");
+  nkToast(e.data.ok ? `✔ 転記できました: ${e.data.message || ""}` : `✖ 転記できませんでした: ${e.data.message || ""}`, e.data.ok ? "ok" : "ng");
 });
 function nkHelpHTML() {
   // 2026-11-22 ユーザーの指示: PC は拡張機能(自動で転記)を主に、ブックマークは補助。拡張機能の説明は PC の幅のときだけ出す
@@ -719,6 +739,7 @@ function nkHelpHTML() {
     `<input readonly value="chrome://extensions" onclick="this.select()" style="width:12em;margin-left:6px"></li>` +
     `<li>右上の「デベロッパー モード」をオンにする。</li><li>「パッケージ化されていない拡張機能を読み込む」を押し、展開した netkeiba-marks のフォルダを選ぶ。</li>` +
     `<li>一覧に「予想ビューア 印転記」が出れば完了。展開したフォルダは消さずに置いておく(消すと拡張機能が動かなくなる)。</li>` +
+    `<li>ブックマークの方式(拡張機能なし)で netkeiba のタブが開かないときは、ポップアップのブロック。${NK_POPUP_NOTE}</li>` +
     `<li>前の版(1.0)を入れていた場合は、新しい zip を同じ場所に展開し直して上書きし、一覧の「予想ビューア 印転記」の更新ボタン(↻)を押す。この画面も読み込み直す。</li></ol>` +
     `<p class="muted">今の状態: ${document.documentElement.dataset.kbmExt ? `拡張機能 ${esc(document.documentElement.dataset.kbmExt)} を確認${document.documentElement.dataset.kbmExt === "1" ? "(古い版。裏で転記するには更新が要る)" : ""}` : "拡張機能は見つからない"}</p>`;
   return `<p>このビューアで付けた印を、netkeiba の同じレースの印に転記する。</p>${pc ? ext : ""}<h3>${pc ? "補助: " : ""}ブックマーク(ブックマークレット)の登録${pc ? "(拡張機能を入れられないとき・携帯)" : ""}</h3>` +

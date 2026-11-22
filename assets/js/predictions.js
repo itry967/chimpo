@@ -670,7 +670,7 @@ function nkRaceId(rid) { return rid.slice(0, 4) + rid.slice(8, 16); }
 // ---------- netkeiba(IPAT 連動馬券購入)への買い目の転記(2026-11-22 ユーザーの指示) ----------
 // 「買い目候補」の買い目を、netkeiba の IPAT 連動馬券購入の画面に入れる(券種のタブ → 馬 → 金額 → 追加)。最後の「IPAT投票」(購入)は押さない。
 // 拡張機能(1.2 以降)が入っていれば開いた画面で自動で入れる。無ければ開いた画面でブックマーク「買い目転記」を押す。中身は拡張機能の bets.js と同じ
-const NK_BET_CODE = "(function () { var m = location.search.match(/[?&]kbb=([^&]+)/); if (!m) return; var d; try { d = JSON.parse(decodeURIComponent(m[1])); } catch (e) { alert(\"買い目転記: 買い目を読めませんでした\"); return; } var rid = (location.search.match(/race_id=(\\d+)/) || [])[1]; if (d.r && rid && d.r !== rid) { alert(\"買い目転記: レースが違います(ビューア \" + d.r + \" / このページ \" + rid + \")\"); return; } var q = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); }; var tab = function (n) { return q(\"dl.shikibetu dd a\").filter(function (a) { return a.textContent.trim() === n; })[0]; }; var addBtn = function () { return q(\"button\").filter(function (x) { return x.textContent.trim() === \"追加\"; })[0]; }; var i = 0, ok = 0, yen = 0, ng = [], okNames = [], tries = 0; var wbox = document.createElement(\"div\"); wbox.setAttribute(\"style\", \"position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-family:sans-serif\"); wbox.innerHTML = '<div style=\"background:#fff;color:#222;border-radius:12px;padding:22px 30px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.4);min-width:280px\">' + '<div style=\"font-size:17px;font-weight:700;margin-bottom:8px\">予想ビューアから買い目を入れています</div>' + '<div id=\"kbbWaitMsg\" style=\"font-size:14px\">しばらくお待ちください(画面ができるのを待っています)</div>' + '<div style=\"font-size:12px;color:#666;margin-top:8px\">終わるまで画面に触らないでください。購入(IPAT投票)は押しません。</div></div>'; var showWait = function (t) { if (!wbox.parentNode) document.body.appendChild(wbox); var m = wbox.querySelector(\"#kbbWaitMsg\"); if (m && t) m.textContent = t; }; var hideWait = function () { if (wbox.parentNode) wbox.parentNode.removeChild(wbox); }; function clearSel() { q(\"td.Horse_Select input:checked\").forEach(function (x) { (x.parentNode.querySelector(\"label\") || x).click(); }); } function step() { if (i >= d.b.length) return done(); showWait(\"しばらくお待ちください(\" + (i + 1) + \" / \" + d.b.length + \" 点目)\"); var b = d.b[i++], kind = b[0], t = b[1], amt = b[2], name = kind + \" \" + t.join(kind === \"馬単\" || kind === \"3連単\" ? \"→\" : \"-\"); var tb = tab(kind); if (!tb) { ng.push(name + \"(券種が無い)\"); return step(); } tb.click(); setTimeout(function () { var rows = q(\"tr.HorseList\").filter(function (tr) { return tr.getClientRects().length && tr.querySelector(\"td.Horse_Select\"); }); var byU = {}; rows.forEach(function (tr) { byU[String(+tr.cells[1].textContent.trim())] = tr; }); var miss = false; t.forEach(function (u, k) { var tr = byU[String(+u)]; if (!tr) { miss = true; return; } var cells = tr.querySelectorAll(\"td.Horse_Select\"), c = cells.length > 1 ? cells[k] : cells[0]; var inp = c && c.querySelector(\"input\"); if (!inp || inp.disabled) { miss = true; return; } if (!inp.checked) (c.querySelector(\"label\") || inp).click(); }); var money = document.querySelector(\"input[name=money]\"); if (money) { money.value = String(Math.max(1, Math.round(amt / 100))); [\"input\", \"keyup\", \"change\"].forEach(function (ev) { money.dispatchEvent(new Event(ev, { bubbles: true })); }); } setTimeout(function () { var add = addBtn(); if (miss || !money || !add || /disabled/.test(add.className)) { ng.push(name + (miss ? \"(馬を選べない)\" : \"(追加できない)\")); clearSel(); return setTimeout(step, 500); } add.click(); ok++; yen += Math.max(1, Math.round(amt / 100)) * 100; okNames.push(name); setTimeout(step, 900); }, 500); }, 900); } function done() { hideWait(); history.replaceState(null, \"\", location.pathname + location.search.replace(/&kbb=[^&]*/, \"\")); var got = stored() - base; if (got < ok) { ok = Math.max(0, got); okNames = got > 0 ? okNames.slice(0, got) : []; ng.push(\"購入画面の記録に入っていない買い目がある(「IPAT投票」で「買い目が入力されていません」になる。ページを読み込み直して、もう一度送ってください)\"); } try { if (typeof chrome !== \"undefined\" && chrome.runtime && chrome.runtime.id) chrome.runtime.sendMessage({ type: \"kbb-done\", ok: ok > 0, n: ok, yen: yen, ng: ng, okNames: okNames, id: d.id || \"\" }); } catch (e) {} alert(\"netkeiba の購入画面に買い目を \" + ok + \" 点入れました(合計 \" + yen.toLocaleString() + \" 円)。\" + (ng.length ? \"\\n入れられなかった買い目: \" + ng.join(\"、\") : \"\") + \"\\n\\n右の「投票内容」で買い目と金額を確かめてから、ご自分で「IPAT投票」を押してください(このプログラムは購入を押しません)。\"); } var lsKey = \"ndi::bet_\" + rid; var stored = function () { try { var v = JSON.parse(localStorage.getItem(lsKey) || \"null\"); return v && v.list ? Object.keys(v.list).length : 0; } catch (e) { return 0; } }; var base = 0; (function wait() { if (document.body) showWait(); if (!tab(\"単勝\") || !document.querySelector(\"input[name=money]\") || localStorage.getItem(lsKey) === null) { if (++tries > 40) { hideWait(); alert(\"買い目転記: 購入画面が出ませんでした(netkeiba にログインしているか・IPAT 連動の設定を確かめてください)\"); return; } return setTimeout(wait, 500); } setTimeout(function () { base = stored(); step(); }, 1500); })(); })();";
+const NK_BET_CODE = "(function () { var m = location.search.match(/[?&]kbb=([^&]+)/); if (!m) return; var d; try { d = JSON.parse(decodeURIComponent(m[1])); } catch (e) { alert(\"買い目転記: 買い目を読めませんでした\"); return; } var rid = (location.search.match(/race_id=(\\d+)/) || [])[1]; if (d.r && rid && d.r !== rid) { alert(\"買い目転記: レースが違います(ビューア \" + d.r + \" / このページ \" + rid + \")\"); return; } var q = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); }; var tab = function (n) { return q(\"dl.shikibetu dd a\").filter(function (a) { return a.textContent.trim() === n; })[0]; }; var addBtn = function () { return q(\"button\").filter(function (x) { return x.textContent.trim() === \"追加\"; })[0]; }; var i = 0, ok = 0, yen = 0, ng = [], okNames = [], tries = 0, adds = 0, cancelled = false; var wbox = document.createElement(\"div\"); wbox.setAttribute(\"style\", \"position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-family:sans-serif\"); wbox.innerHTML = '<div style=\"background:#fff;color:#222;border-radius:12px;padding:22px 30px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.4);min-width:280px\">' + '<div style=\"font-size:17px;font-weight:700;margin-bottom:8px\">予想ビューアから買い目を入れています</div>' + '<div id=\"kbbWaitMsg\" style=\"font-size:14px\">しばらくお待ちください(画面ができるのを待っています)</div>' + '<div style=\"font-size:12px;color:#666;margin-top:8px\">終わるまで画面に触らないでください。購入(IPAT投票)は押しません。</div>' + '<button id=\"kbbCancel\" style=\"margin-top:12px;padding:6px 18px;border-radius:6px;border:1px solid #999;background:#f4f4f4;cursor:pointer\">やめる</button></div>'; wbox.querySelector(\"#kbbCancel\").onclick = function () { cancelled = true; this.textContent = \"やめています…\"; this.disabled = true; }; var showWait = function (t) { if (!wbox.parentNode) document.body.appendChild(wbox); var m = wbox.querySelector(\"#kbbWaitMsg\"); if (m && t) m.textContent = t; }; var hideWait = function () { if (wbox.parentNode) wbox.parentNode.removeChild(wbox); }; var ordered = function (k) { return k === \"馬単\" || k === \"3連単\"; }; function clearSel() { q(\"td.Horse_Select input:checked\").forEach(function (x) { (x.parentNode.querySelector(\"label\") || x).click(); }); } function houshiki(name) { var a = q(\"dl.houshiki dd a, .houshiki a\").filter(function (x) { return x.textContent.trim() === name; })[0]; if (a) a.click(); return !!a; } function kensu() { var e = document.getElementById(\"kumiawase_kensu\"); return e ? +e.textContent.trim() : -1; } function step() { if (cancelled) return done(); if (i >= d.b.length) return done(); showWait(\"しばらくお待ちください(\" + (i + 1) + \" / \" + d.b.length + \" 件目)\"); var b = d.b[i++], form = !Array.isArray(b) && b.f; var kind = form ? b.kind : b[0], amt = form ? b.amt : b[2]; var name = form ? kind + \" フォーメーション \" + b.cols.map(function (c) { return c.join(\",\"); }).join(ordered(kind) ? \" → \" : \" - \") + \"(\" + b.n + \"点)\" : kind + \" \" + b[1].join(ordered(kind) ? \"→\" : \"-\"); var tb = tab(kind); if (!tb) { ng.push(name + \"(券種が無い)\"); return step(); } tb.click(); setTimeout(function () { if (!houshiki(form ? \"フォーメーション\" : \"通常\") && form) { d.b.splice.apply(d.b, [i, 0].concat(b.t.map(function (t) { return [kind, t, amt]; }))); return step(); } setTimeout(function () { var rows = q(\"tr.HorseList\").filter(function (tr) { return tr.getClientRects().length && tr.querySelector(\"td.Horse_Select\"); }); var byU = {}; rows.forEach(function (tr) { byU[String(+tr.cells[1].textContent.trim())] = tr; }); var miss = false; var pick = function (u, k) { var tr = byU[String(+u)]; if (!tr) { miss = true; return; } var cells = tr.querySelectorAll(\"td.Horse_Select\"), c = cells.length > 1 ? cells[k] : cells[0]; var inp = c && c.querySelector(\"input\"); if (!inp || inp.disabled) { miss = true; return; } if (!inp.checked) (c.querySelector(\"label\") || inp).click(); }; if (form) b.cols.forEach(function (col, k) { col.forEach(function (u) { pick(u, k); }); }); else b[1].forEach(pick); var money = document.querySelector(\"input[name=money]\"); if (money) { money.value = String(Math.max(1, Math.round(amt / 100))); [\"input\", \"keyup\", \"change\"].forEach(function (ev) { money.dispatchEvent(new Event(ev, { bubbles: true })); }); } setTimeout(function () { var add = addBtn(), pts = form ? b.n : 1; if (form && !miss && kensu() !== b.n) { clearSel(); d.b.splice.apply(d.b, [i, 0].concat(b.t.map(function (t) { return [kind, t, amt]; }))); return setTimeout(step, 500); } if (miss || !money || !add || /disabled/.test(add.className)) { ng.push(name + (miss ? \"(馬を選べない)\" : \"(追加できない)\")); clearSel(); return setTimeout(step, 500); } add.click(); adds++; ok += pts; yen += Math.max(1, Math.round(amt / 100)) * 100 * pts; if (form) okNames.push.apply(okNames, b.names); else okNames.push(name); setTimeout(step, 900); }, 600); }, 600); }, 900); } function done() { hideWait(); history.replaceState(null, \"\", location.pathname + location.search.replace(/&kbb=[^&]*/, \"\")); var got = stored() - base; if (got < adds) { ok = 0; okNames = []; ng.push(\"購入画面の記録に入っていない買い目がある(「IPAT投票」で「買い目が入力されていません」になる。ページを読み込み直して、もう一度送ってください)\"); } if (cancelled) ng.push(\"「やめる」で途中で止めた(残り \" + (d.b.length - i) + \" 件は入れていない。入れた分は投票内容に残っている)\"); try { if (typeof chrome !== \"undefined\" && chrome.runtime && chrome.runtime.id) chrome.runtime.sendMessage({ type: \"kbb-done\", ok: ok > 0, n: ok, yen: yen, ng: ng, okNames: okNames, id: d.id || \"\" }); } catch (e) {} alert(\"netkeiba の購入画面に買い目を \" + ok + \" 点入れました(合計 \" + yen.toLocaleString() + \" 円)。\" + (ng.length ? \"\\n入れられなかった・止めた: \" + ng.join(\"、\") : \"\") + \"\\n\\n右の「投票内容」で買い目と金額を確かめてから、ご自分で「IPAT投票」を押してください(このプログラムは購入を押しません)。\"); } var lsKey = \"ndi::bet_\" + rid; var stored = function () { try { var v = JSON.parse(localStorage.getItem(lsKey) || \"null\"); return v && v.list ? Object.keys(v.list).length : 0; } catch (e) { return 0; } }; var base = 0; (function wait() { if (document.body) showWait(); if (!tab(\"単勝\") || !document.querySelector(\"input[name=money]\")) { if (++tries > 40) { hideWait(); alert(\"買い目転記: 購入画面が出ませんでした(netkeiba にログインしているか・IPAT 連動の設定を確かめてください)\"); return; } return setTimeout(wait, 500); } setTimeout(function () { base = stored(); step(); }, 2500); })(); })();";
 const NK_BET_BOOKMARKLET = "javascript:" + encodeURIComponent(NK_BET_CODE);
 const NK_BET_KINDS = ["単勝", "複勝", "馬連", "ワイド", "馬単", "3連複", "3連単"];
 // 買い目ごとの IPAT 送信の記録: { "馬連 4-14": { at, st: "sent" | "ok" | "ng" } }
@@ -710,11 +710,25 @@ ${list}
 
 ※ 購入(「IPAT投票」)は押しません。入ったあと、netkeiba の画面で買い目と金額を確かめて、ご自分で「IPAT投票」を押してください。` +
     `
-※ 拡張機能「予想ビューア 印・買い目転記」(1.3.3 以降)を入れていれば自動で入ります。入れていなければ、開いた画面でブックマーク「買い目転記」を押してください。` +
+※ 拡張機能「予想ビューア 印・買い目転記」(1.4.0 以降)を入れていれば自動で入ります。入れていなければ、開いた画面でブックマーク「買い目転記」を押してください。` +
     `
 ※ ${NK_POPUP_NOTE}`;
   if (!(await nkConfirm(msg, false))) return;
-  const data = encodeURIComponent(JSON.stringify({ r: nkRaceId(rid), id: rid, b: ok.map(x => [x.kind, x.t.map(String), +x.amount]) }));
+  // フォーメーションのまま送る(2026-11-23 ユーザーの指示)。フォーメーションの買い目が全部そろっていて、金額がすべて同じで、
+  // ほかのフォーメーションと重なっていない(1つのフォーメーションからだけ入れた)ときだけ。ほかは1点ずつ
+  const amtOf = x => Math.max(100, Math.round(x.amount / 100) * 100), keyOf = (k, t) => k + "|" + t.map(String).join("-");
+  const byKey = new Map(ok.map(x => [keyOf(x.kind, x.t), x])), used = new Set(), payload = [];
+  for (const x of ok) {
+    const fs = x.fsets?.length === 1 ? x.fsets[0] : null;
+    if (!fs || used.has(keyOf(x.kind, x.t))) continue;
+    const exp = expandTickets(fs.kind, fs.cols), its = exp.map(t => byKey.get(keyOf(fs.kind, t)));
+    if (exp.length < 2 || its.some(y => !y || y.fsets?.length !== 1 || y.fsets[0].label !== fs.label) || new Set(its.map(amtOf)).size !== 1) continue;
+    its.forEach(y => used.add(keyOf(y.kind, y.t)));
+    payload.push({ f: 1, kind: fs.kind, cols: fs.cols.map(c => c.map(String)), amt: amtOf(its[0]), n: exp.length,
+      names: its.map(y => y.kind + " " + y.t.join(sep(y.kind))), t: its.map(y => y.t.map(String)) });
+  }
+  for (const x of ok) if (!used.has(keyOf(x.kind, x.t))) payload.push([x.kind, x.t.map(String), +x.amount]);
+  const data = encodeURIComponent(JSON.stringify({ r: nkRaceId(rid), id: rid, b: payload }));
   const w = window.open(`https://race.netkeiba.com/ipat/ipat.html?date=${rid.slice(0, 8)}&race_id=${nkRaceId(rid)}&kbb=${data}`, "_blank");
   if (!w) { nkPopupBlocked(); return; }
   const d = new Date();
@@ -1631,6 +1645,26 @@ function renderRace(rid) {
     try { localStorage.setItem("keiba-viewer:fav", e.target.checked ? "1" : "0"); } catch (err) { state.fav = e.target.checked; }
     renderRace(rid);
   }));
+  document.querySelectorAll("th.bsort").forEach(th => th.onclick = () => {
+    state.basketSort = state.basketSort || {}; const cur = state.basketSort[rid], k = th.dataset.k;
+    state.basketSort[rid] = cur?.k === k ? { k, dir: -(cur.dir || (k === "t" ? 1 : -1)) } : { k }; renderRace(rid);
+  });
+  document.querySelectorAll("th.psort").forEach(th => th.onclick = () => {
+    state.calcSort = state.calcSort || {}; const cur = state.calcSort[rid], k = th.dataset.k;
+    state.calcSort[rid] = cur?.k === k ? { k, dir: -(cur.dir || (k === "t" ? 1 : -1)) } : { k }; renderRace(rid);
+  });
+  document.getElementById("bAllocGo")?.addEventListener("click", () => {
+    const budget = roundYen(document.getElementById("bAllocBudget").value), mode = document.getElementById("bAllocMode").value;
+    state.bAlloc = state.bAlloc || {}; state.bAlloc[rid] = { budget, mode };
+    const b = basketOf(rid), info = new Map((state.basketRows?.[rid] || []).map(r => [r.i, r]));
+    if (!b.length) return;
+    if (!(budget >= 100 * b.length)) { alert(`予算(${budget.toLocaleString()}円)が 買い目の点数 ${b.length}点 × 100円 より少ないので、自動では配れません。手動で金額を入れてください。`); return; }
+    const ps = b.map((_, i) => info.get(i)?.p || 0), os = b.map((_, i) => info.get(i)?.o || 0);
+    if (mode === "期待値追求型" && !os.some(o => o)) { alert("オッズのある買い目が無いので、期待値追求では配れません。"); return; }
+    const amt = allocate(budget, ps, mode, os);
+    b.forEach((x, i) => x.amount = amt[i] || 0);
+    saveBasket(rid); renderRace(rid);
+  });
   document.querySelectorAll(".nkBetsBtn").forEach(b => b.onclick = e => { e.stopPropagation(); sendBetsToNetkeiba(rid); });
   document.querySelectorAll(".nkBetHelp").forEach(h => h.onclick = e => {
     e.stopPropagation();
@@ -1733,7 +1767,7 @@ function renderRace(rid) {
     const horses = raceRows.map(r => String(r.umaban)).sort((a, b) => a - b);
     const [n] = CALC_KINDS[calc.kind];
     const cols = calc.rows.slice(0, n).map(r => horses.filter(u => r.includes(u)));
-    if (cols.every(x => x.length)) addToBasket(rid, calc.kind, expandTickets(calc.kind, cols), t => calcAmtOf(calc, t), formationLabel(calc.kind, cols));
+    if (cols.every(x => x.length)) addToBasket(rid, calc.kind, expandTickets(calc.kind, cols), t => calcAmtOf(calc, t), formationLabel(calc.kind, cols), cols);
     renderRace(rid);
   });
   document.querySelectorAll("input.amt").forEach(x => {
@@ -2527,7 +2561,7 @@ function renderCalc(rid) {
       const a = calcAmtOf(c, t);
       if (o && a) { pc += a; pb += p * o * a; }
       return { t, p, o, a };
-    }).sort((x, y) => y.p - x.p);
+    }).sort(tSortCmp(state.calcSort?.[rid]) || ((x, y) => y.p - x.p));
     const anyP = tri.reduce((s, x) => s + (tickets.some(t => hits(c.kind, t, x, places)) ? x[3] : 0), 0);
     const sep = CALC_KINDS[c.kind][1] && n > 1 ? "→" : "-";
     h += `<div class="kpis" style="margin:6px 0 8px">` +
@@ -2535,8 +2569,8 @@ function renderCalc(rid) {
       kpi(pct(anyP), "どれか当たる確率(予想の上で)") +
       kpi(pc ? `${Math.round(pb).toLocaleString()}円` : "-", "払戻の期待値") +
       kpi(pc ? `<span class="${pb / pc >= 1 ? "hi" : ""}">${fix(pb / pc * 100)}%</span>` : "-", "回収率の期待値(予想の上で)") + `</div>` +
-      `<div class="scroll" style="max-height:320px;overflow-y:auto"><table><tr><th><input type="checkbox" class="prevAll" title="全部選ぶ"></th><th>買い目</th><th class="n">確率</th><th class="n">妥当オッズ</th>` +
-      `<th class="n">オッズ${lower ? "(下限)" : ""}</th><th class="n">期待値</th><th class="n">金額</th><th class="n">当たったときの払戻</th></tr>` +
+      `<div class="scroll" style="max-height:320px;overflow-y:auto"><table><tr><th><input type="checkbox" class="prevAll" title="全部選ぶ"></th>${tSortHead("t", "買い目", state.calcSort?.[rid], "psort", "")}${tSortHead("p", "確率", state.calcSort?.[rid], "psort")}<th class="n">妥当オッズ</th>` +
+      `${tSortHead("o", "オッズ" + (lower ? "(下限)" : ""), state.calcSort?.[rid], "psort")}${tSortHead("ev", "期待値", state.calcSort?.[rid], "psort")}<th class="n">金額</th><th class="n">当たったときの払戻</th></tr>` +
       prev.map(r => `<tr><td><input type="checkbox" class="prevPick" data-k="${esc(r.t.join("-"))}"></td><td><b>${esc(r.t.join(sep))}</b></td><td class="n">${pct(r.p, 2)}</td><td class="n">${r.p > 0 ? fix(1 / r.p) : ""}</td>` +
         `<td class="n">${r.o ? fix(r.o) : `<span class="dim">オッズなし</span>`}</td><td class="n">${r.o && r.p ? evCell(r.o, 1 / r.p) : ""}</td>` +
         `<td class="n"><input class="odds calcAmt" data-k="${esc(r.t.join("-"))}" type="number" min="0" step="100" value="${r.a}" style="width:90px" title="この買い目の金額(100円単位。0円にすると買い目候補に移さない)"> 円</td>` +
@@ -2567,15 +2601,15 @@ function saveBasket(rid) {
 function roundYen(v) { return Math.max(0, Math.round((num(String(v).replace(/[,円\s]/g, "")) || 0) / 100) * 100); }
 // 「選んでいる馬券」の1点ごとの金額(2026-11-22 ユーザーの指示「ここでも金額を変更できるようにしてほしい」)。変えていなければ「1点」の金額
 function calcAmtOf(c, t) { const v = c.amt?.[c.kind + "|" + t.join("-")]; return v != null ? v : roundYen(c.unit); }
-function addToBasket(rid, kind, tickets, unit, form) {
+function addToBasket(rid, kind, tickets, unit, form, cols) {
   // form: どこから入れたか(フォーメーションの書き方。買い目候補の「フォーメーション」の列に出す)。unit は金額か、買い目ごとの金額を返す関数
   const b = basketOf(rid);
   for (const t of tickets) {
     const amt = typeof unit === "function" ? unit(t) : unit;
     if (!(amt > 0)) continue;
     const hit = b.find(x => x.kind === kind && x.t.join("-") === t.join("-"));
-    if (hit) { hit.amount += amt; if (form && !(hit.forms || []).includes(form)) hit.forms = [...(hit.forms || []), form]; }
-    else b.push({ kind, t, amount: amt, ...(form ? { forms: [form] } : {}) });
+    if (hit) { hit.amount += amt; if (cols) hit.fsets = [...(hit.fsets || []), { label: form, kind, cols }]; if (form && !(hit.forms || []).includes(form)) hit.forms = [...(hit.forms || []), form]; }
+    else b.push({ kind, t, amount: amt, ...(cols ? { fsets: [{ label: form, kind, cols }] } : {}), ...(form ? { forms: [form] } : {}) });
   }
   saveBasket(rid);
 }
@@ -2623,10 +2657,25 @@ function ticketValue(rid, kind, t, triCache) {
   }
   return { p, o: o ?? null };
 }
+// 並べ替え(2026-11-23 ユーザーの指示「オッズ・期待値・確率・買い目でソートできるように」)。見出しを押す、もう一度で逆
+const TSORT = { p: r => r.p ?? -1, o: r => r.o ?? -1, ev: r => r.o && r.p ? r.o * r.p : -1, t: r => r.t.map(u => String(u).padStart(2, "0")).join("-") };
+function tSortCmp(st) {
+  if (!st || !TSORT[st.k]) return null;
+  const f = TSORT[st.k], d = st.dir || (st.k === "t" ? 1 : -1);
+  return (a, b) => { const x = f(a), y = f(b); return (x < y ? -1 : x > y ? 1 : 0) * d; };
+}
+function tSortHead(key, label, st, cls, cls2 = "n") {
+  const on = st?.k === key, d = st?.dir || (key === "t" ? 1 : -1);
+  return `<th class="${cls2} ${cls}" data-k="${key}" style="cursor:pointer" title="押すとこの順に並べる(もう一度で逆)">${label}${on ? (d > 0 ? " ▲" : " ▼") : ""}</th>`;
+}
 function renderBasket(rid, tri, places, odds, raceRows) {
   const b = basketOf(rid);
   let h = `<h3>買い目候補</h3>` + (b.length ? `<div class="calc" style="margin:0 0 8px"><button class="nkBetsBtn" title="この買い目を netkeiba の IPAT 連動馬券購入の画面に入れる(購入は押さない)">netkeiba(IPAT)に買い目を送る</button>` +
-    `<button class="help nkBetHelp" title="netkeiba(IPAT)への買い目の転記の使い方">？</button>${nkBetSentTag(rid)}</div>` : "");
+    `<button class="help nkBetHelp" title="netkeiba(IPAT)への買い目の転記の使い方">？</button>${nkBetSentTag(rid)}</div>` +
+    // 予算の自動配分(2026-11-23 ユーザーの指示。0円=買わない もあり)
+    `<div class="calc" style="margin:0 0 8px"><label>このレースの予算 <input id="bAllocBudget" class="odds" type="number" min="0" step="100" style="width:100px" value="${state.bAlloc?.[rid]?.budget ?? ""}"> 円</label>` +
+    `<select id="bAllocMode">${[["均等", "均等"], ["確率比例", "確率に比例"], ["払戻均等化", "払戻均等化"], ["期待値追求型", "期待値追求"]].map(([v, l]) => `<option value="${v}" ${(state.bAlloc?.[rid]?.mode || "均等") === v ? "selected" : ""}>${l}</option>`).join("")}</select>` +
+    `<button id="bAllocGo" title="予算を、選んだ決め方で買い目に配る(100円単位。買わない=0円になる買い目もある)">自動配分</button></div>` : "");
   if (!b.length) return h + `<div class="muted">上の「推奨買い目と資金配分」や「買い目を入れて計算」から送ると、ここに溜まります。券種やフォーメーションを変えて何回でも足せます。` +
     `溜めた買い目は「→ 購入した馬券に送る」で日別ページの「購入した馬券」に送れます。</div>`;
   let cost = 0, back = 0, priced = 0;
@@ -2643,7 +2692,9 @@ function renderBasket(rid, tri, places, odds, raceRows) {
   });
   // 同じフォーメーションの行を、最初に出てきた順のかたまりにまとめる(かたまりの中は入れた順)
   const order = [...new Set(rows.map(r => r.fk))];
-  rows.sort((a, b) => order.indexOf(a.fk) - order.indexOf(b.fk) || a.i - b.i);
+  const bcmp = tSortCmp(state.basketSort?.[rid]);   // フォーメーションのかたまりは崩さず、かたまりの中で並べ替える
+  rows.sort((a, b) => order.indexOf(a.fk) - order.indexOf(b.fk) || (bcmp ? bcmp(a, b) : 0) || a.i - b.i);
+  state.basketRows = state.basketRows || {}; state.basketRows[rid] = rows.map(r => ({ i: r.i, p: r.p, o: r.o }));
   const live = b.filter(x => x.amount > 0);
   const anyP = tri.reduce((s, y) => s + (live.some(x => hits(x.kind, x.t, y, places)) ? y[3] : 0), 0);
   h += `<div class="kpis" style="margin:6px 0 8px">` +
@@ -2652,8 +2703,8 @@ function renderBasket(rid, tri, places, odds, raceRows) {
     kpi(priced ? `${Math.round(back).toLocaleString()}円` : "-", `払戻の期待値${priced < cost ? `(オッズのある ${priced.toLocaleString()}円分)` : ""}`) +
     kpi(priced ? `<span class="${back / priced >= 1 ? "hi" : ""}">${fix(back / priced * 100)}%</span>` : "-", "回収率の期待値(予想の上で)") +
     (state.oddsKind?.get(rid) ? kpi(esc(state.oddsKind.get(rid)), "オッズの種類") : "") + `</div>`;
-  h += `<div class="scroll" style="max-height:460px;overflow-y:auto"><table class="basket-table"><tr><th>券種</th><th title="どのフォーメーションから入れたか(同じフォーメーションはまとめて1つ)">フォーメーション</th><th>買い目</th><th class="n">確率</th><th class="n">妥当オッズ</th>` +
-    `<th class="n">オッズ</th><th class="n">期待値</th><th class="n">金額(100円単位)</th><th class="n">当たったときの払戻</th>` +
+  h += `<div class="scroll" style="max-height:460px;overflow-y:auto"><table class="basket-table"><tr><th>券種</th><th title="どのフォーメーションから入れたか(同じフォーメーションはまとめて1つ)">フォーメーション</th>${tSortHead("t", "買い目", state.basketSort?.[rid], "bsort", "")}${tSortHead("p", "確率", state.basketSort?.[rid], "bsort")}<th class="n">妥当オッズ</th>` +
+    `${tSortHead("o", "オッズ", state.basketSort?.[rid], "bsort")}${tSortHead("ev", "期待値", state.basketSort?.[rid], "bsort")}<th class="n">金額(100円単位)</th><th class="n">当たったときの払戻</th>` +
     `<th title="netkeiba(IPAT 連動)の購入画面に送ったか(✔ = 拡張機能で入ったと確かめた、送信 = 送ったが入ったかは分からない、✖ = 入れられなかった)">IPAT</th>` +
     `<th title="日別ページの「購入した馬券」に入っているか(入っている金額)">購入した馬券</th><th></th></tr>`;
   // 買い目ごとの送った記録(2026-11-22 ユーザーの指示「買い目一つ一つIPATに送ったかわかるように」「日別ページにおくったかも」)

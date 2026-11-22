@@ -667,13 +667,31 @@ const NK_BOOKMARKLET = `javascript:(function(){var m=location.hash.match(/kbm=([
   `var k=0;(function next(){if(k>=q.length){alert('netkeiba に印を転記しました(変えた馬 '+q.length+'頭)。OK でこのタブを閉じます');history.replaceState(null,'',location.pathname+location.search);setTimeout(function(){try{if(window.opener&&!window.opener.closed)window.opener.focus();}catch(e){}window.close();},800);return;}` +
   `var x=q[k++];if(window.jQuery)jQuery(x[0]).trigger('click');else x[0].click();setTimeout(next,400);})();})();`;
 function nkRaceId(rid) { return rid.slice(0, 4) + rid.slice(8, 16); }
-function sendMarksToNetkeiba(rid) {
+function nkConfirmOff() { try { return localStorage.getItem("keiba-viewer:nkNoConfirm") === "1"; } catch (e) { return false; } }
+function setNkConfirmOff(v) { try { localStorage.setItem("keiba-viewer:nkNoConfirm", v ? "1" : "0"); } catch (e) {} }
+// 印転記の確認(ブラウザの confirm の代わり。「次から表示しない」のチェック付き)
+function nkConfirm(text) {
+  return new Promise(resolve => {
+    const d = document.createElement("dialog");
+    d.className = "nk-confirm";
+    d.innerHTML = `<div style="white-space:pre-wrap;line-height:1.6">${esc(text)}</div>` +
+      `<label style="display:block;margin:12px 0 4px"><input type="checkbox" class="nkNoAsk"> 次から確認を表示しない(？の説明からいつでも戻せる)</label>` +
+      `<div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px"><button class="nkNo">キャンセル</button><button class="nkYes on">OK(転記する)</button></div>`;
+    document.body.appendChild(d);
+    const end = v => { if (v && d.querySelector(".nkNoAsk").checked) setNkConfirmOff(true); d.close(); d.remove(); resolve(v); };
+    d.querySelector(".nkYes").onclick = () => end(true);
+    d.querySelector(".nkNo").onclick = () => end(false);
+    d.addEventListener("cancel", e => { e.preventDefault(); end(false); });
+    d.showModal();
+  });
+}
+async function sendMarksToNetkeiba(rid) {
   const ms = marksOf(rid), rows = state.races.get(rid) || [];
   const list = rows.map(r => [String(+r.umaban), ms[String(r.umaban)] || ms[String(+r.umaban)]]).filter(([, m]) => m && m !== "-")
     .sort((a, b) => +a[0] - +b[0]);
   const bad = list.filter(([, m]) => !NK_MARK[m]);
   const txt = list.length ? list.map(([u, m]) => `${m} ${u}番`).join("・") : "(印なし。netkeiba の印を全部外します)";
-  const ok = confirm(`このページで付けた印を、netkeiba のこのレース(${title(rid)})に転記します。
+  const msg = `このページで付けた印を、netkeiba のこのレース(${title(rid)})に転記します。
 
 ${txt}` +
     `${bad.length ? `
@@ -684,7 +702,9 @@ netkeiba で元々付けていた印は消えます(このページの印に置�
 
 OK を押すと netkeiba の出馬表を開きます。拡張機能「予想ビューア 印転記」を入れていれば、裏のタブで自動で転記して閉じ、この画面に結果を知らせます(入れていなければ、netkeiba の出馬表が開くので、そこでブックマーク「印転記」を押す)。
 
-※ ${NK_POPUP_NOTE}`);
+※ ${NK_POPUP_NOTE}`;
+  // 確認を出さない設定(2026-11-22 ユーザーの指示「表示しないチェックボックス」「？のモーダルから後から選べる」)
+  const ok = nkConfirmOff() ? true : await nkConfirm(msg);
   if (!ok) return;
   const m = Object.fromEntries(list.filter(([, x]) => NK_MARK[x]).map(([u, x]) => [u, NK_MARK[x]]));
   const data = encodeURIComponent(JSON.stringify({ r: nkRaceId(rid), m }));
@@ -754,7 +774,8 @@ function nkHelpHTML() {
     `<li>ブックマークの方式(拡張機能なし)で netkeiba のタブが開かないときは、ポップアップのブロック。${NK_POPUP_NOTE}</li>` +
     `<li>前の版(1.0)を入れていた場合は、新しい zip を同じ場所に展開し直して上書きし、一覧の「予想ビューア 印転記」の更新ボタン(↻)を押す。この画面も読み込み直す。</li></ol>` +
     `<p class="muted">今の状態: ${document.documentElement.dataset.kbmExt ? `拡張機能 ${esc(document.documentElement.dataset.kbmExt)} を確認${document.documentElement.dataset.kbmExt === "1" ? "(古い版。裏で転記するには更新が要る)" : ""}` : "拡張機能は見つからない"}</p>`;
-  return `<p>このビューアで付けた印を、netkeiba の同じレースの印に転記する。</p>${pc ? ext : ""}<h3>${pc ? "補助: " : ""}ブックマーク(ブックマークレット)の登録${pc ? "(拡張機能を入れられないとき・携帯)" : ""}</h3>` +
+  const ask = `<p style="margin:8px 0"><label><input type="checkbox" ${nkConfirmOff() ? "" : "checked"} onchange="setNkConfirmOff(!this.checked)"> 転記の前に確認(送る印・元の印が消えること)を表示する</label></p>`;
+  return `<p>このビューアで付けた印を、netkeiba の同じレースの印に転記する。</p>${ask}${pc ? ext : ""}<h3>${pc ? "補助: " : ""}ブックマーク(ブックマークレット)の登録${pc ? "(拡張機能を入れられないとき・携帯)" : ""}</h3>` +
     `<p><b>PC:</b> 下の「印転記」をブックマークバーへドラッグする(ブックマークバーが出ていなければ Ctrl+Shift+B)。</p>` +
     `<p style="margin:10px 0"><a class="nk-bm" href="${esc(NK_BOOKMARKLET)}" onclick="alert('ブックマークバーへドラッグして登録してください');return false;">印転記</a> <span class="muted">← これをブックマークバーへドラッグ</span></p>` +
     `<p class="muted">ドラッグできないときは、何かのページをブックマークに登録してから編集し、名前を「印転記」、URL に下の文をまるごと貼る。</p>` +

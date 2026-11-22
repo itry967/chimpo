@@ -177,6 +177,8 @@ header { min-width: 100%; }
 .lamp-gb, .lamp-ob, .lamp-rb { animation: lampblink 1s steps(2, start) infinite; }
 .lamp-rb { animation-duration: .6s; }
 @keyframes lampblink { to { visibility: hidden; } }
+dialog.nk-confirm { max-width: min(560px, calc(100vw - 32px)); background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+dialog.nk-confirm::backdrop { background: rgba(0,0,0,.45); }
 .nk-toast { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 9999; max-width: min(560px, calc(100vw - 32px)); padding: 12px 18px; border-radius: 10px; background: var(--panel); color: var(--text); border: 2px solid var(--line); box-shadow: 0 6px 24px rgba(0,0,0,.35); font-size: 14px; font-weight: 600; cursor: pointer; }
 .nk-toast.ok { background: #1f9d55; border-color: #1f9d55; color: #fff; font-size: 16px; }
 .nk-toast.ng { background: #c53030; border-color: #c53030; color: #fff; }

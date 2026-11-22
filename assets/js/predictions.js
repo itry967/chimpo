@@ -620,6 +620,38 @@ function changeCard(rows) {
     `<div class="note">予想順位を、枠順確定の時点と馬体重を入れた今で比べたもの(↑2 は2つ上がった、↓1 は1つ下がった)。かっこ内は枠順確定の時点 → 今の予想順位と、馬体重と前走からの増減。変化の理由は馬体重だけではない。馬体重の版には、前日の天候・当日のクッション値と含水率・当日の馬場傾向も入っている。</div></div>`;
 }
 
+// 当日の馬場傾向(2026-11-22 ユーザーの指示「足したい」「ビューアから見れるようにしたい」)。予想 CSV の「今日の内外・前後・レース数」
+// (同じ日・同じ競馬場・同じ芝ダで発走が前のレース)。当日前_ の列があれば、馬体重の版の最初の値からの変化も出す
+function todayBiasRows(r0) {
+  if (!("今日のレース数" in r0)) return "";
+  const n = num(r0["今日のレース数"]), n0 = num(r0["当日前_今日のレース数"]);
+  const f = v => v == null ? "-" : `${v >= 0 ? "+" : ""}${v.toFixed(3)}`;
+  const side = (v, a, b) => v == null ? "" : Math.abs(v) < BIAS_FLAT ? `<span class="chip gray">ほぼ互角</span>` : `<span class="chip ${v < 0 ? "up" : "warn"}">${v < 0 ? a : b}</span>`;
+  const row = (label, c, a, b) => {
+    const v = num(r0[c]), v0 = num(r0[`当日前_${c}`]);
+    const mv = v0 != null && v != null && v0 !== v ? ` <span class="dim">(馬体重の版の最初 ${f(v0)} → 今)</span>` : "";
+    return `<div class="pace"><div class="pl">${label}</div><div><b>${f(v)}</b> ${side(v, a, b)}${mv}</div></div>`;
+  };
+  if (!n) return `<div style="margin-top:6px"><div class="pace"><div class="pl">今日のここまで</div><div><span class="muted">この競馬場・芝ダで、このレースより前の結果はまだ無い</span></div></div></div>`;
+  return `<div style="margin-top:6px">` + row(`今日の内外(${n}レース)`, "今日の内外", "内有利", "外有利") + row(`今日の前後(${n}レース)`, "今日の前後", "前有利", "後ろ有利") +
+    `<div class="note">今日の内外・前後は、同じ日・同じ競馬場・同じ芝ダで、このレースより前に発走したレース(${n}レース${n0 != null && n0 !== n ? `。馬体重の版の最初は ${n0}レース` : ""})の3着以内の馬の位置の平均 − 全馬の平均。` +
+    `予想にも使っていて、前のレースの結果が出るたびと発走15分前に計算し直す。レースが少ないうちはぶれが大きい。</div></div>`;
+}
+// 当日の更新(当日の馬場傾向など)による変化: 馬体重の版の最初(当日前_順位・当日前_勝率)と今の比べ
+function todayChangeCard(rows) {
+  if (!rows.length || !("当日前_順位" in rows[0])) return "";
+  const mv = r => { const a = num(r["当日前_順位"]), b = num(r["平均_順位"]); return a == null || b == null ? 0 : a - b; };
+  const wd = r => { const a = num(r["当日前_勝率"]), b = num(r["平均_勝率"]); return a == null || b == null ? 0 : (b - a) * 100; };
+  const moved = rows.filter(r => mv(r) !== 0 || Math.abs(wd(r)) >= 0.5);
+  const a = honmei(rows, "当日前_順位"), b = honmei(rows, "平均_順位");
+  const who = r => r ? `${esc(r.umaban)}番 ${esc(r.horse_name || "")}` : "-";
+  const list = moved.sort((x, y) => Math.abs(wd(y)) - Math.abs(wd(x))).slice(0, 6).map(r =>
+    `${moveMark(mv(r))} ${who(r)}(${num(r["当日前_順位"])}位 → <b>${num(r["平均_順位"])}位</b>・勝率 ${pct(num(r["当日前_勝率"]))} → <b>${pct(num(r["平均_勝率"]))}</b>)`).join("<br>");
+  return `<div class="card day-fold"><h3>当日の更新による変化${updTag("予想", rows[0].race_id)}</h3><dl class="kv">` +
+    `<dt>本命</dt><dd>${a && b && +a.umaban === +b.umaban ? `変わらず(${who(b)})` : `${who(a)} → <b>${who(b)}</b> <span class="chip warn">本命変更</span>`}</dd>` +
+    `<dt>変わった馬</dt><dd>${list || "なし(順位は同じ、勝率の差は 0.5% 未満)"}</dd></dl>` +
+    `<div class="note">馬体重を入れた最初の予想と今の予想の比べ。そのあとの変化は、主に当日の馬場傾向(前のレースの結果)の更新による。取消・騎手変更や当日の馬場の計測値でも変わる。</div></div>`;
+}
 function simpleView() {
   // 出走馬の簡易表示(このブラウザに覚えておく)
   // 2026-11-22 ユーザーの指示: PC も携帯も簡易表示を最初の表示にし、チェックは「詳細表示」(✓で前の PC の最初の表示)にした
@@ -1220,16 +1252,17 @@ function renderRace(rid) {
     `${pace || `<span class="muted">列がありません</span>`}` +
     (pace ? `<div class="note">目安(札)は検証期間(2019〜2023年)の同じ芝ダのレースと比べたもの。ペース予想の数字はコースの基準タイムとの差で、ふつうのレースでも前に行く馬は基準より少し速い(平均は下の行のとおり)ので、札はそれと比べた速さ。逃げ・先行馬が多くペースが速いと差しが届きやすく、少なく遅いと前が残りやすい。</div>` : "") +
     `</div>`;
+  const today = todayBiasRows(r0);
   const babaCard = `<div class="card"><h3>馬場傾向予想（仮）<button class="help" data-help="baba" title="馬場傾向予想の各項目の説明(別ウインドウ)">？</button>${updTag("予想", rid)}</h3>` +
     `${info ? `<dl class="kv">${info}</dl>` : ""}` +
     (bias ? `<div style="margin-top:6px">${bias}</div><div class="note">馬場傾向の数字は、3着以内の馬の位置の平均 − 全馬の平均。` +
       `内外は馬番÷頭数(0 = 内、1 = 外)、前後は最初のコーナーの順位÷頭数(0 = 前、1 = 後ろ)で、マイナスなら内・前が有利。` +
       `目安の「いつも」は、検証期間(2019〜2023年)の同じ競馬場・同じ芝ダのレースの値(札の「東京芝のふだん」がその平均)。` +
       `そのコースのふだんより内・前が来ているか、外・後ろが来ているかを表す(2026-11-13 までに作った予想は、競馬場を問わない同じ芝ダの全レースと比べている)。</div>` : "") +
-    (info || bias ? "" : `<span class="muted">列がありません</span>`) + `</div>`;
+    today + (info || bias || today ? "" : `<span class="muted">列がありません</span>`) + `</div>`;
   html += `<div class="grid2">${babaCard}${tenkaiCard}</div>`;   // 左に馬場、右に展開
 
-  html += changeCard(base);   // 得意モデルだけの表示のときも、枠順確定との比較は6モデルの平均どうしで
+  html += changeCard(base) + todayChangeCard(base);   // 得意モデルだけの表示のときも、枠順確定との比較は6モデルの平均どうしで
   // 出走馬
   html += `<div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">` +
     `<h3 style="margin:0">出走馬${updTag(["予想", "オッズ"], rid)}</h3>` + favBox +
@@ -1309,6 +1342,8 @@ function renderRace(rid) {
     try { localStorage.setItem("keiba-viewer:fav", e.target.checked ? "1" : "0"); } catch (err) { state.fav = e.target.checked; }
     renderRace(rid);
   }));
+  document.getElementById("vizPre")?.addEventListener("change", e => { state.vizPre = e.target.checked; renderRace(rid); });
+  document.querySelectorAll("button.vizSort").forEach(b => b.onclick = () => { state.vizSort = b.dataset.k; renderRace(rid); });
   document.getElementById("simpleView")?.addEventListener("change", e => {
     try { localStorage.setItem("keiba-viewer:detail", e.target.checked ? "1" : "0"); } catch (err) { state.detail = e.target.checked; }
     renderRace(rid);
@@ -1752,31 +1787,46 @@ function rankBand(rid, m, umaban, given = null) {
 // ビジュアライズ予想(2026-11-22 ユーザーの指示「『出走馬』項目の下の項目として…取りうるであろう順位などを図示する『ビジュアライズ予想』項目を追加したい」)
 // 1頭1行。横の軸は着順(左が1着)。太い帯 = 着順の見込み(50%)、細い線 = 80% の範囲、点 = 平均の着順。並びは表と同じ(予想の順位)
 function renderViz(rid, rows) {
+  // 2026-11-22 ユーザーの指示: 馬体重確定前・後の切り替え、馬名の右に予想着順・実際の着順、予想着順・実際の着順・馬番で並べ替え(最初は予想の順位の並び)
   const n = rows.length;
   if (n < 2) return "";
+  const hasPreV = rows.some(r => num(r["枠順時_勝率"]) != null);
+  const pre = hasPreV && !!state.vizPre;
+  const m = pre ? "枠順時" : "平均";
   const x = v => ((v - 0.5) / n * 100).toFixed(2) + "%";
   // 結果が出ていれば実際の着順の印(2026-11-22 ユーザーの指示「結果が出ていたら実結果を示す点をそれぞれの項目内に表示してほしい」)
   const res = new Map((state.results.get(rid) || []).map(x => [String(+x["馬番"]), num(x["着順"])]));
   const ticks = [...new Set([1, ...Array.from({ length: Math.floor(n / 5) }, (_, k) => (k + 1) * 5), n])].filter(v => v <= n);
-  let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想${updTag(["予想"], rid)}</h3><div class="viz">` +
-    `<div class="viz-row viz-axis"><div class="viz-name"></div><div class="viz-track">` +
-    ticks.map(t => `<span class="viz-tick" style="left:${x(t)}">${t}着</span>`).join("") + `</div></div>`;
-  for (const r of rows) {
-    const b = rankBand(rid, "平均", r.umaban, state.favActive ? rows : null);
-    if (!b || b[0] == null) continue;
-    const [lo, hi, p10, p90, mean] = b;
-    const k = res.get(String(+r.umaban)), inB = k != null && k >= lo && k <= hi;
+  const items = rows.map((r, i) => ({ r, i, b: rankBand(rid, m, r.umaban, !pre && state.favActive ? rows : null), k: res.get(String(+r.umaban)) }))
+    .filter(o => o.b && o.b[0] != null);
+  const sort = ["fin", "res", "uma"].includes(state.vizSort) ? state.vizSort : "pred";
+  const big = 999;
+  if (sort === "fin") items.sort((a, b) => a.b[4] - b.b[4]);
+  else if (sort === "res") items.sort((a, b) => (a.k ?? big) - (b.k ?? big) || a.b[4] - b.b[4]);
+  else if (sort === "uma") items.sort((a, b) => +a.r.umaban - +b.r.umaban);
+  else if (pre) items.sort((a, b) => (num(a.r["枠順時_順位"]) ?? big) - (num(b.r["枠順時_順位"]) ?? big));
+  const sb = (k, l) => `<button class="vizSort${sort === k ? " on" : ""}" data-k="${k}">${l}</button>`;
+  let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想${updTag(["予想"], rid)}</h3>` +
+    `<div class="calc" style="margin-bottom:6px;gap:10px">` +
+    (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
+    `<span class="tabs" style="margin:0"><span class="muted" style="align-self:center;margin-right:4px">並び:</span>${sb("pred", "予想の順位")}${sb("fin", "予想着順")}${sb("res", "実際の着順")}${sb("uma", "馬番")}</span></div>` +
+    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-name"></div><div class="viz-n">予想</div><div class="viz-n">着順</div><div class="viz-track">` +
+    ticks.map(t => `<span class="viz-tick" style="left:${x(t)}">${t}着</span>`).join("") + `</div><div></div></div>`;
+  for (const { r, b, k } of items) {
+    const [lo, hi, p10, p90, mean] = b, inB = k != null && k >= lo && k <= hi;
     h += `<div class="viz-row" title="${esc(r.horse_name)}: 着順の見込み ${bandStr(b)}(80% の範囲 ${p10}〜${p90}、平均 ${mean.toFixed(1)}着)${k != null ? `・結果 ${k}着` : ""}">` +
-      `<div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-track">` +
+      `<div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-n">${mean.toFixed(1)}</div>` +
+      `<div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${k}</b>` : `<span class="dim">-</span>`}</div><div class="viz-track">` +
       ticks.map(t => `<span class="viz-grid" style="left:${x(t)}"></span>`).join("") +
       `<span class="viz-w" style="left:${x(p10)};width:calc(${x(p90)} - ${x(p10)})"></span>` +
       `<span class="viz-b" style="left:calc(${x(lo)} - 6px);width:calc(${x(hi)} - ${x(lo)} + 12px)"></span>` +
       `<span class="viz-dot" style="left:${x(mean)}"></span>` +
       (k != null && k >= 1 && k <= n ? `<span class="viz-res${inB ? " in" : ""}" style="left:${x(k)}" title="結果 ${k}着"></span>` : "") +
-      `</div><div class="viz-txt">${bandStr(b)}${k != null ? `<br><b class="${inB ? "hi" : ""}">${k}着</b>` : ""}</div></div>`;
+      `</div><div class="viz-txt">${bandStr(b)}</div></div>`;
   }
-  return h + `</div><div class="note">平均の勝率から、勝率の高い馬から順に残りの馬の勝率の比で着順を決めるくり返しで作った着順の分布。` +
-    `太い帯は実際の着順が半々で入る範囲(表の「着順の見込み」)、細い線は 80% の範囲、点は平均の着順。結果が出たレースは、実際の着順を ◆ で出す(帯の中なら緑、外なら橙)。帯が短いほど予想がはっきりしている。モデルの勝率だけから作った見込みで、当たり方はまだ確かめていない。</div></div>`;
+  return h + `</div><div class="note">${pre ? "馬体重確定前(枠順確定の時点)" : "今"}の平均の勝率から、勝率の高い馬から順に残りの馬の勝率の比で着順を決めるくり返しで作った着順の分布。` +
+    `「予想」はその平均の着順、「着順」は実際の着順。太い帯は実際の着順が半々で入る範囲(表の「着順の見込み」)、細い線は 80% の範囲、点は平均の着順。` +
+    `結果が出たレースは、実際の着順を ◆ で出す(帯の中なら緑、外なら橙)。帯が短いほど予想がはっきりしている。モデルの勝率だけから作った見込みで、当たり方はまだ確かめていない。</div></div>`;
 }
 function bandStr(b) { return b && b[0] != null ? (b[0] === b[1] ? `${b[0]}` : `${b[0]}〜${b[1]}`) : "-"; }
 function detail(r, ms) {

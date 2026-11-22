@@ -652,6 +652,51 @@ function todayChangeCard(rows) {
     `<dt>変わった馬</dt><dd>${list || "なし(順位は同じ、勝率の差は 0.5% 未満)"}</dd></dl>` +
     `<div class="note">馬体重を入れた最初の予想と今の予想の比べ。そのあとの変化は、主に当日の馬場傾向(前のレースの結果)の更新による。取消・騎手変更や当日の馬場の計測値でも変わる。</div></div>`;
 }
+// ---------- netkeiba への印の転記(2026-11-22 ユーザーの指示。公開用にも 11/22 に入れた) ----------
+// ボタン → 確認のダイアログ → netkeiba の出馬表を開く(印は URL の # の後ろに入れて渡す)→ 開いたページでブックマークレット「印転記」を押す。
+// ブックマークレットは netkeiba の印の▼のリストの項目を押して付ける(保存は netkeiba 自身の仕組み)。渡した印の無い馬は「--」に戻す
+const NK_MARK = { "◎": "◎", "〇": "◯", "▲": "▲", "△": "△", "★": "☆", "✓": "✓", "消": "消" };   // ビューアの印 → netkeiba の印
+const NK_BOOKMARKLET = `javascript:(function(){var m=location.hash.match(/kbm=([^&]+)/);if(!m){alert('ビューアの「netkeiba に印を転記」から開いたページで押してください');return;}` +
+  `var d;try{d=JSON.parse(decodeURIComponent(m[1]));}catch(e){alert('印を読めませんでした');return;}` +
+  `var rid=(location.search.match(/race_id=(\d+)/)||[])[1];if(d.r&&rid&&d.r!==rid){alert('レースが違います(ビューア '+d.r+' / このページ '+rid+')');return;}` +
+  `var T=['--','◎','◯','▲','△','☆','✓','消'],q=[];` +
+  `document.querySelectorAll('.HorseList .CheckMark select').forEach(function(s){var o=s.options[1];if(!o)return;var u=String(+o.value.split('_')[0]);` +
+  `var want=d.m[u]||'--',i=T.indexOf(want);if(i<0)return;var cur=s.options[s.selectedIndex]?s.options[s.selectedIndex].text:'--';if(cur.indexOf('10003')>=0)cur='✓';if(cur===want||(cur==='--'&&want==='--'))return;` +
+  `var li=s.parentNode.querySelectorAll('ul.dropDown li')[i];if(li)q.push([li,u,want]);});` +
+  `var k=0;(function next(){if(k>=q.length){alert('netkeiba に印を転記しました(変えた馬 '+q.length+'頭)。OK でこのタブを閉じます');history.replaceState(null,'',location.pathname+location.search);setTimeout(function(){try{if(window.opener&&!window.opener.closed)window.opener.focus();}catch(e){}window.close();},800);return;}` +
+  `var x=q[k++];if(window.jQuery)jQuery(x[0]).trigger('click');else x[0].click();setTimeout(next,400);})();})();`;
+function nkRaceId(rid) { return rid.slice(0, 4) + rid.slice(8, 16); }
+function sendMarksToNetkeiba(rid) {
+  const ms = marksOf(rid), rows = state.races.get(rid) || [];
+  const list = rows.map(r => [String(+r.umaban), ms[String(r.umaban)] || ms[String(+r.umaban)]]).filter(([, m]) => m && m !== "-")
+    .sort((a, b) => +a[0] - +b[0]);
+  const bad = list.filter(([, m]) => !NK_MARK[m]);
+  const txt = list.length ? list.map(([u, m]) => `${m} ${u}番`).join("・") : "(印なし。netkeiba の印を全部外します)";
+  const ok = confirm(`このページで付けた印を、netkeiba のこのレース(${title(rid)})に転記します。
+
+${txt}` +
+    `${bad.length ? `
+(netkeiba に無い印は送りません: ${bad.map(([u, m]) => m + u + "番").join("・")})` : ""}` +
+    `
+
+netkeiba で元々付けていた印は消えます(このページの印に置き換わります)。
+
+OK を押すと netkeiba の出馬表を開きます。開いたページでブックマーク「印転記」を押すと転記します。`);
+  if (!ok) return;
+  const m = Object.fromEntries(list.filter(([, x]) => NK_MARK[x]).map(([u, x]) => [u, NK_MARK[x]]));
+  const data = encodeURIComponent(JSON.stringify({ r: nkRaceId(rid), m }));
+  window.open(`https://race.netkeiba.com/race/shutuba.html?race_id=${nkRaceId(rid)}#kbm=${data}`, "_blank");
+}
+function nkHelpHTML() {
+  return `<p>このビューアで付けた印を、netkeiba の同じレースの印に転記する。</p><h3>はじめに一度だけ: ブックマークの登録</h3>` +
+    `<p><b>PC:</b> 下の「印転記」をブックマークバーへドラッグする(ブックマークバーが出ていなければ Ctrl+Shift+B)。</p>` +
+    `<p style="margin:10px 0"><a class="nk-bm" href="${esc(NK_BOOKMARKLET)}" onclick="alert('ブックマークバーへドラッグして登録してください');return false;">印転記</a></p>` +
+    `<p class="muted">ドラッグできないときは、何かのページをブックマークに登録してから編集し、名前を「印転記」、URL に下の文をまるごと貼る。</p>` +
+    `<textarea readonly style="width:100%;height:80px;font-size:11px" onclick="this.select()">${esc(NK_BOOKMARKLET)}</textarea>` +
+    `<h3>使い方</h3><ol><li>レースのページの「netkeiba に印を転記」を押す。</li><li>確認のダイアログで、送る印と、netkeiba で元々付けていた印が消えることを確かめて OK を押す(キャンセルなら何もしない)。</li>` +
+    `<li>netkeiba の出馬表が新しいタブで開く(netkeiba にログインしておく)。</li><li>開いたページで、ブックマークの「印転記」を押す。印が付いて「転記しました」と出て、OK を押すとそのタブが閉じて、元の予想ビューアのタブに戻る(保存が終わるまで少し待ってから閉じる)。</li></ol><p class="muted">2026-11-22 にタブを閉じる動きを足した。それより前に登録したブックマークは古いままなので、ブックマークの URL を上の文に入れ替える(または登録し直す)。</p>` +
+    `<p>印の対応: ◎ → ◎、〇 → ◯、▲ → ▲、△ → △、★ → ☆、✓ → ✓、消 → 消。このページで印の無い馬は、netkeiba でも「--」(印なし)にする。</p>`;
+}
 function simpleView() {
   // 出走馬の簡易表示(このブラウザに覚えておく)
   // 2026-11-22 ユーザーの指示: PC も携帯も簡易表示を最初の表示にし、チェックは「詳細表示」(✓で前の PC の最初の表示)にした
@@ -1275,6 +1320,7 @@ function renderRace(rid) {
     `<h3 style="margin:0">出走馬${updTag(["予想", "オッズ"], rid)}</h3>` + favBox +
     `<label class="muted" style="font-size:13px" title="相対値・絶対値・理由を全部の馬に出す。✓が無いとき(簡易表示)は、馬の行を1回押すとそれが出て、2回目で詳細が出る">` +
     `<input type="checkbox" id="simpleView" ${simpleView() ? "" : "checked"}> 詳細表示</label>` +
+    `<button id="nkMarks" class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る)">netkeiba に印を転記</button><button class="help" id="nkHelp" title="netkeiba への印の転記の使い方(ブックマークの登録)">？</button>` +
     (hasPre(rows) ? `<label class="muted" style="font-size:13px" title="予想順位と勝率の横に枠順確定の時点からの変化を出す。レース一覧に、本命が変わったレースの印を出す">` +
       `<input type="checkbox" id="changeView" ${changeView() ? "checked" : ""}> 馬体重確定前からの変化</label>` : "") +
     (r0["オッズの時刻"] ? `<span class="chip gray" title="単複オッズの発表日時と、取った日時(過去のレースは確定オッズ)。オッズは発走まで変わる">${r0["オッズの時刻"] === "確定" ? "確定オッズ" : `オッズ ${esc(r0["オッズの時刻"])} 発表` + (r0["オッズの取得時刻"] ? `・${esc(r0["オッズの取得時刻"])} 取得` : "")}</span>` : "") +
@@ -1351,6 +1397,13 @@ function renderRace(rid) {
     try { localStorage.setItem("keiba-viewer:fav", e.target.checked ? "1" : "0"); } catch (err) { state.fav = e.target.checked; }
     renderRace(rid);
   }));
+  document.querySelectorAll(".nkMarksBtn").forEach(b => b.onclick = e => { e.stopPropagation(); sendMarksToNetkeiba(rid); });   // 出走馬の欄とビジュアライズ予想の両方(11/22)
+  document.getElementById("nkHelp")?.addEventListener("click", e => {
+    e.stopPropagation();
+    document.getElementById("guideTitle").textContent = "netkeiba への印の転記";
+    document.getElementById("guideBody").innerHTML = nkHelpHTML();
+    const d = document.getElementById("guide"); if (!d.open) d.showModal();
+  });
   document.getElementById("vizPre")?.addEventListener("change", e => { state.vizPre = e.target.checked; renderRace(rid); });
   document.querySelectorAll(".vizSort").forEach(b => b.onclick = () => {
     const cur = ["res", "uma"].includes(state.vizSort) ? state.vizSort : "pred";
@@ -1828,7 +1881,8 @@ function renderViz(rid, rows) {
   let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想<button class="help" data-help="viz" title="ビジュアライズ予想の各項目の説明">？</button>${updTag(["予想"], rid)}</h3>` +
     `<div class="calc" style="margin-bottom:6px;gap:10px">` +
     (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
-    `<span class="muted" style="font-size:12px">列の見出し(馬番・予想着順・結果)を押すと並べ替え</span></div>` +
+    `<span class="muted" style="font-size:12px">列の見出し(馬番・予想着順・結果)を押すと並べ替え</span>` +
+    `<button class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る。使い方は出走馬の欄の ？)">netkeiba に印を転記</button></div>` +
     `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
     ticks.map(t => `<span class="viz-tick" style="left:${x(t)}">${t}着</span>`).join("") + `</div><div></div></div>`;
   for (const { r, b, k } of items) {

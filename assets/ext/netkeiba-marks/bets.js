@@ -1,7 +1,8 @@
-// 予想ビューア 買い目転記(2026-11-22)。ビューアの「netkeiba(IPAT)に買い目を送る」から開いた IPAT 連動馬券購入の画面(URL の # に kbb=… がある)でだけ動く。
+// 予想ビューア 買い目転記(2026-11-22)。ビューアの「netkeiba(IPAT)に買い目を送る」から開いた IPAT 連動馬券購入の画面(URL に &kbb=… がある)でだけ動く。
+// 購入画面は URL に # が付くと中身を出さないので、買い目は # ではなく URL の後ろ(&kbb=)で渡す(1.3.1 で直した)。
 // 券種のタブ → 馬のチェック → 金額 → 「追加」を、買い目の数だけくり返して入れる。最後の「IPAT投票」(購入)は押さない(購入は自分で確かめて押す)。
 (function () {
-  var m = location.hash.match(/kbb=([^&]+)/);
+  var m = location.search.match(/[?&]kbb=([^&]+)/);
   if (!m) return;
   var d;
   try { d = JSON.parse(decodeURIComponent(m[1])); } catch (e) { alert("買い目転記: 買い目を読めませんでした"); return; }
@@ -47,7 +48,7 @@
     }, 900);
   }
   function done() {
-    history.replaceState(null, "", location.pathname + location.search);
+    history.replaceState(null, "", location.pathname + location.search.replace(/&kbb=[^&]*/, ""));
     // 拡張機能のときは、入れた結果をビューアに知らせる(ビューアの設定で日別ページの「購入した馬券」に入れる。2026-11-22)
     try { if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) chrome.runtime.sendMessage({ type: "kbb-done", ok: ok > 0, n: ok, yen: yen, ng: ng, okNames: okNames, id: d.id || "" }); } catch (e) {}
     alert("netkeiba の購入画面に買い目を " + ok + " 点入れました(合計 " + yen.toLocaleString() + " 円)。" +

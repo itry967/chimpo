@@ -1419,7 +1419,7 @@ function renderRace(rid) {
   });
   document.getElementById("vizPre")?.addEventListener("change", e => { state.vizPre = e.target.checked; renderRace(rid); });
   document.querySelectorAll(".vizSort").forEach(b => b.onclick = () => {
-    const cur = ["res", "uma"].includes(state.vizSort) ? state.vizSort : "pred";
+    const cur = ["res", "uma", "ninki", "odds"].includes(state.vizSort) ? state.vizSort : "pred";
     state.vizDir = cur === b.dataset.k && state.vizDir !== -1 ? -1 : 1; state.vizSort = b.dataset.k; renderRace(rid);
   });
   document.getElementById("simpleView")?.addEventListener("change", e => {
@@ -1879,14 +1879,19 @@ function renderViz(rid, rows) {
   const gridTicks = [...new Set([...ticks, 2, 3])].filter(v => v <= n).sort((a, b) => a - b);   // 2着・3着の縦の点線も(2026-11-22 ユーザーの指示)
   const items = rows.map((r, i) => ({ r, i, b: rankBand(rid, m, r.umaban, !pre && state.favActive ? rows : null), k: res.get(String(+r.umaban)) }))
     .filter(o => o.b && o.b[0] != null);
-  const sort = ["res", "uma"].includes(state.vizSort) ? state.vizSort : "pred";   // 11/22: 平均の着順の並びはやめた(予想着順とほぼ同じ)
+  // 単勝オッズと人気(2026-11-22 ユーザーの指示。出走馬の表と同じ getOdds。人気はオッズの低い順)
+  for (const o of items) o.o = getOdds(rid, o.r.umaban, o.r);
+  const oddsSorted = items.map(o => o.o).filter(v => v != null && v > 0).sort((a, b) => a - b);
+  for (const o of items) o.nk = o.o != null && o.o > 0 ? oddsSorted.indexOf(o.o) + 1 : null;
+  const sort = ["res", "uma", "ninki", "odds"].includes(state.vizSort) ? state.vizSort : "pred";   // 11/22: 平均の着順の並びはやめた(予想着順とほぼ同じ)
   const big = 999;
   const dir = state.vizDir === -1 ? -1 : 1;   // 同じ見出しをもう一度押すと逆の順(2026-11-22 ユーザーの指示)
-  if (sort === "res") items.sort((a, b) => (a.k ?? big) - (b.k ?? big) || a.b[4] - b.b[4]);
+  if (sort === "ninki" || sort === "odds") items.sort((a, b) => (a.o ?? big) - (b.o ?? big) || a.b[4] - b.b[4]);
+  else if (sort === "res") items.sort((a, b) => (a.k ?? big) - (b.k ?? big) || a.b[4] - b.b[4]);
   else if (sort === "uma") items.sort((a, b) => +a.r.umaban - +b.r.umaban);
   else if (pre) items.sort((a, b) => (num(a.r["枠順時_順位"]) ?? big) - (num(b.r["枠順時_順位"]) ?? big));
   if (dir === -1) {   // 逆の順。結果の無い馬は逆にしても下のまま
-    const none = sort === "res" ? items.filter(o => o.k == null) : [];
+    const none = sort === "res" ? items.filter(o => o.k == null) : sort === "ninki" || sort === "odds" ? items.filter(o => o.o == null) : [];
     const rest = items.filter(o => !none.includes(o)).reverse();
     items.splice(0, items.length, ...rest, ...none);
   }
@@ -1895,14 +1900,15 @@ function renderViz(rid, rows) {
   let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想<button class="help" data-help="viz" title="ビジュアライズ予想の各項目の説明">？</button>${updTag(["予想"], rid)}</h3>` +
     `<div class="calc" style="margin-bottom:6px;gap:10px">` +
     (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
-    `<span class="muted" style="font-size:12px">列の見出し(馬番・予想着順・結果)を押すと並べ替え</span>` +
+    `<span class="muted" style="font-size:12px">列の見出し(馬番・人気・単勝・予想着順・結果)を押すと並べ替え</span>` +
     `<button class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る。使い方は出走馬の欄の ？)">netkeiba に印を転記</button></div>` +
-    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
+    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-n">${sb("ninki", "人気", "人気")}</div><div class="viz-n">${sb("odds", "単勝", "単勝オッズ")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
     gridTicks.map(t => `<span class="viz-tick" style="left:${x(t)}">${ticks.includes(t) ? `${t}着` : t}</span>`).join("") + `</div><div></div></div>`;
-  for (const { r, b, k } of items) {
+  for (const { r, b, k, o, nk } of items) {
     const [lo, hi, p10, p90, mean] = b, inB = k != null && k >= lo && k <= hi;
     h += `<div class="viz-row" title="${esc(r.horse_name)}: 着順の見込み ${bandStr(b)}(80% の範囲 ${p10}〜${p90}、平均 ${mean.toFixed(1)}着)${k != null ? `・結果 ${k}着` : ""}">` +
-      `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-n">${num(r[pre ? "枠順時_順位" : "平均_順位"]) ?? "-"}${cdot(r, "予想")}</div>` +
+      `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div>` +
+      `<div class="viz-n">${nk ?? `<span class="dim">-</span>`}</div><div class="viz-n">${o != null ? fix(o) : `<span class="dim">-</span>`}</div><div class="viz-n">${num(r[pre ? "枠順時_順位" : "平均_順位"]) ?? "-"}${cdot(r, "予想")}</div>` +
       `<div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${k}</b>` : `<span class="dim">-</span>`}</div><div class="viz-track">` +
       gridTicks.map(t => `<span class="viz-grid" style="left:${x(t)}"></span>`).join("") +
       `<span class="viz-w" style="left:${x(p10)};width:calc(${x(p90)} - ${x(p10)})"></span>` +
@@ -1926,7 +1932,8 @@ function vizHelpHTML() {
     `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。出走馬の表の「予」の列と同じ。</td></tr>` +
     `<tr><th>結果</th><td>実際の着順(結果が出たレースだけ)。着順の見込みの帯の中なら緑の字。</td></tr></table>` +
     `<h3>並び</h3><table>` +
-    `<tr><th>並べ替え</th><td>列の見出し(馬番・馬名、予想着順、結果)を押すと、その順に並ぶ。同じ見出しをもう一度押すと逆の順(▲ 小さい順・▼ 大きい順)。最初は予想着順の小さい順。</td></tr>` +
+    `<tr><th>人気・単勝</th><td>単勝オッズと、その低い順の人気(出走馬の表と同じオッズ。発走前は今のオッズ、終わったレースは確定オッズ)。</td></tr>` +
+    `<tr><th>並べ替え</th><td>列の見出し(馬番・馬名、人気、単勝、予想着順、結果)を押すと、その順に並ぶ。同じ見出しをもう一度押すと逆の順(▲ 小さい順・▼ 大きい順)。最初は予想着順の小さい順。</td></tr>` +
     `<tr><th>印</th><td>左端の「印」の列で印(◎ 〇 ▲ △ ★ ✓ 消)を付けられる。出走馬の表の印と共通で、どちらで付けても両方に出る。</td></tr>` +
     `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。出走馬の表の馬名の横と同じ)。</td></tr>` +
     `<tr><th>結果</th><td>実際の着順の順(結果の無い馬は下)。</td></tr>` +

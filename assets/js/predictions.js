@@ -1413,12 +1413,12 @@ function renderRace(rid) {
     renderRace(rid);
   }));
   document.querySelectorAll(".nkMarksBtn").forEach(b => b.onclick = e => { e.stopPropagation(); sendMarksToNetkeiba(rid); });   // 出走馬の欄とビジュアライズ予想の両方(11/22)
-  document.getElementById("nkHelp")?.addEventListener("click", e => {
+  document.querySelectorAll("#nkHelp, .nkHelpBtn").forEach(h => h.addEventListener("click", e => {
     e.stopPropagation();
     document.getElementById("guideTitle").textContent = "netkeiba への印の転記";
     document.getElementById("guideBody").innerHTML = nkHelpHTML();
     const d = document.getElementById("guide"); if (!d.open) d.showModal();
-  });
+  }));
   document.getElementById("vizPre")?.addEventListener("change", e => { state.vizPre = e.target.checked; renderRace(rid); });
   document.querySelectorAll(".vizSort").forEach(b => b.onclick = () => {
     const cur = ["res", "uma", "ninki", "odds"].includes(state.vizSort) ? state.vizSort : "pred";
@@ -1903,7 +1903,7 @@ function renderViz(rid, rows, favBox = "") {
     `<div class="calc" style="margin-bottom:6px;gap:10px">` +
     favBox + (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
     `<span class="muted" style="font-size:12px">列の見出し(馬番・人気・単勝・予想着順・結果)を押すと並べ替え</span>` +
-    `<button class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る。使い方は出走馬の欄の ？)">netkeiba に印を転記</button></div>` +
+    `<button class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る。使い方は右の ？)">netkeiba に印を転記</button><button class="help nkHelpBtn" title="netkeiba への印の転記の使い方(ブックマークの登録)">？</button></div>` +
     `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-n">${sb("ninki", "人気", "人気")}</div><div class="viz-n">${sb("odds", "単勝", "単勝オッズ")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
     gridTicks.map(t => `<span class="viz-tick" style="left:${x(t)}">${ticks.includes(t) ? `${t}着` : t}</span>`).join("") + `</div><div></div></div>`;
   for (const { r, b, k, o, nk } of items) {

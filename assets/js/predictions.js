@@ -1163,19 +1163,22 @@ function setupCardFolds(root, sel = ".card") {
     // 見出しの「更新 HH:MM」・ボタン・かっこの中(並び順・件数など)は入れない。更新やレースの切り替えで変わらないように(2026-11-21 ユーザーの指示)
     const hc = head.cloneNode(true);
     hc.querySelectorAll(".sec-upd, button, .fold-mark").forEach(x => x.remove());
-    const key = "card:" + hc.textContent.replace(/\s+/g, "").replace(/[(（][^)）]*[)）]/g, "").replace(/^[▾▸]/, "").replace(/？$/, "").slice(0, 20);
+    const titleKey = "card:" + hc.textContent.replace(/\s+/g, "").replace(/[(（][^)）]*[)）]/g, "").replace(/^[▾▸]/, "").replace(/？$/, "").slice(0, 20);
+    // data-fold があるカードはその名前で覚え、同じ名前のカードはいっしょに開け閉めする(馬場傾向予想と展開予想。2026-11-22 ユーザーの指示)
+    const key = card.dataset.fold ? "card:" + card.dataset.fold : titleKey;
     // 携帯: 展開予想・馬場傾向予想は、レースを開いたときはたたんでおく(開いたのはそのレースを見ているあいだだけ。2026-11-15 ユーザーの指示)
-    const mob = MOBILE_SHUT.test(key) && window.matchMedia("(max-width: 760px)").matches;
+    const mob = MOBILE_SHUT.test(titleKey) && window.matchMedia("(max-width: 760px)").matches;
     // 携帯でも開いたことを覚えておき、どのレースでも同じにする(2026-11-21 ユーザーの指示。前はそのレースを見ているあいだだけ)
     const isShut = () => mob ? !folded("mopen:" + key) : folded(key);
     head.classList.add("fold-card");
     head.insertAdjacentHTML("afterbegin", `<span class="fold-mark">${isShut() ? "▸" : "▾"}</span>`);
     card.classList.toggle("folded", isShut());
+    card._foldRefresh = () => { card.classList.toggle("folded", isShut()); head.querySelector(".fold-mark").textContent = isShut() ? "▸" : "▾"; };
     head.onclick = e => {
       e.stopPropagation();
       toggleFold(mob ? "mopen:" + key : key);
-      card.classList.toggle("folded", isShut());
-      head.querySelector(".fold-mark").textContent = isShut() ? "▸" : "▾";
+      const same = card.dataset.fold ? [...root.querySelectorAll(`[data-fold="${card.dataset.fold}"]`)] : [card];
+      same.forEach(c => c._foldRefresh ? c._foldRefresh() : null);
     };
   });
 }
@@ -1300,12 +1303,12 @@ function renderRace(rid) {
       (word ? ` <span class="chip ${biasTone(word)}">${esc(word)}</span>` : "") + confChip(src, label) +
       (why || cw ? `<div class="note" style="margin:0">${esc(why)}${why && cw ? "。" : ""}${cw ? "確度の根拠: " + esc(cw) : ""}</div>` : "") + `</div></div>`;
   }).join("");
-  const tenkaiCard = `<div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">展開予想${updTag("予想", rid)}</h3>${favBox}</div>${favNote}` +
+  const tenkaiCard = `<div class="card" data-fold="baba-tenkai"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">展開予想${updTag("予想", rid)}</h3>${favBox}</div>${favNote}` +
     `${pace || `<span class="muted">列がありません</span>`}` +
     (pace ? `<div class="note">目安(札)は検証期間(2019〜2023年)の同じ芝ダのレースと比べたもの。ペース予想の数字はコースの基準タイムとの差で、ふつうのレースでも前に行く馬は基準より少し速い(平均は下の行のとおり)ので、札はそれと比べた速さ。逃げ・先行馬が多くペースが速いと差しが届きやすく、少なく遅いと前が残りやすい。</div>` : "") +
     `</div>`;
   const today = todayBiasRows(r0);
-  const babaCard = `<div class="card"><h3>馬場傾向予想（仮）<button class="help" data-help="baba" title="馬場傾向予想の各項目の説明(別ウインドウ)">？</button>${updTag("予想", rid)}</h3>` +
+  const babaCard = `<div class="card" data-fold="baba-tenkai"><h3>馬場傾向予想（仮）<button class="help" data-help="baba" title="馬場傾向予想の各項目の説明(別ウインドウ)">？</button>${updTag("予想", rid)}</h3>` +
     `${info ? `<dl class="kv">${info}</dl>` : ""}` +
     (bias ? `<div style="margin-top:6px">${bias}</div><div class="note">馬場傾向の数字は、3着以内の馬の位置の平均 − 全馬の平均。` +
       `内外は馬番÷頭数(0 = 内、1 = 外)、前後は最初のコーナーの順位÷頭数(0 = 前、1 = 後ろ)で、マイナスなら内・前が有利。` +

@@ -1100,6 +1100,13 @@ function toggleFold(key) {
 }
 function setupHelpButtons(root) {
   root.querySelectorAll("button.help[data-help='baba']").forEach(b => b.onclick = openBabaHelp);
+  root.querySelectorAll("button.help[data-help='viz']").forEach(b => b.onclick = e => {   // 2026-11-22 ユーザーの指示: モーダルで出す(PC も同じ画面の中)
+    e.stopPropagation();
+    document.getElementById("guideTitle").textContent = "ビジュアライズ予想の見方";
+    document.getElementById("guideBody").innerHTML = vizHelpHTML();
+    const d = document.getElementById("guide");
+    if (!d.open) d.showModal();
+  });
 }
 const MOBILE_SHUT = /^card:(展開予想|馬場傾向予想|枠順確定)/;   // 枠順確定 → 馬体重の変化 も(2026-11-16)
 function setupCardFolds(root, sel = ".card") {
@@ -1806,10 +1813,10 @@ function renderViz(rid, rows) {
   else if (sort === "uma") items.sort((a, b) => +a.r.umaban - +b.r.umaban);
   else if (pre) items.sort((a, b) => (num(a.r["枠順時_順位"]) ?? big) - (num(b.r["枠順時_順位"]) ?? big));
   const sb = (k, l) => `<button class="vizSort${sort === k ? " on" : ""}" data-k="${k}">${l}</button>`;
-  let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想${updTag(["予想"], rid)}</h3>` +
+  let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想<button class="help" data-help="viz" title="ビジュアライズ予想の各項目の説明">？</button>${updTag(["予想"], rid)}</h3>` +
     `<div class="calc" style="margin-bottom:6px;gap:10px">` +
     (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
-    `<span class="tabs" style="margin:0"><span class="muted" style="align-self:center;margin-right:4px">並び:</span>${sb("pred", "予想の順位")}${sb("fin", "予想着順")}${sb("res", "実際の着順")}${sb("uma", "馬番")}</span></div>` +
+    `<span class="tabs" style="margin:0"><span class="muted" style="align-self:center;margin-right:4px">並び:</span>${sb("pred", "勝率の順")}${sb("fin", "平均の着順")}${sb("res", "実際の着順")}${sb("uma", "馬番")}</span></div>` +
     `<div class="viz"><div class="viz-row viz-axis"><div class="viz-name"></div><div class="viz-n">予想</div><div class="viz-n">着順</div><div class="viz-track">` +
     ticks.map(t => `<span class="viz-tick" style="left:${x(t)}">${t}着</span>`).join("") + `</div><div></div></div>`;
   for (const { r, b, k } of items) {
@@ -1827,6 +1834,28 @@ function renderViz(rid, rows) {
   return h + `</div><div class="note">${pre ? "馬体重確定前(枠順確定の時点)" : "今"}の平均の勝率から、勝率の高い馬から順に残りの馬の勝率の比で着順を決めるくり返しで作った着順の分布。` +
     `「予想」はその平均の着順、「着順」は実際の着順。太い帯は実際の着順が半々で入る範囲(表の「着順の見込み」)、細い線は 80% の範囲、点は平均の着順。` +
     `結果が出たレースは、実際の着順を ◆ で出す(帯の中なら緑、外なら橙)。帯が短いほど予想がはっきりしている。モデルの勝率だけから作った見込みで、当たり方はまだ確かめていない。</div></div>`;
+}
+function vizHelpHTML() {
+  return `<p>1頭1行で、その馬が実際に何着くらいに来そうかの見込みを横向きの図で出す。横の軸は着順で、左が1着、右が最下位。</p>` +
+    `<h3>図の見方</h3><table>` +
+    `<tr><th>太い帯</th><td>着順の見込み。実際の着順が半々(50%)の確率でこの範囲に入る見込み。右端の「1〜4」などの数字と、出走馬の表の「着順の見込み」と同じ。帯が短いほど予想がはっきりしていて、長いほどどこに来てもおかしくない。</td></tr>` +
+    `<tr><th>細い線</th><td>80% の確率で入る範囲(広めに見たとき)。</td></tr>` +
+    `<tr><th>丸い点</th><td>平均の着順(「予想」の列の数字)。</td></tr>` +
+    `<tr><th>◆</th><td>結果が出たレースの実際の着順。帯の中なら緑、外なら橙。</td></tr></table>` +
+    `<h3>列</h3><table>` +
+    `<tr><th>予想</th><td>平均の着順。下の「作り方」のくり返しで出た着順の平均(例: 1.8 なら、だいたい1〜2着)。</td></tr>` +
+    `<tr><th>着順</th><td>実際の着順(結果が出たレースだけ)。着順の見込みの帯の中なら緑の字。</td></tr></table>` +
+    `<h3>並び</h3><table>` +
+    `<tr><th>勝率の順</th><td>6モデルの平均の勝率(1着になる確率)が高い順。出走馬の表の「予」の列と同じで、最初の並び。</td></tr>` +
+    `<tr><th>平均の着順</th><td>「予想」の列(平均の着順)の小さい順。勝率は1着になれるかだけを見るが、平均の着順は2着以下も含めた全体の見込み。` +
+    `どちらも同じ勝率から作るので、ほとんど同じ並びになる。勝率が近い馬どうしで入れ替わることがある。</td></tr>` +
+    `<tr><th>実際の着順</th><td>結果の着順の順(結果の無い馬は下)。</td></tr>` +
+    `<tr><th>馬番</th><td>馬番の順。</td></tr></table>` +
+    `<h3>馬体重確定前の予想</h3><p>✓を入れると、馬体重が出る前(枠順確定の時点)の予想の勝率で描き直す。馬体重や当日の馬場傾向で見込みがどう変わったかを比べられる。枠順確定の時点の値が無いレースでは出ない。</p>` +
+    `<h3>作り方</h3><p>そのレースの全頭の勝率から、勝率の高い馬から順に、残った馬の勝率の比で次の着順を決める(1着を決めたら、残りの馬で2着を決める…)。` +
+    `これを4000回くり返して、馬ごとに何着が何回出たかを数え、着順の分布を作る。乱数は毎回同じなので、開き直しても同じ値になる。` +
+    `「得意モデルのみの予想を表示」に✓があるときは、得意モデルだけの平均の勝率から作る。</p>` +
+    `<p class="muted">モデルの勝率だけから作った見込みで、実際にこの割合で帯の中に入るかは、まだ確かめていない。予想 CSV は変えず、ビューアの中だけで計算している。</p>`;
 }
 function bandStr(b) { return b && b[0] != null ? (b[0] === b[1] ? `${b[0]}` : `${b[0]}〜${b[1]}`) : "-"; }
 function detail(r, ms) {

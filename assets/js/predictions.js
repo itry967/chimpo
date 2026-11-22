@@ -1176,25 +1176,60 @@ function renderNav() {
       if (!mobile) html += `<div class="jyo fold-h" data-fold="jyo:${k}">${jyoShut ? "▸" : "▾"} ${JYO[jyo] || jyo}</div>`;
       if (jyoShut) continue;
       byDayJyo[k].sort((a, b) => a.slice(14).localeCompare(b.slice(14)));
-      for (const rid of byDayJyo[k]) {
+      byDayJyo[k].forEach((rid, ri) => {
       const rows = state.races.get(rid), r = rows[0], c = confLevel(rows), x = num(r["混戦の段階"]);
-      html += `<a data-rid="${rid}" class="${state.current === rid ? "on" : ""}"><span class="r">${+rid.slice(14, 16)}R</span>` +
+      const prev = ri > 0 ? byDayJyo[k][ri - 1] : "";
+      html += `<a data-rid="${rid}" class="${state.current === rid ? "on" : ""}"><span class="lamp" data-lamp="${rid}" data-prev="${prev}"></span><span class="r">${+rid.slice(14, 16)}R</span>` +
         `<span class="t">${hhmm(r.hasso_time)}</span><span class="tag">` +
         (c ? `<span class="chip ${c.lv >= 7 ? "up" : c.lv <= 3 ? "gray" : ""}" title="自信 ${c.score}/100(10段階で ${c.lv}・${CONF_WORDS[c.lv]})">自信${c.score}</span>` : "") +
         (x ? ` <span class="chip ${x >= 7 ? "warn" : "gray"}" title="混戦 ${x}/10(${MIX_WORDS[x]})">混戦${x}</span>` : "") +
         (changeView() && honmeiChanged(rows) ? ` <span class="chip warn" title="枠順確定の時点と馬体重の版で本命が変わった">本命変更</span>` : "") +
         navQuality(rid, rows) + `</span></a>`;
-      }
+      });
     }
   }
   state.navJyoSeen = state.current;
   nav.innerHTML = html;
+  updateLamps();
   nav.querySelectorAll("button[data-day]").forEach(a => a.onclick = e => { e.stopPropagation(); if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("mobile-nav-collapsed"); state.dayPage = a.dataset.day; state.open.clear(); render(); });
   nav.querySelectorAll("a[data-rid]").forEach(a => a.onclick = () => { if (window.matchMedia("(max-width: 760px)").matches) document.body.classList.add("mobile-nav-collapsed"); state.dayPage = null; state.current = a.dataset.rid; state.open.clear(); render(); });
   nav.querySelectorAll(".fold-h").forEach(d => d.onclick = () => { toggleFold(d.dataset.fold); renderNav(); });
   nav.querySelectorAll("button[data-navjyo]").forEach(b => b.onclick = () => { state.navJyo[b.dataset.navjyo.slice(0, 8)] = b.dataset.navjyo; renderNav(); });
   document.getElementById("navClose").onclick = () => document.getElementById("navToggle").click();
 }
+
+// ---------- レース一覧のランプ(2026-11-22 ユーザーの指示) ----------
+// 締め切り = 発走の2分前(JRA の発売締め切り)。前のレースの締め切り(1R は朝 9:00)から: 締め切り20分前までは緑の点灯、
+// 20分前〜10分前は緑の点滅、10分前〜5分前はオレンジの点滅、5分前〜締め切りは赤の点滅、締め切りから5分(レース中)は赤の点灯。ほかは消す
+const LAMP_CLOSE = 2;
+function raceDeadline(rid) {
+  const r = state.races.get(rid)?.[0], hm = String(r?.hasso_time ?? "").padStart(4, "0");
+  if (!/^\d{4}$/.test(hm)) return null;
+  const d = new Date(+rid.slice(0, 4), +rid.slice(4, 6) - 1, +rid.slice(6, 8), +hm.slice(0, 2), +hm.slice(2, 4));
+  return new Date(d.getTime() - LAMP_CLOSE * 60000);
+}
+function lampState(rid, prev, now = new Date()) {
+  const dl = raceDeadline(rid);
+  if (!dl) return "";
+  const start = prev ? raceDeadline(prev) : new Date(dl.getFullYear(), dl.getMonth(), dl.getDate(), 9, 0);
+  const m = (dl - now) / 60000;
+  if (m < -5 || (start && now < start)) return "";
+  if (m < 0) return "rs";        // レース中(締め切りから5分)
+  if (m <= 5) return "rb";
+  if (m <= 10) return "ob";
+  if (m <= 20) return "gb";
+  return "gs";
+}
+const LAMP_TIP = { gs: "発売中(締め切りまで20分より前)", gb: "締め切り20分前", ob: "締め切り10分前", rb: "締め切り5分前", rs: "レース中(締め切りから5分)" };
+function updateLamps() {
+  const now = new Date();
+  document.querySelectorAll(".lamp[data-lamp]").forEach(l => {
+    const st = lampState(l.dataset.lamp, l.dataset.prev, now);
+    l.className = "lamp" + (st ? " lamp-" + st : "");
+    l.title = st ? LAMP_TIP[st] : "";
+  });
+}
+setInterval(updateLamps, 15000);
 
 // ---------- 折りたたみ(レース一覧の開催日・競馬場、レースのカード。このブラウザに覚えておく) ----------
 function foldSet() {

@@ -209,7 +209,7 @@ a.nk-bm:hover { background: var(--accent); color: var(--panel); }
 .viz-res { position: absolute; top: 2px; width: 12px; height: 12px; margin-left: -6px; transform: rotate(45deg); background: #f5c400; border: 1px solid var(--panel); box-sizing: border-box; }
 .viz-res.in { background: #f5c400; }   /* 実際の着順の点は黄色に統一(2026-11-22) */
 .viz-txt { font-size: 12px; color: var(--muted); text-align: right; white-space: nowrap; }
-@media (max-width: 640px) { .viz-row { grid-template-columns: 40px 84px 26px 36px 40px 26px 1fr 36px; gap: 4px; } .viz-name { font-size: 12px; } }
+/* 携帯は図の幅を取り、左右にスクロールして見る(2026-11-23 ユーザーの指示「かなり潰れて見える」) */@media (max-width: 760px) { .viz { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; } .viz-row { min-width: 760px; grid-template-columns: 46px 150px 40px 52px 64px 40px 1fr 56px; gap: 6px; } .viz-row.viz-sec { grid-template-columns: 150px 52px 44px 1fr; } .viz-name { font-size: 13px; } }
 .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--accent-soft);
   color: var(--accent); white-space: nowrap; }
 .chip.up { background: var(--up-soft); color: var(--up); }

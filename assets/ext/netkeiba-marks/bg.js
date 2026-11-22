@@ -17,7 +17,8 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
     });
   } else if (msg.type === "kbb-done") {   // 買い目転記の結果を、開いている予想ビューアのタブに知らせる
     chrome.tabs.query({ url: ["http://localhost:8770/*", "http://127.0.0.1:8770/*", "https://itry967.github.io/chimpo/*"] }, tabs => {
-      for (const t of tabs) chrome.tabs.sendMessage(t.id, { type: "kbm-result", kind: "bets", ...msg }).catch(() => {});
+      // msg の type(kbb-done)で上書きしないよう、type は後に書く(1.3.3 で直した。前は購入した馬券に入らなかった)
+      for (const t of tabs) chrome.tabs.sendMessage(t.id, { ...msg, type: "kbm-result", kind: "bets" }).catch(() => {});
     });
   } else if (msg.type === "kbm-done" && sender.tab) {
     finish(sender.tab.id, { ok: msg.ok, message: msg.message });

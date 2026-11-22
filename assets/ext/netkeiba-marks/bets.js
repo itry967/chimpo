@@ -12,9 +12,19 @@
   var tab = function (n) { return q("dl.shikibetu dd a").filter(function (a) { return a.textContent.trim() === n; })[0]; };
   var addBtn = function () { return q("button").filter(function (x) { return x.textContent.trim() === "追加"; })[0]; };
   var i = 0, ok = 0, yen = 0, ng = [], okNames = [], tries = 0;
+  // 入れているあいだは画面に「お待ちください」を出す(1.3.3。2026-11-22 ユーザーの指示)。画面の操作はふさぐ(入れ終わるまで触らない)
+  var wbox = document.createElement("div");
+  wbox.setAttribute("style", "position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font-family:sans-serif");
+  wbox.innerHTML = '<div style="background:#fff;color:#222;border-radius:12px;padding:22px 30px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.4);min-width:280px">' +
+    '<div style="font-size:17px;font-weight:700;margin-bottom:8px">予想ビューアから買い目を入れています</div>' +
+    '<div id="kbbWaitMsg" style="font-size:14px">しばらくお待ちください(画面ができるのを待っています)</div>' +
+    '<div style="font-size:12px;color:#666;margin-top:8px">終わるまで画面に触らないでください。購入(IPAT投票)は押しません。</div></div>';
+  var showWait = function (t) { if (!wbox.parentNode) document.body.appendChild(wbox); var m = wbox.querySelector("#kbbWaitMsg"); if (m && t) m.textContent = t; };
+  var hideWait = function () { if (wbox.parentNode) wbox.parentNode.removeChild(wbox); };
   function clearSel() { q("td.Horse_Select input:checked").forEach(function (x) { (x.parentNode.querySelector("label") || x).click(); }); }
   function step() {
     if (i >= d.b.length) return done();
+    showWait("しばらくお待ちください(" + (i + 1) + " / " + d.b.length + " 点目)");
     var b = d.b[i++], kind = b[0], t = b[1], amt = b[2], name = kind + " " + t.join(kind === "馬単" || kind === "3連単" ? "→" : "-");
     var tb = tab(kind);
     if (!tb) { ng.push(name + "(券種が無い)"); return step(); }
@@ -48,6 +58,7 @@
     }, 900);
   }
   function done() {
+    hideWait();
     history.replaceState(null, "", location.pathname + location.search.replace(/&kbb=[^&]*/, ""));
     var got = stored() - base;   // 「IPAT投票」が読む記録に、実際に入った数
     if (got < ok) {
@@ -66,8 +77,9 @@
   var stored = function () { try { var v = JSON.parse(localStorage.getItem(lsKey) || "null"); return v && v.list ? Object.keys(v.list).length : 0; } catch (e) { return 0; } };
   var base = 0;
   (function wait() {   // 画面と記録ができるまで待つ(最大 20 秒)
+    if (document.body) showWait();
     if (!tab("単勝") || !document.querySelector("input[name=money]") || localStorage.getItem(lsKey) === null) {
-      if (++tries > 40) { alert("買い目転記: 購入画面が出ませんでした(netkeiba にログインしているか・IPAT 連動の設定を確かめてください)"); return; }
+      if (++tries > 40) { hideWait(); alert("買い目転記: 購入画面が出ませんでした(netkeiba にログインしているか・IPAT 連動の設定を確かめてください)"); return; }
       return setTimeout(wait, 500);
     }
     setTimeout(function () { base = stored(); step(); }, 1500);

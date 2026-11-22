@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "予想ビューア 印・買い目転記",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "予想ビューアから、netkeiba の出馬表に印を自動で付ける(裏のタブ)・IPAT 連動馬券購入の画面に買い目を入れる(購入は自分で押す)。PC の Chrome 用。",
   "icons": {
     "32": "icon32.png",

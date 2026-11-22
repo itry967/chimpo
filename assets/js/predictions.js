@@ -1368,6 +1368,13 @@ function renderRace(rid) {
   html += modelCard;
   document.getElementById("main").innerHTML = html;
   state.favActive = false;   // 変化の印を止めるのは出走馬の表を作るあいだだけ(レース一覧の印は止めない)
+  // 並び(2026-11-22 ユーザーの指示): レース概要 → ビジュアライズ予想 → 出走馬 → ほか
+  {
+    const main = document.getElementById("main"), top = main.querySelector(".card");
+    const viz = main.querySelector(".viz-card"), horse = main.querySelector("tr.horse")?.closest(".card");
+    if (top && viz) top.after(viz);
+    if (viz && horse) viz.after(horse); else if (top && horse) top.after(horse);
+  }
   setupCardFolds(document.getElementById("main"), ".card", true);   // 個別レース: 概要・出走馬・ビジュアライズ予想のほかは最初たたむ
   setupHelpButtons(document.getElementById("main"));
   setupLapBase(document.getElementById("main"));

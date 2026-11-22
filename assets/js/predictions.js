@@ -1346,6 +1346,7 @@ function renderRace(rid) {
     const why = catChips(r) + reasonChips(r);
     html += `<tr class="horse${why ? " has-why" : ""}" data-key="${key}"><td class="rank">${esc(r["平均_順位"])}${changeView() ? moveMark(rankMove(r)) : ""}</td><td class="mark-col">${markSelect(rid, r.umaban)}</td>` +
       `<td>${umaBadge(r.umaban, nUma)}</td><td class="name">${esc(r.horse_name)}${cdot(r, "予想")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}${changeView() ? winMove(r) : ""}</td><td>${placeBar(top2(r), top3(r), maxTop3)}${preTops(r, ms)}</td>` +
+      `<td class="n hide-sm">${w == null ? "" : w + (z == null ? "" : `<span class="dim">(${z > 0 ? "+" : ""}${z})</span>`)}</td>` +
       `<td class="n">${fix(num(r["妥当オッズ_単勝"]))}${gapMark(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]), "単勝")}${colMove(r, "妥当オッズ_単勝", 1, true)} / ` +
       `${fix(num(r["妥当オッズ_複勝"]))}${gapMark(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]), "複勝(下限)")}${colMove(r, "妥当オッズ_複勝", 1, true)}</td>` +
       `<td class="n">${odds != null ? `${fix(odds)}<span class="dim ninki">${ninki.get(String(r.umaban))}人気</span>` : `<span class="dim">—</span>`}</td>` +
@@ -1354,14 +1355,13 @@ function renderRace(rid) {
       `<td class="n">${fix(num(r["予想着順"]))}${colMove(r, "予想着順", 1, true)}${cdot(r, "予想")}</td>` +
       `<td class="n">${bandStr(rankBand(rid, "平均", r.umaban, state.favActive ? rows : null))}</td><td>${esc(styleOf(r))}${cdot(r, "脚質")}</td>` +
       `<td class="n">${passing(r)}${colMove(r, "前半の番手", 0, true)}${colMove(r, "4角の番手", 0, true)}${cdot(r, "通過予想")}</td><td class="n">${lastThree(r)}${colMove(r, "上がり3Fの予想", 1, true)}${cdot(r, "上がり予想")}</td>` +
-      `<td class="n hide-sm">${w == null ? "" : w + (z == null ? "" : `<span class="dim">(${z > 0 ? "+" : ""}${z})</span>`)}</td>` +
       `<td class="hide-sm">${split ? `<span class="chip warn" title="モデルの順位の幅 ${spread}">割れ</span>` : ""}</td></tr>`;
     if (why && (!simpleView() || state.whyOpen?.has(key))) html += `<tr class="why"><td></td><td colspan="18">${why}</td></tr>`;
     if (state.open.has(key)) html += `<tr class="detail"><td colspan="19">${detail(r, ms)}</td></tr>`;
   }
   html += `</table></div>${favNote}<div class="note">勝率・3着内は6モデルの平均。妥当オッズの横の印は実際のオッズとの差(▲▲ 1.5倍以上・▲ 1.2倍以上高い、▼ 0.8倍未満・▼▼ 0.5倍未満に低い。上にのせると比)。期待値 = オッズ ÷ 妥当オッズ(1 を超えると予想の上では得。緑は 1.0 以上、太字は 1.2 以上。複勝は下限のオッズで計算)。単勝オッズの横は人気(オッズの低い順)。「割れ」はモデルの順位の幅が4以上。馬名・予想着順・脚質・通過予想・上がり予想の横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。色は緑 = 高・灰 = 中・橙 = 低。上にのせると0〜100の点と、検証期間の同じ条件での平均のずれ)。馬名の横は勝率・3着内・期待値を含む予想全体の確度。通過予想は前半(最初のコーナー)→ 4コーナーの番手、上がり予想は秒(かっこ内はレースで速い順、緑は3位まで)。根拠は説明用の LightGBM で、▲が評価を上げた項目、▼が下げた項目。数字は点数の差(レースの平均と比べた分)と、勝つ見込みのおおよその倍率(×)。総合・能力・適性・調子・人・展開は、根拠の項目を分類ごとに足したもの(総合は全部の合計)。1行目の「相対値」はこのレースの中の順位から星(点は1位が100・最下位が0)、2行目の「絶対値」は検証期間 2019〜2023年の全出走馬の中の位置(点は上位何%かで、80以上が★5)。横の高・中・低は確度(元になった出走数・調教などのデータの量。総合は能力・適性・調子のうち一番低いもの)で、低いものは薄く出す。</div></div>`;
 
-  html += renderViz(rid, rows);
+  html += renderViz(rid, rows, favBox);
   html += renderPlan(rid);
   html += renderCalc(rid);
   html += renderCombos(rid);
@@ -1529,9 +1529,10 @@ function horseCols(rid) {
     ["馬名", r => r.horse_name || "", 1, "", ""],
     ["勝率", r => num(r["平均_勝率"]), -1, "", ""],
     ["2・3着内", t3, -1, "", "3着内の確率で並べる"],
+    ["馬体重", r => num(r["馬体重"]), -1, "n hide-sm", ""],   // 2026-11-22 ユーザーの指示: 2・3着内の右に
     ["妥当オッズ<br>単/複", r => num(r["妥当オッズ_単勝"]), 1, "n", "単勝の妥当オッズで並べる"],
     ["単勝<br>オッズ", o, 1, "n", ""],
-    ["期待値", r => ratio(o(r), num(r["妥当オッズ_単勝"])), -1, "n", ""],
+    ["単勝<br>期待値", r => ratio(o(r), num(r["妥当オッズ_単勝"])), -1, "n", "単勝の期待値 = 単勝オッズ ÷ 妥当オッズ(単勝)"],
     ["複勝<br>オッズ", r => num(r["複勝オッズ_下限"]), 1, "n", "下限で並べる"],
     ["複勝<br>期待値", r => ratio(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"])), -1, "n", ""],
     ["1〜5着", r => upTo(r, 3), -1, "", "3着以内の確率で並べる"],
@@ -1541,7 +1542,6 @@ function horseCols(rid) {
     ["脚質", r => STYLE_ORDER[styleOf(r)] ?? 9, 1, "", "逃・先行・差・追込・自在・不明の順"],
     ["通過<br>予想", r => num(r["4角の番手"]), 1, "n", "前半(最初のコーナー)→ 4コーナーの予想の番手。4コーナーの番手で並べる"],
     ["上がり<br>予想", r => num(r["上がり3Fの予想"]), 1, "n", "上がり3F の予想(かっこ内はレースの中で速い順)"],
-    ["馬体重", r => num(r["馬体重"]), -1, "n hide-sm", ""],
   ];
 }
 // ---------- 自分で付ける印(◎ 〇 ▲ △ ★ ✓ 消)。表示だけで、予想・モデルには使わない ----------
@@ -1867,7 +1867,7 @@ function rankBand(rid, m, umaban, given = null) {
 }
 // ビジュアライズ予想(2026-11-22 ユーザーの指示「『出走馬』項目の下の項目として…取りうるであろう順位などを図示する『ビジュアライズ予想』項目を追加したい」)
 // 1頭1行。横の軸は着順(左が1着)。太い帯 = 着順の見込み(50%)、細い線 = 80% の範囲、点 = 平均の着順。並びは表と同じ(予想の順位)
-function renderViz(rid, rows) {
+function renderViz(rid, rows, favBox = "") {
   // 2026-11-22 ユーザーの指示: 馬体重確定前・後の切り替え、馬名の右に予想着順・実際の着順、予想着順・実際の着順・馬番で並べ替え(最初は予想の順位の並び)
   const n = rows.length;
   if (n < 2) return "";
@@ -1901,7 +1901,7 @@ function renderViz(rid, rows) {
   const sb = (k, l, tip) => `<span class="vizSort${sort === k ? " on" : ""}" data-k="${k}" title="${tip}で並べる">${l}${sort === k ? (dir === 1 ? " ▲" : " ▼") : ""}</span>`;
   let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想<button class="help" data-help="viz" title="ビジュアライズ予想の各項目の説明">？</button>${updTag(["予想"], rid)}</h3>` +
     `<div class="calc" style="margin-bottom:6px;gap:10px">` +
-    (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
+    favBox + (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
     `<span class="muted" style="font-size:12px">列の見出し(馬番・人気・単勝・予想着順・結果)を押すと並べ替え</span>` +
     `<button class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る。使い方は出走馬の欄の ？)">netkeiba に印を転記</button></div>` +
     `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-n">${sb("ninki", "人気", "人気")}</div><div class="viz-n">${sb("odds", "単勝", "単勝オッズ")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
@@ -1921,7 +1921,7 @@ function renderViz(rid, rows) {
   }
   return h + `</div><div class="note">${pre ? "馬体重確定前(枠順確定の時点)" : "今"}の平均の勝率から、勝率の高い馬から順に残りの馬の勝率の比で着順を決めるくり返しで作った着順の分布。` +
     `「予想着順」は予想の順位(勝率の順)、「結果」は実際の着順。太い帯は実際の着順が半々で入る範囲(表の「着順の見込み」)、細い線は 80% の範囲、点は平均の着順。` +
-    `結果が出たレースは、実際の着順を ◆ で出す(帯の中なら緑、外なら橙)。帯が短いほど予想がはっきりしている。モデルの勝率だけから作った見込みで、当たり方はまだ確かめていない。</div></div>`;
+    `結果が出たレースは、実際の着順を黄色の ◆ で出す。帯が短いほど予想がはっきりしている。モデルの勝率だけから作った見込みで、当たり方はまだ確かめていない。</div></div>`;
 }
 function vizHelpHTML() {
   return `<p>1頭1行で、その馬が実際に何着くらいに来そうかの見込みを横向きの図で出す。横の軸は着順で、左が1着、右が最下位。</p>` +
@@ -1929,7 +1929,7 @@ function vizHelpHTML() {
     `<tr><th>太い帯</th><td>着順の見込み。実際の着順が半々(50%)の確率でこの範囲に入る見込み。右端の「1〜4」などの数字と、出走馬の表の「着順の見込み」と同じ。帯が短いほど予想がはっきりしていて、長いほどどこに来てもおかしくない。</td></tr>` +
     `<tr><th>細い線</th><td>80% の確率で入る範囲(広めに見たとき)。</td></tr>` +
     `<tr><th>丸い点</th><td>平均の着順(下の「作り方」のくり返しで出た着順の平均)。行にのせると数字でも出る。</td></tr>` +
-    `<tr><th>◆</th><td>結果が出たレースの実際の着順。帯の中なら緑、外なら橙。</td></tr></table>` +
+    `<tr><th>◆</th><td>結果が出たレースの実際の着順(黄色)。</td></tr></table>` +
     `<h3>列</h3><table>` +
     `<tr><th>予想着順</th><td>予想の順位(6モデルの平均の勝率が高い順)。出走馬の表の「予」の列と同じ。</td></tr>` +
     `<tr><th>結果</th><td>実際の着順(結果が出たレースだけ)。着順の見込みの帯の中なら緑の字。</td></tr></table>` +

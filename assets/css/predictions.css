@@ -182,8 +182,8 @@ a.nk-bm:hover { background: var(--accent); color: var(--panel); }
 .viz-w { position: absolute; top: 8px; height: 2px; background: var(--muted); opacity: .6; border-radius: 1px; }
 .viz-b { position: absolute; top: 3px; height: 12px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 6px; box-sizing: border-box; }
 .viz-dot { position: absolute; top: 4px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--accent); }
-.viz-res { position: absolute; top: 2px; width: 12px; height: 12px; margin-left: -6px; transform: rotate(45deg); background: var(--warn); border: 1px solid var(--panel); box-sizing: border-box; }
-.viz-res.in { background: var(--up); }
+.viz-res { position: absolute; top: 2px; width: 12px; height: 12px; margin-left: -6px; transform: rotate(45deg); background: #f5c400; border: 1px solid var(--panel); box-sizing: border-box; }
+.viz-res.in { background: #f5c400; }   /* 実際の着順の点は黄色に統一(2026-11-22) */
 .viz-txt { font-size: 12px; color: var(--muted); text-align: right; white-space: nowrap; }
 @media (max-width: 640px) { .viz-row { grid-template-columns: 40px 84px 26px 36px 40px 26px 1fr 36px; gap: 4px; } .viz-name { font-size: 12px; } }
 .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--accent-soft);

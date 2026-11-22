@@ -162,6 +162,10 @@ header { min-width: 100%; }
 .kpi .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .kpi .l { font-size: 12px; color: var(--muted); }
 /* ビジュアライズ予想(2026-11-22) */
+/* 印転記のブックマークレットのリンク(ダークモードでも見えるようにボタン風に。2026-11-22) */
+a.nk-bm { display: inline-block; padding: 6px 16px; border-radius: 8px; border: 2px dashed var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 15px; text-decoration: none; cursor: grab; }
+a.nk-bm:hover { background: var(--accent); color: var(--panel); }
+#guideBody textarea { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; }
 .viz { display: flex; flex-direction: column; gap: 0; }
 .viz-mark select.mark { min-width: 38px; height: 26px; font-size: 14px; padding: 0 2px; }
 .viz-n { font-size: 12px; text-align: right; white-space: nowrap; }

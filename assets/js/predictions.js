@@ -690,7 +690,7 @@ OK を押すと netkeiba の出馬表を開きます。開いたページでブ�
 function nkHelpHTML() {
   return `<p>このビューアで付けた印を、netkeiba の同じレースの印に転記する。</p><h3>はじめに一度だけ: ブックマークの登録</h3>` +
     `<p><b>PC:</b> 下の「印転記」をブックマークバーへドラッグする(ブックマークバーが出ていなければ Ctrl+Shift+B)。</p>` +
-    `<p style="margin:10px 0"><a class="nk-bm" href="${esc(NK_BOOKMARKLET)}" onclick="alert('ブックマークバーへドラッグして登録してください');return false;">印転記</a></p>` +
+    `<p style="margin:10px 0"><a class="nk-bm" href="${esc(NK_BOOKMARKLET)}" onclick="alert('ブックマークバーへドラッグして登録してください');return false;">印転記</a> <span class="muted">← これをブックマークバーへドラッグ</span></p>` +
     `<p class="muted">ドラッグできないときは、何かのページをブックマークに登録してから編集し、名前を「印転記」、URL に下の文をまるごと貼る。</p>` +
     `<textarea readonly style="width:100%;height:80px;font-size:11px" onclick="this.select()">${esc(NK_BOOKMARKLET)}</textarea>` +
     `<h3>使い方</h3><ol><li>レースのページの「netkeiba に印を転記」を押す。</li><li>確認のダイアログで、送る印と、netkeiba で元々付けていた印が消えることを確かめて OK を押す(キャンセルなら何もしない)。</li>` +

@@ -1269,6 +1269,7 @@ function renderRace(rid) {
   }
   html += `</table></div>${favNote}<div class="note">勝率・3着内は6モデルの平均。妥当オッズの横の印は実際のオッズとの差(▲▲ 1.5倍以上・▲ 1.2倍以上高い、▼ 0.8倍未満・▼▼ 0.5倍未満に低い。上にのせると比)。期待値 = オッズ ÷ 妥当オッズ(1 を超えると予想の上では得。緑は 1.0 以上、太字は 1.2 以上。複勝は下限のオッズで計算)。単勝オッズの横は人気(オッズの低い順)。「割れ」はモデルの順位の幅が4以上。馬名・予想着順・脚質・通過予想・上がり予想の横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。色は緑 = 高・灰 = 中・橙 = 低。上にのせると0〜100の点と、検証期間の同じ条件での平均のずれ)。馬名の横は勝率・3着内・期待値を含む予想全体の確度。通過予想は前半(最初のコーナー)→ 4コーナーの番手、上がり予想は秒(かっこ内はレースで速い順、緑は3位まで)。根拠は説明用の LightGBM で、▲が評価を上げた項目、▼が下げた項目。数字は点数の差(レースの平均と比べた分)と、勝つ見込みのおおよその倍率(×)。総合・能力・適性・調子・人・展開は、根拠の項目を分類ごとに足したもの(総合は全部の合計)。1行目の「相対値」はこのレースの中の順位から星(点は1位が100・最下位が0)、2行目の「絶対値」は検証期間 2019〜2023年の全出走馬の中の位置(点は上位何%かで、80以上が★5)。横の高・中・低は確度(元になった出走数・調教などのデータの量。総合は能力・適性・調子のうち一番低いもの)で、低いものは薄く出す。</div></div>`;
 
+  html += renderViz(rid, rows);
   html += renderPlan(rid);
   html += renderCalc(rid);
   html += renderCombos(rid);
@@ -1735,13 +1736,47 @@ function rankBand(rid, m, umaban, given = null) {
       }
     }
     const band = new Map(rows.map((x, i) => {
-      let c = 0, lo = null, hi = null;
-      for (let pos = 0; pos < n; pos++) { c += cnt[i][pos] / N; if (lo == null && c >= 0.25) lo = pos + 1; if (hi == null && c >= 0.75) hi = pos + 1; }
-      return [String(x.umaban), [lo, hi]];
+      // [25%点, 75%点, 10%点, 90%点, 平均の着順](10%・90%・平均はビジュアライズ予想で使う)
+      let c = 0, lo = null, hi = null, p10 = null, p90 = null, mean = 0;
+      for (let pos = 0; pos < n; pos++) {
+        const q = cnt[i][pos] / N; c += q; mean += q * (pos + 1);
+        if (p10 == null && c >= 0.10) p10 = pos + 1; if (lo == null && c >= 0.25) lo = pos + 1;
+        if (hi == null && c >= 0.75) hi = pos + 1; if (p90 == null && c >= 0.90) p90 = pos + 1;
+      }
+      return [String(x.umaban), [lo, hi, p10, p90, mean]];
     }));
     RANK_BAND.set(key, n ? band : new Map());
   }
   return RANK_BAND.get(key).get(String(umaban));
+}
+// ビジュアライズ予想(2026-11-22 ユーザーの指示「『出走馬』項目の下の項目として…取りうるであろう順位などを図示する『ビジュアライズ予想』項目を追加したい」)
+// 1頭1行。横の軸は着順(左が1着)。太い帯 = 着順の見込み(50%)、細い線 = 80% の範囲、点 = 平均の着順。並びは表と同じ(予想の順位)
+function renderViz(rid, rows) {
+  const n = rows.length;
+  if (n < 2) return "";
+  const x = v => ((v - 0.5) / n * 100).toFixed(2) + "%";
+  // 結果が出ていれば実際の着順の印(2026-11-22 ユーザーの指示「結果が出ていたら実結果を示す点をそれぞれの項目内に表示してほしい」)
+  const res = new Map((state.results.get(rid) || []).map(x => [String(+x["馬番"]), num(x["着順"])]));
+  const ticks = [...new Set([1, ...Array.from({ length: Math.floor(n / 5) }, (_, k) => (k + 1) * 5), n])].filter(v => v <= n);
+  let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想${updTag(["予想"], rid)}</h3><div class="viz">` +
+    `<div class="viz-row viz-axis"><div class="viz-name"></div><div class="viz-track">` +
+    ticks.map(t => `<span class="viz-tick" style="left:${x(t)}">${t}着</span>`).join("") + `</div></div>`;
+  for (const r of rows) {
+    const b = rankBand(rid, "平均", r.umaban, state.favActive ? rows : null);
+    if (!b || b[0] == null) continue;
+    const [lo, hi, p10, p90, mean] = b;
+    const k = res.get(String(+r.umaban)), inB = k != null && k >= lo && k <= hi;
+    h += `<div class="viz-row" title="${esc(r.horse_name)}: 着順の見込み ${bandStr(b)}(80% の範囲 ${p10}〜${p90}、平均 ${mean.toFixed(1)}着)${k != null ? `・結果 ${k}着` : ""}">` +
+      `<div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-track">` +
+      ticks.map(t => `<span class="viz-grid" style="left:${x(t)}"></span>`).join("") +
+      `<span class="viz-w" style="left:${x(p10)};width:calc(${x(p90)} - ${x(p10)})"></span>` +
+      `<span class="viz-b" style="left:calc(${x(lo)} - 6px);width:calc(${x(hi)} - ${x(lo)} + 12px)"></span>` +
+      `<span class="viz-dot" style="left:${x(mean)}"></span>` +
+      (k != null && k >= 1 && k <= n ? `<span class="viz-res${inB ? " in" : ""}" style="left:${x(k)}" title="結果 ${k}着"></span>` : "") +
+      `</div><div class="viz-txt">${bandStr(b)}${k != null ? `<br><b class="${inB ? "hi" : ""}">${k}着</b>` : ""}</div></div>`;
+  }
+  return h + `</div><div class="note">平均の勝率から、勝率の高い馬から順に残りの馬の勝率の比で着順を決めるくり返しで作った着順の分布。` +
+    `太い帯は実際の着順が半々で入る範囲(表の「着順の見込み」)、細い線は 80% の範囲、点は平均の着順。結果が出たレースは、実際の着順を ◆ で出す(帯の中なら緑、外なら橙)。帯が短いほど予想がはっきりしている。モデルの勝率だけから作った見込みで、当たり方はまだ確かめていない。</div></div>`;
 }
 function bandStr(b) { return b && b[0] != null ? (b[0] === b[1] ? `${b[0]}` : `${b[0]}〜${b[1]}`) : "-"; }
 function detail(r, ms) {

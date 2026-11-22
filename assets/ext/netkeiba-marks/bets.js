@@ -49,17 +49,27 @@
   }
   function done() {
     history.replaceState(null, "", location.pathname + location.search.replace(/&kbb=[^&]*/, ""));
+    var got = stored() - base;   // 「IPAT投票」が読む記録に、実際に入った数
+    if (got < ok) {
+      ok = Math.max(0, got); okNames = got > 0 ? okNames.slice(0, got) : [];
+      ng.push("購入画面の記録に入っていない買い目がある(「IPAT投票」で「買い目が入力されていません」になる。ページを読み込み直して、もう一度送ってください)");
+    }
     // 拡張機能のときは、入れた結果をビューアに知らせる(ビューアの設定で日別ページの「購入した馬券」に入れる。2026-11-22)
     try { if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) chrome.runtime.sendMessage({ type: "kbb-done", ok: ok > 0, n: ok, yen: yen, ng: ng, okNames: okNames, id: d.id || "" }); } catch (e) {}
     alert("netkeiba の購入画面に買い目を " + ok + " 点入れました(合計 " + yen.toLocaleString() + " 円)。" +
       (ng.length ? "\n入れられなかった買い目: " + ng.join("、") : "") +
       "\n\n右の「投票内容」で買い目と金額を確かめてから、ご自分で「IPAT投票」を押してください(このプログラムは購入を押しません)。");
   }
-  (function wait() {   // 画面ができるまで待つ(最大 15 秒)
-    if (!tab("単勝") || !document.querySelector("input[name=money]")) {
-      if (++tries > 30) { alert("買い目転記: 購入画面が出ませんでした(netkeiba にログインしているか・IPAT 連動の設定を確かめてください)"); return; }
+  // 購入画面は買い目を画面とは別にブラウザの記録(localStorage の ndi::bet_<race_id>)にも入れ、「IPAT投票」はその記録を読む。
+  // 開いた直後にその記録を作り直す処理が後から走るので、記録ができてから少し待って入れる(1.3.2。11/22 に「買い目が入力されていません」が出た)
+  var lsKey = "ndi::bet_" + rid;
+  var stored = function () { try { var v = JSON.parse(localStorage.getItem(lsKey) || "null"); return v && v.list ? Object.keys(v.list).length : 0; } catch (e) { return 0; } };
+  var base = 0;
+  (function wait() {   // 画面と記録ができるまで待つ(最大 20 秒)
+    if (!tab("単勝") || !document.querySelector("input[name=money]") || localStorage.getItem(lsKey) === null) {
+      if (++tries > 40) { alert("買い目転記: 購入画面が出ませんでした(netkeiba にログインしているか・IPAT 連動の設定を確かめてください)"); return; }
       return setTimeout(wait, 500);
     }
-    step();
+    setTimeout(function () { base = stored(); step(); }, 1500);
   })();
 })();

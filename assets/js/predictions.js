@@ -298,6 +298,15 @@ function sortedRaces() {
 }
 // レースの概要(芝ダ・距離・回り・レース名・グレード・馬場)と状態。レース情報.csv が無ければ出さない
 const STATUS_TONE = { "結果確定後": "gray", "馬体重発表後": "up", "枠順確定(馬体重未発表)": "", "枠順確定前": "warn", "特別登録発表後": "warn" };
+// 当日の馬場傾向が予想に入っているか(2026-11-23 ユーザーの指示「馬体重確定後みたいにわかる表示を追加」)。予想 CSV の「今日のレース数」
+// (同じ日・同じ競馬場・同じ芝ダで、このレースより前に結果の出たレースの数)。列が無い昔の CSV では出さない
+function j2Chip(rid) {
+  const r0 = state.races.get(rid)?.[0];
+  if (!r0 || !("今日のレース数" in r0)) return "";
+  const n = num(r0["今日のレース数"]);
+  return n ? `<span class="chip up" title="当日の馬場傾向(このレースより前の同じ競馬場・芝ダの ${n}レースの結果)を予想に入れている。発走15分前に計算し直す">当日の馬場傾向 反映済(${n}R)</span>`
+    : `<span class="chip gray" title="この競馬場・芝ダで、このレースより前に結果の出たレースがまだ無いので、当日の馬場傾向は入っていない">当日の馬場傾向 まだ無し</span>`;
+}
 function overview(rid) {
   const i = state.info.get(rid);
   if (!i) return "";
@@ -312,6 +321,7 @@ function overview(rid) {
     (i["馬場状態"] ? `<span class="muted">馬場 ${esc(i["馬場状態"])}</span>` : "") +
     (stage ? `<span class="chip ${stage === "馬体重あり" ? "up" : "warn"}" title="予想 CSV の段階。枠順確定の版は馬体重・当日の馬場の計測値を入れる前の予想で、馬体重が出ると作り直す">予想: ${esc(stage)}</span>` : "") +
     `<span class="chip ${STATUS_TONE[i["レースの状態"]] ?? ""}" title="DB にあるデータから決めた状態">${esc(i["レースの状態"] || "")}</span>` +
+    j2Chip(rid) +
     (updatedText ? `<span class="data-updated">データ更新：${esc(updatedText)}</span>` : "") + `</div>`;
 }
 

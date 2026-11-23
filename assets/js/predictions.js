@@ -1784,12 +1784,12 @@ function renderRace(rid) {
   });
   document.querySelectorAll("input.amt").forEach(x => {
     x.onclick = e => e.stopPropagation();
-    x.onchange = () => { basketOf(rid)[x.dataset.i].amount = roundYen(x.value); saveBasket(rid); renderRace(rid); };
+    x.onchange = () => { basketOf(rid)[x.dataset.i].amount = roundYen(x.value); saveBasket(rid); keepScroll(() => renderRace(rid)); };
   });
-  document.querySelectorAll("button.del").forEach(x => x.onclick = () => { basketOf(rid).splice(+x.dataset.i, 1); saveBasket(rid); renderRace(rid); });
+  document.querySelectorAll("button.del").forEach(x => x.onclick = () => { basketOf(rid).splice(+x.dataset.i, 1); saveBasket(rid); keepScroll(() => renderRace(rid)); });
   document.getElementById("basketBuy")?.addEventListener("click", () => { sendToBought(rid, basketOf(rid).filter(x => x.sel !== false)); renderRace(rid); });
-  document.querySelectorAll("input.bsel").forEach(x => x.onchange = () => { const it = basketOf(rid)[x.dataset.i]; if (it) it.sel = x.checked; saveBasket(rid); renderRace(rid); });
-  document.querySelector("input.bselAll")?.addEventListener("change", e => { basketOf(rid).forEach(x => x.sel = e.target.checked); saveBasket(rid); renderRace(rid); });
+  document.querySelectorAll("input.bsel").forEach(x => x.onchange = () => { const it = basketOf(rid)[x.dataset.i]; if (it) it.sel = x.checked; saveBasket(rid); keepScroll(() => renderRace(rid)); });
+  document.querySelector("input.bselAll")?.addEventListener("change", e => { basketOf(rid).forEach(x => x.sel = e.target.checked); saveBasket(rid); keepScroll(() => renderRace(rid)); });
   document.querySelectorAll("a.toDay").forEach(a => a.onclick = e => { e.preventDefault(); state.dayPage = a.dataset.day; state.open.clear(); render(); });
   document.getElementById("basketZero")?.addEventListener("click", () => { basketOf(rid).forEach(x => x.amount = 0); saveBasket(rid); renderRace(rid); });
   document.getElementById("basketClear")?.addEventListener("click", () => { state.basket[rid] = []; saveBasket(rid); renderRace(rid); });
@@ -2655,6 +2655,14 @@ function boughtOf(date) {
 function saveBought(date) {
   try { localStorage.setItem(`keiba-viewer:bought:${date}`, JSON.stringify(state.bought?.[date] || [])); } catch (e) {}
 }
+// 描き直しの前後で、ページと表(.scroll の箱)のスクロール位置を保つ(11/23 ユーザーの指示「金額を変えるとスクロールが戻る」)
+function keepScroll(fn) {
+  const main = document.getElementById("main"), y = window.scrollY, my = main?.scrollTop || 0;
+  const boxes = [...document.querySelectorAll("#main .scroll")].map(e => [e.scrollTop, e.scrollLeft]);
+  fn();
+  window.scrollTo(0, y); if (main) main.scrollTop = my;
+  document.querySelectorAll("#main .scroll").forEach((e, i) => { if (boxes[i]) { e.scrollTop = boxes[i][0]; e.scrollLeft = boxes[i][1]; } });
+}
 function sendToBought(rid, tickets) {
   const date = rid.slice(0, 8), b = boughtOf(date);
   for (const x of tickets) {
@@ -3065,7 +3073,7 @@ function renderDayPage(date) {
     const b = boughtOf(date)[+x.dataset.i];
     if (!b) return;
     b.amount = roundYen(x.value); saveBought(date);
-    const y = window.scrollY; renderDayPage(date); window.scrollTo(0, y);
+    keepScroll(() => renderDayPage(date));
   });
   bindFund(date);
   main.querySelectorAll(".simBtn").forEach(b => b.onclick = () => {
@@ -3074,7 +3082,7 @@ function renderDayPage(date) {
     else state[b.dataset.k] = b.dataset.v;
     const y = window.scrollY; renderDayPage(date); window.scrollTo(0, y);
   });
-  main.querySelectorAll("button.boughtDel").forEach(b => b.onclick = () => { boughtOf(date).splice(+b.dataset.i, 1); saveBought(date); renderDayPage(date); });
+  main.querySelectorAll("button.boughtDel").forEach(b => b.onclick = () => { boughtOf(date).splice(+b.dataset.i, 1); saveBought(date); keepScroll(() => renderDayPage(date)); });
   document.getElementById("boughtClear")?.addEventListener("click", () => {
     if (!confirm("この日の購入した馬券を全部消します。よろしいですか?")) return;
     state.bought[date] = []; saveBought(date); renderDayPage(date);

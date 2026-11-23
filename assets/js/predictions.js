@@ -3207,6 +3207,64 @@ document.addEventListener("change", e => {
   try { localStorage.setItem("keiba-viewer:bpTrail", e.target.checked ? "1" : "0"); } catch (er) {}
   keepScroll(() => state.dayPage ? renderDayPage(state.dayPage) : renderRace(state.current));
 });
+// 馬場傾向マップの拡大表示(11/23 ユーザーの指示「拡大表示ボタン・モーダル・＋−でズーム・ドラッグで移動」)
+document.addEventListener("click", e => {
+  const btn = e.target.closest?.("button.bpZoom");
+  if (!btn) return;
+  const src = btn.closest(".bp")?.querySelector("svg");
+  if (!src) return;
+  const base = src.getAttribute("viewBox").split(/\s+/).map(Number);
+  let vb = [...base], zoom = 1;
+  const wrap = document.createElement("div");
+  wrap.className = "bpz-back";
+  wrap.innerHTML = `<div class="bpz" role="dialog" aria-label="馬場傾向マップの拡大表示"><div class="bpz-bar"><b>馬場傾向マップ(拡大)</b>` +
+    `<span class="muted" style="font-size:12px">＋−・マウスホイールで拡大・縮小、ドラッグで動かす</span><span style="flex:1"></span>` +
+    `<button class="bpz-close">閉じる</button></div><div class="bpz-view">` +
+    // ＋−・元に戻すは図の右下に重ねて出す(11/23 ユーザーの指示)
+    `<div class="bpz-tools"><button class="bpz-in" title="拡大">＋</button><button class="bpz-out" title="縮小">−</button><button class="bpz-reset" title="元の大きさ">元に戻す</button></div></div></div>`;
+  const svg = src.cloneNode(true);
+  svg.removeAttribute("width"); svg.removeAttribute("height");
+  svg.style.width = "100%"; svg.style.height = "100%"; svg.style.cursor = "grab"; svg.style.touchAction = "none";
+  wrap.querySelector(".bpz-view").appendChild(svg);
+  const apply = () => svg.setAttribute("viewBox", vb.join(" "));
+  const zoomBy = f => {
+    const nz = Math.max(1, Math.min(8, zoom * f));
+    const cx = vb[0] + vb[2] / 2, cy = vb[1] + vb[3] / 2;
+    zoom = nz; vb[2] = base[2] / zoom; vb[3] = base[3] / zoom; vb[0] = cx - vb[2] / 2; vb[1] = cy - vb[3] / 2; clamp(); apply();
+  };
+  const clamp = () => {
+    vb[0] = Math.max(base[0], Math.min(base[0] + base[2] - vb[2], vb[0]));
+    vb[1] = Math.max(base[1], Math.min(base[1] + base[3] - vb[3], vb[1]));
+  };
+  // マウスホイールでも拡大・縮小(11/23)。マウスの下の場所を動かさずに拡大する
+  svg.addEventListener("wheel", ev => {
+    ev.preventDefault();
+    const r = svg.getBoundingClientRect(), s = Math.max(vb[2] / r.width, vb[3] / r.height);
+    const ox = (r.width - vb[2] / s) / 2, oy = (r.height - vb[3] / s) / 2;   // 縦横比の余白
+    const px = vb[0] + (ev.clientX - r.left - ox) * s, py = vb[1] + (ev.clientY - r.top - oy) * s;
+    const nz = Math.max(1, Math.min(8, zoom * (ev.deltaY < 0 ? 1.25 : 1 / 1.25)));
+    const k = zoom / nz;
+    zoom = nz; vb[0] = px - (px - vb[0]) * k; vb[1] = py - (py - vb[1]) * k; vb[2] = base[2] / zoom; vb[3] = base[3] / zoom; clamp(); apply();
+  }, { passive: false });
+  let drag = null;
+  svg.addEventListener("pointerdown", ev => { drag = { x: ev.clientX, y: ev.clientY, vx: vb[0], vy: vb[1] }; svg.setPointerCapture(ev.pointerId); svg.style.cursor = "grabbing"; });
+  svg.addEventListener("pointermove", ev => {
+    if (!drag) return;
+    const r = svg.getBoundingClientRect(), s = Math.max(vb[2] / r.width, vb[3] / r.height);
+    vb[0] = drag.vx - (ev.clientX - drag.x) * s; vb[1] = drag.vy - (ev.clientY - drag.y) * s; clamp(); apply();
+  });
+  const end = () => { drag = null; svg.style.cursor = "grab"; };
+  svg.addEventListener("pointerup", end); svg.addEventListener("pointercancel", end);
+  const close = () => { wrap.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = ev => { if (ev.key === "Escape") close(); else if (ev.key === "+" || ev.key === "=") zoomBy(1.5); else if (ev.key === "-") zoomBy(1 / 1.5); };
+  document.addEventListener("keydown", onKey);
+  wrap.querySelector(".bpz-in").onclick = () => zoomBy(1.5);
+  wrap.querySelector(".bpz-out").onclick = () => zoomBy(1 / 1.5);
+  wrap.querySelector(".bpz-reset").onclick = () => { vb = [...base]; zoom = 1; apply(); };
+  wrap.querySelector(".bpz-close").onclick = close;
+  wrap.addEventListener("click", ev => { if (ev.target === wrap) close(); });
+  document.body.appendChild(wrap);
+});
 const BP_NORM = "このコースの平均(2019〜23年)";   // 「ふだん」の言い換え(11/23 ユーザーの指示「何を示すのかわかりやすく」)
 function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ", trail = []) {
   items = items.map(it => ({ ...it, name: it.name + "（予想）" }));   // 表と図の名前は「この開催（予想）」(11/23 ユーザーの指示)
@@ -3241,11 +3299,11 @@ function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ"
   const showTrail = trail.length && bpTrailOn();
   if (showTrail) {
     const pts = trail.map(r => [x(r.front), y(r.inner)]);
-    g += `<polyline points="${pts.map(p => p.join(",")).join(" ")}" fill="none" stroke="#4f8cff" stroke-width="1.5" stroke-opacity=".55" stroke-dasharray="4 3"/>`;
+    g += `<polyline points="${pts.map(p => p.join(",")).join(" ")}" fill="none" stroke="#2fb37a" stroke-width="1.5" stroke-opacity=".55" stroke-dasharray="4 3"/>`;
     trail.forEach((r, k) => {
       const [px, py] = pts[k], last = k === trail.length - 1;
-      g += `<circle cx="${px}" cy="${py}" r="${last ? 4 : 3}" fill="${last ? "#4f8cff" : "var(--panel)"}" stroke="#4f8cff" stroke-width="1.5"><title>${r.n}日目(${+r.date.slice(4, 6)}/${+r.date.slice(6, 8)}・${r.races}レース): 内外 ${r.inner.toFixed(3)}・前後 ${r.front.toFixed(3)}</title></circle>`;
-      if (k === 0 || last) labels.push([px, py, `${r.n}日目`, "#4f8cff"]);
+      g += `<circle cx="${px}" cy="${py}" r="${last ? 4 : 3}" fill="${last ? "#2fb37a" : "var(--panel)"}" stroke="#2fb37a" stroke-width="1.5"><title>${r.n}日目(${+r.date.slice(4, 6)}/${+r.date.slice(6, 8)}・${r.races}レース): 内外 ${r.inner.toFixed(3)}・前後 ${r.front.toFixed(3)}</title></circle>`;
+      if (k === 0 || last) labels.push([px, py, `${r.n}日目`, "#2fb37a"]);
     });
   }
   const placed = [];
@@ -3267,7 +3325,7 @@ function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ"
   if (act) t += `<tr><th style="white-space:nowrap"><span style="color:#f5c400;margin-right:4px">◆</span>${esc(act.name || "結果")}</th><td>${act.inner != null ? `<b>${act.inner >= 0 ? "+" : ""}${act.inner.toFixed(3)}</b>` : "-"}</td><td>${act.front != null ? `<b>${act.front >= 0 ? "+" : ""}${act.front.toFixed(3)}</b>` : "-"}</td></tr>`;
   const opt = trail.length ? `<label class="muted" style="font-size:12px;display:block;margin-bottom:4px" title="この開催(同じ連続開催)の前日までの開催日ごとの実績を、点と線で重ねる。1日目から順に線でつなぎ、塗った点が前日">` +
     `<input type="checkbox" class="bpTrail" ${bpTrailOn() ? "checked" : ""}> この開催の日ごとの実績を線で出す(${trail.length}日)</label>` : "";
-  return `<div class="bp"><div>${opt}${g}</div>${t}</table></div>`;
+  return `<div class="bp"><div>${opt}${g}<div><button class="bpZoom" title="図を大きく表示する(＋−で拡大、ドラッグで動かす)">拡大表示</button></div></div>${t}</table></div>`;
 }
 // 馬場傾向・時計の横棒グラフ(11/23 ユーザーの指示「数値だとわかりづらいので横のグラフで」「答え合わせを点で重ねて」)。
 // pred: 予想(値か [下, 上] の幅。青の点・帯)、norm: ふだん(灰色の縦線)、act: 結果(黄色の◆)。値は min〜max に収める

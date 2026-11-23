@@ -95,6 +95,13 @@ async function readFile(file, path, modifiedTime) {
       if (!prev || new Date(stamp) > new Date(prev)) state.fileUpdated.set(folderKey, stamp);
     }
   }
+  if (cols.includes("開催日目") && cols.includes("内外") && cols.includes("jyo_cd")) {   // 馬場傾向の推移.csv(この開催の日ごとの実績。11/23)
+    const day = (name.match(/(\d{8})\/[^/]+$/) || [])[1];
+    if (!day) return 0;
+    state.blockBias = state.blockBias || new Map();
+    state.blockBias.set(day, rows);
+    return 1;
+  }
   if (cols.includes("race_id") && cols.includes("平均_勝率")) {
     const rid = rows[0].race_id;
     if (rows.some(r => r.race_id !== rid)) return 0;   // 複数のレースが入った CSV(昔の形)は読まない
@@ -1560,7 +1567,9 @@ function renderRace(rid) {
     inner: { v: num(r0["今日の内外"]), lo: num(r0["今日の内外"]), hi: num(r0["今日の内外"]), html: `<b>${num(r0["今日の内外"]) >= 0 ? "+" : ""}${num(r0["今日の内外"]).toFixed(3)}</b>` },
     front: { v: num(r0["今日の前後"]), lo: num(r0["今日の前後"]), hi: num(r0["今日の前後"]), html: `<b>${num(r0["今日の前後"]) >= 0 ? "+" : ""}${num(r0["今日の前後"]).toFixed(3)}</b>` } }] : [];
   const bNorm = { inner: biasNorm(bItems.find(x => x.inner)?.inner.guide || ""), front: biasNorm(bItems.find(x => x.front)?.front.guide || "") };
-  const bias = bItems.length ? biasPanel(bItems, bNorm, ra && (ra.inner != null || ra.front != null) ? { ...ra, name: "このレースの結果" } : null, todayPt) : "";
+  const rSurf = state.info.get(rid)?.["芝ダ"] || r0["芝ダ"] || "";
+  const bias = bItems.length ? biasPanel(bItems, bNorm, ra && (ra.inner != null || ra.front != null) ? { ...ra, name: "このレースの結果" } : null, todayPt,
+    "馬場傾向マップ", blockTrail(rid.slice(0, 8), rid.slice(8, 10), rSurf)) : "";
   const tenkaiCard = `<div class="card" data-fold="baba-tenkai"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">展開予想${updTag("予想", rid)}</h3>${favBox}</div>${favNote}` +
     `${pace || `<span class="muted">列がありません</span>`}` +
     (pace ? `<div class="note">目安(札)は検証期間(2019〜2023年)の同じ芝ダのレースと比べたもの。ペース予想の数字はコースの基準タイムとの差で、ふつうのレースでも前に行く馬は基準より少し速い(平均は下の行のとおり)ので、札はそれと比べた速さ。逃げ・先行馬が多くペースが速いと差しが届きやすく、少なく遅いと前が残りやすい。</div>` : "") +
@@ -2980,7 +2989,8 @@ function renderDayPage(date) {
     };
     const dItems = BP_ITEMS.map(([n, color]) => ({ name: n, color, inner: cellOf(n + "の内外"), front: cellOf(n + "の前後") })).filter(x => x.inner || x.front);
     const dNorm = { inner: biasNorm(dItems.find(x => x.inner)?.inner.guide || ""), front: biasNorm(dItems.find(x => x.front)?.front.guide || "") };
-    const items = dItems.length ? biasPanel(dItems, dNorm, act?.done && (act.inner != null || act.front != null) ? { inner: act.inner, front: act.front, name: final ? "この日の結果" : "この日の結果(途中)" } : null) : "";
+    const items = dItems.length ? biasPanel(dItems, dNorm, act?.done && (act.inner != null || act.front != null) ? { inner: act.inner, front: act.front, name: final ? "この日の結果" : "この日の結果(途中)" } : null, [], "馬場傾向マップ",
+      blockTrail(date, bj, s)) : "";
     // 実際の馬場傾向(結果)。場の最終レースまで結果がそろうまでは「確定前」(途中の値は薄く出す)
     let res = "";
     if (act) {
@@ -3185,8 +3195,20 @@ const BIAS_FLAT = 0.03;   // ふだんとの差がこれ未満なら「ふだん
 // 馬場傾向を1枚に(2026-11-23 ユーザーの指示「縦軸 内外・横軸 前後で1枚に」「この開催・過去の同じ週・前の開催日の3項目」)。
 // items: [{ name, color, inner: {v, lo, hi, html}, front: {...} }]。norm: ふだん、act: 結果(黄色の◆)、extra: 今日など追加の点
 const BP_ITEMS = [["この開催", "#4f8cff"], ["過去の同じ週", "#b06cff"], ["前の開催日", "#2fb37a"]];
+// この開催の日ごとの実績(馬場傾向の推移.csv)。day の日の CSV のうち、その場・芝ダの行(開催日目の順)
+function blockTrail(day, jyo, surface) {
+  return (state.blockBias?.get(day) || []).filter(r => String(r.jyo_cd).padStart(2, "0") === jyo && r["芝ダ"] === surface)
+    .map(r => ({ inner: num(r["内外"]), front: num(r["前後"]), n: +r["開催日目"], date: String(r["日付"]), races: +r["レース数"] }))
+    .filter(r => r.inner != null && r.front != null).sort((a, b) => a.n - b.n);
+}
+function bpTrailOn() { try { return localStorage.getItem("keiba-viewer:bpTrail") === "1"; } catch (e) { return false; } }
+document.addEventListener("change", e => {
+  if (!e.target.matches?.("input.bpTrail")) return;
+  try { localStorage.setItem("keiba-viewer:bpTrail", e.target.checked ? "1" : "0"); } catch (er) {}
+  keepScroll(() => state.dayPage ? renderDayPage(state.dayPage) : renderRace(state.current));
+});
 const BP_NORM = "このコースの平均(2019〜23年)";   // 「ふだん」の言い換え(11/23 ユーザーの指示「何を示すのかわかりやすく」)
-function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ") {
+function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ", trail = []) {
   items = items.map(it => ({ ...it, name: it.name + "（予想）" }));   // 表と図の名前は「この開催（予想）」(11/23 ユーザーの指示)
   const R = 0.3, W = 280, P = 30, sz = W + P * 2;
   const x = f => P + (Math.max(-R, Math.min(R, f)) + R) / (2 * R) * W, y = i => P + (Math.max(-R, Math.min(R, i)) + R) / (2 * R) * W;
@@ -3215,6 +3237,17 @@ function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ"
   }
   if (act && act.inner != null && act.front != null) labels.push([x(act.front), y(act.inner), "結果", "#d4a800"]);
   // 名前が重ならないよう、近くに先に置いた名前があれば下にずらす
+  // この開催の日ごとの実績を線でつなぐ(✓のときだけ。初期は出さない)
+  const showTrail = trail.length && bpTrailOn();
+  if (showTrail) {
+    const pts = trail.map(r => [x(r.front), y(r.inner)]);
+    g += `<polyline points="${pts.map(p => p.join(",")).join(" ")}" fill="none" stroke="#4f8cff" stroke-width="1.5" stroke-opacity=".55" stroke-dasharray="4 3"/>`;
+    trail.forEach((r, k) => {
+      const [px, py] = pts[k], last = k === trail.length - 1;
+      g += `<circle cx="${px}" cy="${py}" r="${last ? 4 : 3}" fill="${last ? "#4f8cff" : "var(--panel)"}" stroke="#4f8cff" stroke-width="1.5"><title>${r.n}日目(${+r.date.slice(4, 6)}/${+r.date.slice(6, 8)}・${r.races}レース): 内外 ${r.inner.toFixed(3)}・前後 ${r.front.toFixed(3)}</title></circle>`;
+      if (k === 0 || last) labels.push([px, py, `${r.n}日目`, "#4f8cff"]);
+    });
+  }
   const placed = [];
   if (norm && norm.inner != null && norm.front != null) labels.unshift([x(norm.front), y(norm.inner), "平均", "var(--muted)"]);
   for (const [lx, ly, t, c] of labels) {
@@ -3232,7 +3265,9 @@ function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ"
   for (const it of [...items, ...extra]) t += `<tr><th style="white-space:nowrap"><span class="bp-dot" style="background:${it.color}"></span>${esc(it.name)}</th><td>${it.inner?.html || `<span class="dim">-</span>`}</td><td>${it.front?.html || `<span class="dim">-</span>`}</td></tr>`;
   t += `<tr><th style="white-space:nowrap"><span class="bp-dot" style="background:var(--muted);border-radius:0;width:10px;height:2px;vertical-align:3px"></span>${BP_NORM}</th><td>${norm?.inner != null ? (norm.inner >= 0 ? "+" : "") + norm.inner.toFixed(2) : "-"}</td><td>${norm?.front != null ? (norm.front >= 0 ? "+" : "") + norm.front.toFixed(2) : "-"}</td></tr>`;
   if (act) t += `<tr><th style="white-space:nowrap"><span style="color:#f5c400;margin-right:4px">◆</span>${esc(act.name || "結果")}</th><td>${act.inner != null ? `<b>${act.inner >= 0 ? "+" : ""}${act.inner.toFixed(3)}</b>` : "-"}</td><td>${act.front != null ? `<b>${act.front >= 0 ? "+" : ""}${act.front.toFixed(3)}</b>` : "-"}</td></tr>`;
-  return `<div class="bp">${g}${t}</table></div>`;
+  const opt = trail.length ? `<label class="muted" style="font-size:12px;display:block;margin-bottom:4px" title="この開催(同じ連続開催)の前日までの開催日ごとの実績を、点と線で重ねる。1日目から順に線でつなぎ、塗った点が前日">` +
+    `<input type="checkbox" class="bpTrail" ${bpTrailOn() ? "checked" : ""}> この開催の日ごとの実績を線で出す(${trail.length}日)</label>` : "";
+  return `<div class="bp"><div>${opt}${g}</div>${t}</table></div>`;
 }
 // 馬場傾向・時計の横棒グラフ(11/23 ユーザーの指示「数値だとわかりづらいので横のグラフで」「答え合わせを点で重ねて」)。
 // pred: 予想(値か [下, 上] の幅。青の点・帯)、norm: ふだん(灰色の縦線)、act: 結果(黄色の◆)。値は min〜max に収める

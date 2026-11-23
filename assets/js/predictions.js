@@ -1789,6 +1789,13 @@ function renderRace(rid) {
   document.querySelectorAll("button.del").forEach(x => x.onclick = () => { basketOf(rid).splice(+x.dataset.i, 1); saveBasket(rid); keepScroll(() => renderRace(rid)); });
   document.getElementById("basketBuy")?.addEventListener("click", () => { sendToBought(rid, basketOf(rid).filter(x => x.sel !== false)); renderRace(rid); });
   document.querySelectorAll("input.bsel").forEach(x => x.onchange = () => { const it = basketOf(rid)[x.dataset.i]; if (it) it.sel = x.checked; saveBasket(rid); keepScroll(() => renderRace(rid)); });
+  document.querySelectorAll("input.bselGrp").forEach(x => x.onchange = () => { const b = basketOf(rid); x.dataset.is.split(",").forEach(i => { if (b[+i]) b[+i].sel = x.checked; }); saveBasket(rid); keepScroll(() => renderRace(rid)); });
+  document.getElementById("basketDelSel")?.addEventListener("click", () => {
+    const b = basketOf(rid), n = b.filter(x => x.sel !== false).length;
+    if (!n) { alert("チェックした買い目がありません"); return; }
+    if (!confirm(`チェックした ${n} 点を買い目候補から消します。よろしいですか?`)) return;
+    state.basket[rid] = b.filter(x => x.sel === false); saveBasket(rid); keepScroll(() => renderRace(rid));
+  });
   document.querySelector("input.bselAll")?.addEventListener("change", e => { basketOf(rid).forEach(x => x.sel = e.target.checked); saveBasket(rid); keepScroll(() => renderRace(rid)); });
   document.querySelectorAll("a.toDay").forEach(a => a.onclick = e => { e.preventDefault(); state.dayPage = a.dataset.day; state.open.clear(); render(); });
   document.getElementById("basketZero")?.addEventListener("click", () => { basketOf(rid).forEach(x => x.amount = 0); saveBasket(rid); renderRace(rid); });
@@ -2750,7 +2757,10 @@ function renderBasket(rid, tri, places, odds, raceRows) {
     if (k === 0 || rows[k - 1].fk !== r.fk) {
       let span = 1;
       while (k + span < rows.length && rows[k + span].fk === r.fk) span++;
-      formCell = `<td class="bform" rowspan="${span}">${r.fk ? (r.forms || []).map(esc).join("<br>") : `<span class="dim">-</span>`}${span > 1 ? `<div class="dim">${span}点</div>` : ""}</td>`;
+      const gi = rows.slice(k, k + span).map(y => y.i), gOn = gi.every(i => b[i]?.sel !== false);
+      // フォーメーション単位のチェック(11/23 ユーザーの指示)
+      const gBox = span > 1 ? `<input type="checkbox" class="bselGrp" data-is="${gi.join(",")}" title="このフォーメーションの買い目を全部チェック / 全部外す" ${gOn ? "checked" : ""}> ` : "";
+      formCell = `<td class="bform" rowspan="${span}">${gBox}${r.fk ? (r.forms || []).map(esc).join("<br>") : `<span class="dim">-</span>`}${span > 1 ? `<div class="dim">${span}点</div>` : ""}</td>`;
     }
     const hp = hitPayout(rid, r.kind, r.t);
     h += `<tr class="${r.amount && r.sel !== false ? "" : "dim"}${hp != null ? " hit" : ""}"${hp != null ? ` title="的中(100円あたり ${hp.toLocaleString()}円)"` : ""}><td><input type="checkbox" class="bsel" data-i="${r.i}" title="チェックした買い目だけ IPAT・購入した馬券に送る" ${b[r.i]?.sel !== false ? "checked" : ""}></td><td>${esc(r.kind)}</td>${formCell}<td><b>${esc(r.t.join(sep))}</b></td>` +
@@ -2766,7 +2776,7 @@ function renderBasket(rid, tri, places, odds, raceRows) {
   });
   const sent = boughtOf(rid.slice(0, 8)).filter(x => x.rid === rid);
   h += `</table></div><div class="calc" style="margin-top:8px"><button id="basketBuy" class="buy" ${live.length ? "" : "disabled"} title="チェックした、金額が0円より大きい買い目を、日別ページの「購入した馬券」に足す(同じ買い目は金額を足し合わせる)">→ 購入した馬券に送る</button>` +
-    `<button id="basketZero">全部0円にする</button><button id="basketClear">買い目を全部消す</button>` +
+    `<button id="basketZero">全部0円にする</button><button id="basketDelSel" title="チェックした買い目を買い目候補から消す">チェックした買い目を消す</button><button id="basketClear">買い目を全部消す</button>` +
     `<span class="note" style="margin:0">金額は100円単位(入れた値を丸める)。0円は「買わない」(表には残る)。買い目候補はこのブラウザに覚えておく(レースごと)。</span></div>` +
     (sent.length ? `<div class="note bought-note">このレースで購入した馬券に送った分: <b>${sent.length}点・${sent.reduce((s, x) => s + x.amount, 0).toLocaleString()}円</b>` +
       `(<a href="#" class="toDay" data-day="${rid.slice(0, 8)}">日別ページで見る</a>)。送ったあとも買い目候補は残る。</div>` : "") +

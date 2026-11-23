@@ -7,6 +7,7 @@ const RACE_INFO = [  // レースで同じ値の列(展開・馬場)
 const BIAS = [  // 馬場傾向: [表示名, 値の列, 目安の列]
   ["この開催の内外", "この開催の内外(マイナス=内有利)", "この開催の内外の目安"],
   ["この開催の前後", "この開催の前後(マイナス=前有利)", "この開催の前後の目安"],
+  ["過去の同じ週の内外", "過去の同じ週の内外(マイナス=内有利)", "過去の同じ週の内外の目安"],   // 2026-11-23 から
   ["過去の同じ週の前後", "過去の同じ週の前後(マイナス=前有利)", "過去の同じ週の前後の目安"],
   ["前の開催日の内外", "前の開催日の内外", "前の開催日の内外の目安"],
   ["前の開催日の前後", "前の開催日の前後", "前の開催日の前後の目安"]];
@@ -643,7 +644,7 @@ function todayBiasRows(r0, rid) {
     const mv = v0 != null && v != null && v0 !== v ? ` <span class="dim">(馬体重の版の最初 ${f(v0)} → 今)</span>` : "";
     const ax = c.includes("内外") ? "inner" : "front", ra = rid ? raceBiasActual(rid) : null;
     return `<div class="pace"><div class="pl">${label}</div><div><b>${f(v)}</b> ${side(v, a, b)}${mv}` +
-      (v != null ? biasGraph({ pred: v, norm: 0, act: ra?.[ax] ?? null, ...BG_AXIS[ax] }) : "") + `</div></div>`;
+      `</div></div>`;
   };
   if (!n) return `<div style="margin-top:6px"><div class="pace"><div class="pl">今日のここまで</div><div><span class="muted">この競馬場・芝ダで、このレースより前の結果はまだ無い</span></div></div></div>`;
   return `<div style="margin-top:6px">` + row(`今日の内外(${n}レース)`, "今日の内外", "内有利", "外有利") + row(`今日の前後(${n}レース)`, "今日の前後", "前有利", "後ろ有利") +
@@ -1542,19 +1543,24 @@ function renderRace(rid) {
   }).join("");
   const info = RACE_INFO.filter(has).map(c => `<dt>${esc(c)}</dt><dd>${esc(r0[c])}</dd>`).join("");
   pace = levelRow(r0) + t1000Row(r0) + winTimeRow(state.info.get(rid)) + predLapRow(r0, state.info.get(rid)) + settleRow(rows) + pace;
-  const bias = BIAS.filter(([, c]) => has(c) && num(r0[c]) != null).map(([label, c, g]) => {
-    const guide = r0[g] || "", i = guide.indexOf("(");
+  // 馬場傾向: 3項目 × 内外・前後を、図(縦 内外・横 前後)と表の1枚に(11/23)
+  const cell = label => {
+    const g = BIAS.find(x => x[0] === label);
+    if (!g || !has(g[1]) || num(r0[g[1]]) == null) return null;
+    const guide = r0[g[2]] || "", i = guide.indexOf("(");
     const word = i > 0 ? guide.slice(0, i) : guide, why = i > 0 ? guide.slice(i + 1, -1) : "";
-    const v = num(r0[c]);
-    // 予想 CSV に確度が無い項目(過去の同じ週の前後)はレース情報.csv の確度を使う
-    const src = r0[`${label}の確度`] ? r0 : (state.info.get(rid) || {});
-    const cw = src[`${label}の確度の根拠`];
-    const ax = label.includes("内外") ? "inner" : "front", ra = raceBiasActual(rid);
-    return `<div class="pace"><div class="pl">${esc(label)}</div><div><b>${v >= 0 ? "+" : ""}${v.toFixed(3)}</b>` +
-      (word ? ` <span class="chip ${biasTone(word)}">${esc(word)}</span>` : "") + confChip(src, label) +
-      biasGraph({ pred: v, norm: biasNorm(guide), act: ra?.[ax] ?? null, ...BG_AXIS[ax] }) +
-      (why || cw ? `<div class="note" style="margin:0">${esc(why)}${why && cw ? "。" : ""}${cw ? "確度の根拠: " + esc(cw) : ""}</div>` : "") + `</div></div>`;
-  }).join("");
+    const v = num(r0[g[1]]), src = r0[`${label}の確度`] ? r0 : (state.info.get(rid) || {}), cw = src[`${label}の確度の根拠`];
+    return { v, lo: v, hi: v, guide, html: `<span title="${esc(why)}${why && cw ? "。" : ""}${cw ? "確度の根拠: " + esc(cw) : ""}"><b>${v >= 0 ? "+" : ""}${v.toFixed(3)}</b>` +
+      (word ? `<br><span class="chip ${biasTone(word)}">${esc(word)}</span>` : "") + confChip(src, label) + `</span>` };
+  };
+  const bItems = BP_ITEMS.map(([n, color]) => ({ name: n, color, inner: cell(n + "の内外"), front: cell(n + "の前後") })).filter(x => x.inner || x.front);
+  const ra = raceBiasActual(rid);
+  const nTo = num(r0["今日のレース数"]);
+  const todayPt = nTo && num(r0["今日の内外"]) != null && num(r0["今日の前後"]) != null ? [{ name: `今日のここまで(${nTo}レース)`, color: "#ff8a3d",
+    inner: { v: num(r0["今日の内外"]), lo: num(r0["今日の内外"]), hi: num(r0["今日の内外"]), html: `<b>${num(r0["今日の内外"]) >= 0 ? "+" : ""}${num(r0["今日の内外"]).toFixed(3)}</b>` },
+    front: { v: num(r0["今日の前後"]), lo: num(r0["今日の前後"]), hi: num(r0["今日の前後"]), html: `<b>${num(r0["今日の前後"]) >= 0 ? "+" : ""}${num(r0["今日の前後"]).toFixed(3)}</b>` } }] : [];
+  const bNorm = { inner: biasNorm(bItems.find(x => x.inner)?.inner.guide || ""), front: biasNorm(bItems.find(x => x.front)?.front.guide || "") };
+  const bias = bItems.length ? biasPanel(bItems, bNorm, ra && (ra.inner != null || ra.front != null) ? { ...ra, name: "このレースの結果" } : null, todayPt) : "";
   const tenkaiCard = `<div class="card" data-fold="baba-tenkai"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">展開予想${updTag("予想", rid)}</h3>${favBox}</div>${favNote}` +
     `${pace || `<span class="muted">列がありません</span>`}` +
     (pace ? `<div class="note">目安(札)は検証期間(2019〜2023年)の同じ芝ダのレースと比べたもの。ペース予想の数字はコースの基準タイムとの差で、ふつうのレースでも前に行く馬は基準より少し速い(平均は下の行のとおり)ので、札はそれと比べた速さ。逃げ・先行馬が多くペースが速いと差しが届きやすく、少なく遅いと前が残りやすい。</div>` : "") +
@@ -2956,23 +2962,25 @@ function renderDayPage(date) {
     const act = s === "障害" ? null : dayBiasActual(rs);
     const final = venueDone && act && act.done === rs.length;
     let hit = 0, near = 0, judged = 0;
-    const items = BIAS.filter(([, c]) => num(r0[c]) != null).map(([lab, c, g]) => {
+    const cellOf = lab => {
+      const g = BIAS.find(x => x[0] === lab);
+      if (!g || num(r0[g[1]]) == null) return null;
+      const [, c] = g, gcol = g[2];
       const vals = rs.map(rid => num(state.races.get(rid)[0][c])).filter(v => v != null);
       const lo = Math.min(...vals), hi = Math.max(...vals);
-      const guide = r0[g] || "", i = guide.indexOf("(");
+      const guide = r0[gcol] || "", i = guide.indexOf("(");
       const word = i > 0 ? guide.slice(0, i) : guide, why = i > 0 ? guide.slice(i + 1, -1) : "";
       const src = r0[`${lab}の確度`] ? r0 : src0;
       const axis = lab.includes("内外") ? "inner" : "front";
       const j = final && act[axis] != null ? biasJudge(axis, word, act[axis], biasNorm(guide)) : null;
       if (j) { judged++; if (j.mark === "○") hit++; if (j.mark === "△") near++; }
-      return `<div class="pace"><div class="pl">${esc(lab)}</div><div><b>${hi - lo < 0.0005 ? sg(lo) : `${sg(lo)}〜${sg(hi)}`}</b>` +
-        (word ? ` <span class="chip ${biasTone(word)}">${esc(word)}</span>` : "") + confChip(src, lab) +
-        biasGraph({ pred: [lo, hi], norm: biasNorm(guide), act: act?.done ? act[axis] : null, ...BG_AXIS[axis] }) +
-        (j ? ` <span class="chip ${j.mark === "○" ? "up" : j.mark === "△" ? "gray" : "down"}" title="${esc(j.why)}">${
-          { "○": "○ 合っていた", "△": "△ 向きは合っていた(差は小さい)", "×": "× 外れ" }[j.mark]}</span>` : "") +
-        (hi - lo >= 0.0005 ? `<span class="note" style="margin:0 0 0 6px">レースで違う(目安は${raceNo(rs[0])}のもの)</span>` : "") +
-        (why ? `<div class="note" style="margin:0">${esc(why)}</div>` : "") + `</div></div>`;
-    }).join("");
+      return { v: (lo + hi) / 2, lo, hi, guide, html: `<span title="${esc(why)}${hi - lo >= 0.0005 ? `。レースで違う(目安は${raceNo(rs[0])}のもの)` : ""}"><b>${hi - lo < 0.0005 ? sg(lo) : `${sg(lo)}〜${sg(hi)}`}</b>` +
+        (word ? `<br><span class="chip ${biasTone(word)}">${esc(word)}</span>` : "") + confChip(src, lab) +
+        (j ? ` <span class="chip ${j.mark === "○" ? "up" : j.mark === "△" ? "gray" : "down"}" title="${esc(j.why)}">${{ "○": "○ 合っていた", "△": "△ 向きは合っていた", "×": "× 外れ" }[j.mark]}</span>` : "") + `</span>` };
+    };
+    const dItems = BP_ITEMS.map(([n, color]) => ({ name: n, color, inner: cellOf(n + "の内外"), front: cellOf(n + "の前後") })).filter(x => x.inner || x.front);
+    const dNorm = { inner: biasNorm(dItems.find(x => x.inner)?.inner.guide || ""), front: biasNorm(dItems.find(x => x.front)?.front.guide || "") };
+    const items = dItems.length ? biasPanel(dItems, dNorm, act?.done && (act.inner != null || act.front != null) ? { inner: act.inner, front: act.front, name: final ? "この日の結果" : "この日の結果(途中)" } : null) : "";
     // 実際の馬場傾向(結果)。場の最終レースまで結果がそろうまでは「確定前」(途中の値は薄く出す)
     let res = "";
     if (act) {
@@ -3174,6 +3182,38 @@ function dayBiasActual(rids) {
   return { inner: avg("inner"), front: avg("front"), done: xs.length };
 }
 const BIAS_FLAT = 0.03;   // ふだんとの差がこれ未満なら「ふだん並み」
+// 馬場傾向を1枚に(2026-11-23 ユーザーの指示「縦軸 内外・横軸 前後で1枚に」「この開催・過去の同じ週・前の開催日の3項目」)。
+// items: [{ name, color, inner: {v, lo, hi, html}, front: {...} }]。norm: ふだん、act: 結果(黄色の◆)、extra: 今日など追加の点
+const BP_ITEMS = [["この開催", "#4f8cff"], ["過去の同じ週", "#b06cff"], ["前の開催日", "#2fb37a"]];
+function biasPanel(items, norm, act, extra = []) {
+  const R = 0.3, W = 230, P = 30, sz = W + P * 2;
+  const x = f => P + (Math.max(-R, Math.min(R, f)) + R) / (2 * R) * W, y = i => P + (Math.max(-R, Math.min(R, i)) + R) / (2 * R) * W;
+  let g = `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}" role="img" aria-label="馬場傾向の図(縦 内外・横 前後)">` +
+    `<rect x="${P}" y="${P}" width="${W}" height="${W}" fill="none" stroke="var(--line)"/>`;
+  for (const t of [-0.2, -0.1, 0.1, 0.2]) g += `<line x1="${x(t)}" y1="${P}" x2="${x(t)}" y2="${P + W}" stroke="var(--line)" stroke-dasharray="2 3"/><line x1="${P}" y1="${y(t)}" x2="${P + W}" y2="${y(t)}" stroke="var(--line)" stroke-dasharray="2 3"/>`;
+  g += `<line x1="${x(0)}" y1="${P}" x2="${x(0)}" y2="${P + W}" stroke="var(--muted)"/><line x1="${P}" y1="${y(0)}" x2="${P + W}" y2="${y(0)}" stroke="var(--muted)"/>`;
+  const tx = (X, Y, t, a = "middle") => `<text x="${X}" y="${Y}" font-size="11" fill="var(--muted)" text-anchor="${a}">${t}</text>`;
+  g += tx(P + W / 2, P - 8, "↑ 内有利") + tx(P + W / 2, P + W + 18, "↓ 外有利") + tx(P - 4, P + W / 2 + 4, "前", "end") + tx(P + W + 4, P + W / 2 + 4, "後", "start") +
+    tx(P, P + W + 18, "← 前有利", "start") + tx(P + W, P + W + 18, "後ろ有利 →", "end");
+  if (norm && norm.inner != null && norm.front != null)
+    g += `<g stroke="var(--muted)" stroke-width="2"><line x1="${x(norm.front) - 6}" y1="${y(norm.inner)}" x2="${x(norm.front) + 6}" y2="${y(norm.inner)}"/><line x1="${x(norm.front)}" y1="${y(norm.inner) - 6}" x2="${x(norm.front)}" y2="${y(norm.inner) + 6}"/><title>ふだん 内外 ${norm.inner.toFixed(2)}・前後 ${norm.front.toFixed(2)}</title></g>`;
+  for (const it of [...items, ...extra]) {
+    const fi = it.front, ii = it.inner;
+    if (fi?.v == null || ii?.v == null) continue;
+    const lab = `${it.name}: 内外 ${ii.v >= 0 ? "+" : ""}${ii.v.toFixed(3)}・前後 ${fi.v >= 0 ? "+" : ""}${fi.v.toFixed(3)}`;
+    if (fi.hi - fi.lo > 1e-9 || ii.hi - ii.lo > 1e-9)
+      g += `<rect x="${x(fi.lo) - 4}" y="${y(ii.lo) - 4}" width="${x(fi.hi) - x(fi.lo) + 8}" height="${y(ii.hi) - y(ii.lo) + 8}" rx="5" fill="${it.color}" fill-opacity=".25" stroke="${it.color}"><title>${esc(lab)}(レースで違う)</title></rect>`;
+    g += `<circle cx="${x(fi.v)}" cy="${y(ii.v)}" r="6" fill="${it.color}" stroke="var(--panel)" stroke-width="1.5"><title>${esc(lab)}</title></circle>`;
+  }
+  if (act && act.inner != null && act.front != null)
+    g += `<rect x="${x(act.front) - 6}" y="${y(act.inner) - 6}" width="12" height="12" fill="#f5c400" stroke="var(--panel)" transform="rotate(45 ${x(act.front)} ${y(act.inner)})"><title>結果: 内外 ${act.inner.toFixed(3)}・前後 ${act.front.toFixed(3)}</title></rect>`;
+  g += `</svg>`;
+  let t = `<table class="bp-t"><tr><th></th><th>内外</th><th>前後</th></tr>`;
+  for (const it of [...items, ...extra]) t += `<tr><th style="white-space:nowrap"><span class="bp-dot" style="background:${it.color}"></span>${esc(it.name)}</th><td>${it.inner?.html || `<span class="dim">-</span>`}</td><td>${it.front?.html || `<span class="dim">-</span>`}</td></tr>`;
+  t += `<tr><th style="white-space:nowrap"><span class="bp-dot" style="background:var(--muted);border-radius:0;width:10px;height:2px;vertical-align:3px"></span>ふだん</th><td>${norm?.inner != null ? (norm.inner >= 0 ? "+" : "") + norm.inner.toFixed(2) : "-"}</td><td>${norm?.front != null ? (norm.front >= 0 ? "+" : "") + norm.front.toFixed(2) : "-"}</td></tr>`;
+  if (act) t += `<tr><th style="white-space:nowrap"><span style="color:#f5c400;margin-right:4px">◆</span>${esc(act.name || "結果")}</th><td>${act.inner != null ? `<b>${act.inner >= 0 ? "+" : ""}${act.inner.toFixed(3)}</b>` : "-"}</td><td>${act.front != null ? `<b>${act.front >= 0 ? "+" : ""}${act.front.toFixed(3)}</b>` : "-"}</td></tr>`;
+  return `<div class="bp">${g}${t}</table></div>`;
+}
 // 馬場傾向・時計の横棒グラフ(11/23 ユーザーの指示「数値だとわかりづらいので横のグラフで」「答え合わせを点で重ねて」)。
 // pred: 予想(値か [下, 上] の幅。青の点・帯)、norm: ふだん(灰色の縦線)、act: 結果(黄色の◆)。値は min〜max に収める
 function biasGraph({ pred, norm, act, min = -0.3, max = 0.3, left = "内", right = "外", fmt = v => `${v >= 0 ? "+" : ""}${v.toFixed(3)}`, ticks = [-0.2, -0.1, 0, 0.1, 0.2] }) {

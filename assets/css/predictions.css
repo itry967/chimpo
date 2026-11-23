@@ -592,7 +592,7 @@ a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
 .bg-ticks { position: relative; height: 13px; grid-column: 2; }
 
 .bp { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; margin: 6px 0; }
-.bp svg { flex: 0 0 auto; max-width: 100%; }
+.bp svg { flex: 0 0 auto; max-width: 100%; cursor: zoom-in; }
 .bp-t { border-collapse: collapse; font-size: 13px; flex: 1 1 260px; }
 .bp-t th, .bp-t td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; text-align: left; }
 .bp-t .chip { margin: 2px 2px 0 0; }

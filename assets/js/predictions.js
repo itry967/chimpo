@@ -3209,7 +3209,8 @@ document.addEventListener("change", e => {
 });
 // 馬場傾向マップの拡大表示(11/23 ユーザーの指示「拡大表示ボタン・モーダル・＋−でズーム・ドラッグで移動」)
 document.addEventListener("click", e => {
-  const btn = e.target.closest?.("button.bpZoom");
+  // 「拡大表示」ボタンのほか、図そのものを押したときも開く(11/23 ユーザーの指示)
+  const btn = e.target.closest?.("button.bpZoom") || e.target.closest?.(".bp svg");
   if (!btn) return;
   const src = btn.closest(".bp")?.querySelector("svg");
   if (!src) return;
@@ -3267,7 +3268,8 @@ document.addEventListener("click", e => {
 });
 const BP_NORM = "このコースの平均(2019〜23年)";   // 「ふだん」の言い換え(11/23 ユーザーの指示「何を示すのかわかりやすく」)
 function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ", trail = []) {
-  items = items.map(it => ({ ...it, name: it.name + "（予想）" }));   // 表と図の名前は「この開催（予想）」(11/23 ユーザーの指示)
+  // 前の開催日は実績の値そのものなので「（予想）」を付けない(11/23 ユーザーの指示)
+  items = items.map(it => ({ ...it, name: it.name === "前の開催日" ? it.name : it.name + "（予想）" }));   // 表と図の名前は「この開催（予想）」(11/23 ユーザーの指示)
   const R = 0.3, W = 280, P = 30, sz = W + P * 2;
   const x = f => P + (Math.max(-R, Math.min(R, f)) + R) / (2 * R) * W, y = i => P + (Math.max(-R, Math.min(R, i)) + R) / (2 * R) * W;
   const TT = 20;   // 上にタイトルの行
@@ -3294,7 +3296,6 @@ function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ"
     g += `<circle cx="${x(fi.v)}" cy="${y(ii.v)}" r="6" fill="${it.color}" stroke="var(--panel)" stroke-width="1.5"><title>${esc(lab)}</title></circle>`;
   }
   if (act && act.inner != null && act.front != null) labels.push([x(act.front), y(act.inner), "結果", "#d4a800"]);
-  // 名前が重ならないよう、近くに先に置いた名前があれば下にずらす
   // この開催の日ごとの実績を線でつなぐ(✓のときだけ。初期は出さない)
   const showTrail = trail.length && bpTrailOn();
   if (showTrail) {
@@ -3306,15 +3307,47 @@ function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ"
       if (k === 0 || last) labels.push([px, py, `${r.n}日目`, "#2fb37a"]);
     });
   }
-  const placed = [];
-  if (norm && norm.inner != null && norm.front != null) labels.unshift([x(norm.front), y(norm.inner), "平均", "var(--muted)"]);
+  // 名前の置き場所(11/23 ユーザーの指示「点や線となるべく重ならないように」): 点のまわりの 8方向 × 距離の候補から、
+  // ほかの点・線・先に置いた名前・図の外と重ならない(重なりが少ない)近い所を選ぶ。離れたときは点と細い線でつなぐ
+  if (norm && norm.inner != null && norm.front != null) labels.push([x(norm.front), y(norm.inner), "平均", "var(--muted)"]);
+  const obs = [];   // 点 [x, y, 半径]
+  for (const it of [...items, ...extra]) if (it.front?.v != null && it.inner?.v != null) obs.push([x(it.front.v), y(it.inner.v), 7]);
+  if (norm && norm.inner != null && norm.front != null) obs.push([x(norm.front), y(norm.inner), 7]);
+  if (act && act.inner != null && act.front != null) obs.push([x(act.front), y(act.inner), 9]);
+  const segs = [];
+  if (showTrail) {
+    const tp = trail.map(r => [x(r.front), y(r.inner)]);
+    tp.forEach(p => obs.push([p[0], p[1], 4]));
+    for (let k = 1; k < tp.length; k++) segs.push([tp[k - 1], tp[k]]);
+  }
+  const boxes = [];
+  const textW = t => [...t].reduce((a, ch) => a + (/[ -~]/.test(ch) ? 6 : 10.5), 0);
+  const hitPt = (b, [px, py, r]) => px + r > b[0] && px - r < b[0] + b[2] && py + r > b[1] && py - r < b[1] + b[3];
+  const hitSeg = (b, [[x1, y1], [x2, y2]]) => { for (let k = 0; k <= 12; k++) { const sx = x1 + (x2 - x1) * k / 12, sy = y1 + (y2 - y1) * k / 12; if (sx > b[0] && sx < b[0] + b[2] && sy > b[1] && sy < b[1] + b[3]) return true; } return false; };
+  const over = (a, b) => Math.max(0, Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]));
   for (const [lx, ly, t, c] of labels) {
-    let ty = ly - 7;
-    while (placed.some(([px, py]) => Math.abs(px - lx) < 70 && Math.abs(py - ty) < 12)) ty += 12;
-    placed.push([lx, ty]);
-    // ずらしたときは点と名前を細い線でつなぐ
-    if (ty !== ly - 7) g += `<line x1="${lx}" y1="${ly}" x2="${lx > P + W - 60 ? lx - 8 : lx + 8}" y2="${ty - 3}" stroke="${c}" stroke-width="1" opacity=".7"/>`;
-    g += lbl(lx, ty + 7, t, c);
+    const w = textW(t), h = 12;
+    let best = null;
+    for (const d of [9, 14, 20, 28, 38, 50]) {
+      const e = d * 0.75;
+      for (const [bx, by] of [[lx + d, ly - h / 2], [lx - d - w, ly - h / 2], [lx + e, ly - e - h], [lx + e, ly + e], [lx - e - w, ly - e - h], [lx - e - w, ly + e], [lx - w / 2, ly - d - h], [lx - w / 2, ly + d]]) {
+        const b = [bx, by, w, h];
+        let cost = d * 0.6;
+        if (bx < 2 || bx + w > P * 2 + W - 2 || by < 2 || by + h > P * 2 + W - 2) cost += 400;
+        for (const o of obs) if (!(Math.abs(o[0] - lx) < 0.5 && Math.abs(o[1] - ly) < 0.5) && hitPt(b, o)) cost += 120;
+        for (const sg of segs) if (hitSeg(b, sg)) cost += 60;
+        for (const pb of boxes) cost += over(b, pb) * 3;
+        if (!best || cost < best.cost) best = { cost, b, d };
+      }
+      if (best.cost < d * 0.6 + 1) break;   // 何とも重ならない場所が見つかったら、それより遠くは見ない
+    }
+    const [bx, by] = best.b;
+    boxes.push(best.b);
+    if (best.d > 14) {   // 離れたときは、点から名前の一番近い所へ細い線
+      const cx = Math.max(bx, Math.min(bx + w, lx)), cy = Math.max(by, Math.min(by + h, ly));
+      g += `<line x1="${lx}" y1="${ly}" x2="${cx}" y2="${cy}" stroke="${c}" stroke-width="1" opacity=".6"/>`;
+    }
+    g += `<text x="${bx}" y="${by + h - 2}" font-size="10" font-weight="600" fill="${c}" paint-order="stroke" stroke="var(--panel)" stroke-width="3">${esc(t)}</text>`;
   }
   if (act && act.inner != null && act.front != null)
     g += `<rect x="${x(act.front) - 6}" y="${y(act.inner) - 6}" width="12" height="12" fill="#f5c400" stroke="var(--panel)" transform="rotate(45 ${x(act.front)} ${y(act.inner)})"><title>結果: 内外 ${act.inner.toFixed(3)}・前後 ${act.front.toFixed(3)}</title></rect>`;

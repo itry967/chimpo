@@ -3269,7 +3269,7 @@ document.addEventListener("click", e => {
 const BP_NORM = "このコースの平均(2019〜23年)";   // 「ふだん」の言い換え(11/23 ユーザーの指示「何を示すのかわかりやすく」)
 function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ", trail = []) {
   // 前の開催日は実績の値そのものなので「（予想）」を付けない(11/23 ユーザーの指示)
-  items = items.map(it => ({ ...it, name: it.name === "前の開催日" ? it.name : it.name + "（予想）" }));   // 表と図の名前は「この開催（予想）」(11/23 ユーザーの指示)
+  items = items.map(it => ({ ...it, name: it.name === "前の開催日" || it.name === "過去の同じ週" ? it.name : it.name + "（予想）" }));   // 表と図の名前は「この開催（予想）」(11/23 ユーザーの指示)
   const R = 0.3, W = 280, P = 30, sz = W + P * 2;
   const x = f => P + (Math.max(-R, Math.min(R, f)) + R) / (2 * R) * W, y = i => P + (Math.max(-R, Math.min(R, i)) + R) / (2 * R) * W;
   const TT = 20;   // 上にタイトルの行

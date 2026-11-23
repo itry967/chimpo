@@ -273,10 +273,11 @@ async function fetchDayBundles(accessToken, accountEmail, dates) {
     status(head + "データを取得中… 0/" + kinds.length, true);
     for (const kind of kinds) {
       const item = found[kind], old = days[date]?.[kind];
-      if (old?.blob && old.modifiedTime === item.modifiedTime && Number(old.size || 0) === Number(item.size || 0)) {
+      if (old?.b64 && old.modifiedTime === item.modifiedTime && Number(old.size || 0) === Number(item.size || 0)) {
         day[kind] = old;
       } else {
-        day[kind] = {modifiedTime:item.modifiedTime || "", size:Number(item.size || 0), blob:await downloadCsv(item, accessToken)};
+        // iPhone の Safari は、保存場所に入れたファイル(Blob)を後で読むと NotFoundError になることがあるので、取ったらすぐ文字にして持つ(11/23)
+        day[kind] = {modifiedTime:item.modifiedTime || "", size:Number(item.size || 0), b64:await blobToB64(await downloadCsv(item, accessToken))};
       }
       status(head + "データを取得中… " + (++done) + "/" + kinds.length, true);
     }
@@ -292,7 +293,7 @@ async function fetchDayBundles(accessToken, accountEmail, dates) {
     console.warn("まとめファイルを端末に保存できませんでした:", error);
   }
   return Object.entries(days).sort((a, b) => a[0].localeCompare(b[0]))
-    .flatMap(([d, kinds]) => Object.entries(kinds).map(([kind, x]) => ({date:d, kind, modifiedTime:x.modifiedTime, blob:x.blob})));
+    .flatMap(([d, kinds]) => Object.entries(kinds).map(([kind, x]) => ({date:d, kind, modifiedTime:x.modifiedTime, b64:x.b64})));
 }
 
 // CSVを1件取る。回数制限(429・403)・Drive側の一時的なエラー(5xx)・通信の途切れは、待ってから3回までやり直す
@@ -335,7 +336,7 @@ async function storageInfo() {
 }
 function bundlesInfo(bundles) {
   let bytes = 0, files = 0; const days = new Set();
-  for (const b of bundles || []) { files++; if (b.date) days.add(b.date); bytes += Number(b.blob?.size || 0); }
+  for (const b of bundles || []) { files++; if (b.date) days.add(b.date); bytes += b.b64 ? Math.round(b.b64.length * 3 / 4) : Number(b.blob?.size || 0); }
   return { mb: (bytes / 1048576).toFixed(1), files, days: days.size };
 }
 async function explainSaveError(error, bundles) {
@@ -396,6 +397,11 @@ async function saveBundleCacheOnce(accountEmail,value) {
     });
   } finally { db.close(); }
 }
+async function blobToB64(blob) {
+  const buf=new Uint8Array(await blob.arrayBuffer()); let bin="";
+  for (let i=0;i<buf.length;i+=32768) bin+=String.fromCharCode.apply(null,buf.subarray(i,i+32768));
+  return btoa(bin);
+}
 async function saveTransfer(payload) {
   return idbRetry(() => saveTransferOnce(payload));
 }
@@ -404,9 +410,7 @@ async function saveTransferOnce(payload) {
   if (payload.bundles) payload={...payload,bundles:await Promise.all(payload.bundles.map(async b => {
     if (!b.blob) return b;
     const {blob,...rest}=b;
-    const buf=new Uint8Array(await blob.arrayBuffer()); let bin="";
-    for (let i=0;i<buf.length;i+=32768) bin+=String.fromCharCode.apply(null,buf.subarray(i,i+32768));
-    return {...rest,b64:btoa(bin)};
+    return {...rest,b64:await blobToB64(blob)};
   }))};
   const db=await openTransferDb();
   try {
@@ -472,7 +476,7 @@ async function checkForUpdate() {
   const sig = bundleSignature(found);
   const cache = await loadBundleCache(accountEmail).catch(() => ({days:{}}));
   const have = cache.days?.[date] || {};
-  const same = Object.keys(found).every(kind => have[kind]?.blob && have[kind].modifiedTime === found[kind].modifiedTime);
+  const same = Object.keys(found).every(kind => have[kind]?.b64 && have[kind].modifiedTime === found[kind].modifiedTime);
   if (same) return {result:"none"};
   const key = dismissKey(accountEmail, date);
   if (!raceDay && readDismissed(key) === sig) return {result:"none"};

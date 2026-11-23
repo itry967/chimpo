@@ -1590,6 +1590,7 @@ function renderRace(rid) {
     html += `<tr class="horse${why ? " has-why" : ""}" data-key="${key}"><td class="rank">${esc(r["平均_順位"])}${changeView() ? moveMark(rankMove(r)) : ""}</td><td class="mark-col">${markSelect(rid, r.umaban)}</td>` +
       `<td>${umaBadge(r.umaban, nUma)}</td><td class="name">${esc(r.horse_name)}${cdot(r, "予想")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}${changeView() ? winMove(r) : ""}</td><td>${placeBar(top2(r), top3(r), maxTop3)}${preTops(r, ms)}</td>` +
       `<td class="n hide-sm">${w == null ? "" : w + (z == null ? "" : `<span class="dim">(${z > 0 ? "+" : ""}${z})</span>`)}</td>` +
+      `<td class="jk">${jockeyOf(rid, r) ? esc(jockeyOf(rid, r)) : `<span class="dim">-</span>`}</td>` +
       `<td class="n">${fix(num(r["妥当オッズ_単勝"]))}${gapMark(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]), "単勝")}${colMove(r, "妥当オッズ_単勝", 1, true)} / ` +
       `${fix(num(r["妥当オッズ_複勝"]))}${gapMark(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]), "複勝(下限)")}${colMove(r, "妥当オッズ_複勝", 1, true)}</td>` +
       `<td class="n">${odds != null ? `${fix(odds)}<span class="dim ninki">${ninki.get(String(r.umaban))}人気</span>` : `<span class="dim">—</span>`}</td>` +
@@ -1810,7 +1811,8 @@ function horseCols(rid) {
     ["馬名", r => r.horse_name || "", 1, "", ""],
     ["勝率", r => num(r["平均_勝率"]), -1, "", ""],
     ["2・3着内", t3, -1, "", "3着内の確率で並べる"],
-    ["馬体重", r => num(r["馬体重"]), -1, "n hide-sm", ""],   // 2026-11-22 ユーザーの指示: 2・3着内の右に
+    ["馬体重", r => num(r["馬体重"]), -1, "n hide-sm", ""],
+    ["騎手", r => jockeyOf(rid, r), 1, "", "騎手(予想 CSV の時点。騎手変更は予想の作り直しで入る)"],   // 2026-11-22 ユーザーの指示: 2・3着内の右に
     ["妥当オッズ<br>単/複", r => num(r["妥当オッズ_単勝"]), 1, "n", "単勝の妥当オッズで並べる"],
     ["単勝<br>オッズ", o, 1, "n", ""],
     ["単勝<br>期待値", r => ratio(o(r), num(r["妥当オッズ_単勝"])), -1, "n", "単勝の期待値 = 単勝オッズ ÷ 妥当オッズ(単勝)"],
@@ -1852,6 +1854,12 @@ function markSelect(rid, uma) {
     ["", ...MARKS].map(x => `<option value="${x}" ${x === m ? "selected" : ""}>${x || "-"}</option>`).join("") + `</select>`;
 }
 const MODELS_OF = r => Object.keys(r).filter(c => c.endsWith("_3着内") && !c.startsWith("平均") && !c.startsWith(PRE)).map(c => c.slice(0, -4));
+// 騎手名: 予想 CSV の列(11/23 から)。無い古い CSV は、結果の CSV の騎手で補う
+function jockeyOf(rid, r) {
+  if (r.jockey_name) return r.jockey_name;
+  const res = state.results?.get(rid), x = (res?.rows || res || []).find?.(y => String(+y["馬番"]) === String(+r.umaban));
+  return x?.["騎手"] || "";
+}
 function horseHead(rid) {
   const cur = state.horseSort || { i: 0, dir: 1 };
   return horseCols(rid).map(([label, , , cls, tip], i) =>
@@ -2185,12 +2193,12 @@ function renderViz(rid, rows, favBox = "") {
     favBox + (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
     `<span class="muted" style="font-size:12px">列の見出し(馬番・人気・単勝・予想着順・結果)を押すと並べ替え</span>` +
     `<button class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る。使い方は右の ？)">netkeiba に印を転記</button><button class="help nkHelpBtn" title="netkeiba への印の転記の使い方(ブックマークの登録)">？</button>${nkSentTag(rid)}</div>` +
-    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-n">${sb("ninki", "人気", "人気")}</div><div class="viz-n">${sb("odds", "単勝", "単勝オッズ")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
+    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-jk muted">騎手</div><div class="viz-n">${sb("ninki", "人気", "人気")}</div><div class="viz-n">${sb("odds", "単勝", "単勝オッズ")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
     gridTicks.map(t => `<span class="viz-tick" style="left:${x(t)}">${ticks.includes(t) ? `${t}着` : t}</span>`).join("") + `</div><div></div></div>`;
   for (const { r, b, k, o, nk } of items) {
     const [lo, hi, p10, p90, mean] = b, inB = k != null && k >= lo && k <= hi;
     h += `<div class="viz-row" title="${esc(r.horse_name)}: 着順の見込み ${bandStr(b)}(80% の範囲 ${p10}〜${p90}、平均 ${mean.toFixed(1)}着)${k != null ? `・結果 ${k}着` : ""}">` +
-      `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div>` +
+      `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-jk">${jockeyOf(rid, r) ? esc(jockeyOf(rid, r)) : `<span class="dim">-</span>`}</div>` +
       `<div class="viz-n">${nk ?? `<span class="dim">-</span>`}</div><div class="viz-n">${o != null ? fix(o) : `<span class="dim">-</span>`}</div><div class="viz-n">${num(r[pre ? "枠順時_順位" : "平均_順位"]) ?? "-"}${cdot(r, "予想")}</div>` +
       `<div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${k}</b>` : `<span class="dim">-</span>`}</div><div class="viz-track">` +
       gridTicks.map(t => `<span class="viz-grid" style="left:${x(t)}"></span>`).join("") +

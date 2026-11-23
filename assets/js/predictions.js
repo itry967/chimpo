@@ -728,17 +728,18 @@ ${list}
   // フォーメーションのまま送る(2026-11-23 ユーザーの指示)。フォーメーションの買い目が全部そろっていて、金額がすべて同じで、
   // ほかのフォーメーションと重なっていない(1つのフォーメーションからだけ入れた)ときだけ。ほかは1点ずつ
   const amtOf = x => Math.max(100, Math.round(x.amount / 100) * 100), keyOf = (k, t) => k + "|" + t.map(String).join("-");
-  const byKey = new Map(ok.map(x => [keyOf(x.kind, x.t), x])), used = new Set(), payload = [];
+  // 同じ買い目が別のフォーメーションにもあるので、フォーメーションの名前ごとに引く(11/23)
+  const byKey = new Map(ok.filter(x => x.fsets?.length === 1).map(x => [x.fsets[0].label + "#" + keyOf(x.kind, x.t), x])), used = new Set(), payload = [];
   for (const x of ok) {
     const fs = x.fsets?.length === 1 ? x.fsets[0] : null;
-    if (!fs || used.has(keyOf(x.kind, x.t))) continue;
-    const exp = expandTickets(fs.kind, fs.cols), its = exp.map(t => byKey.get(keyOf(fs.kind, t)));
-    if (exp.length < 2 || its.some(y => !y || y.fsets?.length !== 1 || y.fsets[0].label !== fs.label) || new Set(its.map(amtOf)).size !== 1) continue;
-    its.forEach(y => used.add(keyOf(y.kind, y.t)));
+    if (!fs || used.has(x)) continue;
+    const exp = expandTickets(fs.kind, fs.cols), its = exp.map(t => byKey.get(fs.label + "#" + keyOf(fs.kind, t)));
+    if (exp.length < 2 || its.some(y => !y || used.has(y)) || new Set(its.map(amtOf)).size !== 1) continue;
+    its.forEach(y => used.add(y));
     payload.push({ f: 1, kind: fs.kind, cols: fs.cols.map(c => c.map(String)), amt: amtOf(its[0]), n: exp.length,
       names: its.map(y => y.kind + " " + y.t.join(sep(y.kind))), t: its.map(y => y.t.map(String)) });
   }
-  for (const x of ok) if (!used.has(keyOf(x.kind, x.t))) payload.push([x.kind, x.t.map(String), +x.amount]);
+  for (const x of ok) if (!used.has(x)) payload.push([x.kind, x.t.map(String), +x.amount]);
   const data = encodeURIComponent(JSON.stringify({ r: nkRaceId(rid), id: rid, b: payload }));
   const w = window.open(`https://race.netkeiba.com/ipat/ipat.html?date=${rid.slice(0, 8)}&race_id=${nkRaceId(rid)}&kbb=${data}`, "_blank");
   if (!w) { nkPopupBlocked(); return; }
@@ -2635,7 +2636,8 @@ function addToBasket(rid, kind, tickets, unit, form, cols) {
   for (const t of tickets) {
     const amt = typeof unit === "function" ? unit(t) : unit;
     if (!(amt > 0)) continue;
-    const hit = b.find(x => x.kind === kind && x.t.join("-") === t.join("-"));
+    // 同じ買い目でも、別のフォーメーションから入れたものはまとめない(フォーメーションの形を崩さない。11/23 ユーザーの指示)
+    const hit = b.find(x => x.kind === kind && x.t.join("-") === t.join("-") && (x.forms || []).join(" / ") === (form || ""));
     if (hit) { hit.amount += amt; if (cols) hit.fsets = [...(hit.fsets || []), { label: form, kind, cols }]; if (form && !(hit.forms || []).includes(form)) hit.forms = [...(hit.forms || []), form]; }
     else b.push({ kind, t, amount: amt, ...(cols ? { fsets: [{ label: form, kind, cols }] } : {}), ...(form ? { forms: [form] } : {}) });
   }

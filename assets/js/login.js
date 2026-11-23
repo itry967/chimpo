@@ -170,7 +170,8 @@ async function fetchAndTransfer(dates) {
   const date = [...dates].sort().at(-1);      // 前回取得した日付として覚えるのは一番新しい日
   const bundles = await fetchDayBundles(accessToken, accountEmail, dates);
   status("データの準備が完了しました。画面を開いています…", true);
-  await saveTransfer({bundles});
+  try { await saveTransfer({bundles}); }
+  catch (error) { throw new Error(await explainSaveError(error, bundles)); }
   try {
     localStorage.setItem(SCOPE_KEY, JSON.stringify({date}));
     for (const d of dates) localStorage.removeItem(dismissKey(accountEmail, d));
@@ -283,7 +284,9 @@ async function fetchDayBundles(accessToken, accountEmail, dates) {
   for (const d of Object.keys(days)) if (!keepDateOnDevice(d, dates)) delete days[d];
   try {
     await saveBundleCache(accountEmail, {days});
+    lastCacheSave = "できた";
   } catch (error) {
+    lastCacheSave = "失敗(" + (error?.idbName || error?.name || "不明") + "・" + Object.keys(days).length + "日分)";
     // 端末への保存は次の F5 を速くするためだけのもの。保存できなくても、取ったデータはそのまま出す
     console.warn("まとめファイルを端末に保存できませんでした:", error);
   }
@@ -316,7 +319,32 @@ async function downloadCsv(meta, accessToken) {
 // IndexedDB のエラー。iPhone の Safari は理由を付けずに(error が null のまま)中断することがあるので、分かる文にする
 function idbError(error, what) {
   if (error && error.message) return error;
-  return new Error("この端末への保存(" + what + ")が中断されました。画面を消したりほかのアプリに切り替えたりせずに、もう一度お試しください。");
+  const e = new Error("この端末への保存(" + what + ")が中断されました。画面を消したりほかのアプリに切り替えたりせずに、もう一度お試しください。");
+  e.idbName = error ? (error.name || "名前なし") : "理由なし(ブラウザが理由を返さなかった)";
+  return e;
+}
+// 保存に失敗したときの見分け用の情報(2026-11-23 ユーザーの指示「原因を見分ける知らせを入れて、キャッシュ原因かを確認したい」)
+let lastCacheSave = "まだ";   // 前の日のキャッシュの保存の結果(失敗しても取得は続けるので、ここに覚えておく)
+async function storageInfo() {
+  try {
+    const est = await navigator.storage?.estimate?.();
+    if (est) return "使用 " + (est.usage / 1048576).toFixed(1) + " MB / 上限 " + (est.quota / 1048576).toFixed(0) + " MB";
+  } catch (_) {}
+  return "分からない";
+}
+function bundlesInfo(bundles) {
+  let bytes = 0, files = 0; const days = new Set();
+  for (const b of bundles || []) { files++; if (b.date) days.add(b.date); bytes += Number(b.blob?.size || 0); }
+  return { mb: (bytes / 1048576).toFixed(1), files, days: days.size };
+}
+async function explainSaveError(error, bundles) {
+  const info = bundlesInfo(bundles);
+  return (error?.message || String(error)) + "\n\n【見分け用】" +
+    "\n・失敗の種類: " + (error?.idbName || error?.name || "不明") +
+    "\n・書こうとした量: " + info.mb + " MB(" + info.days + "日分・" + info.files + "ファイル)" +
+    "\n・この端末の保存場所: " + await storageInfo() +
+    "\n・前の日のキャッシュの保存: " + lastCacheSave +
+    "\n(量が大きい・保存場所の使用が上限に近い・キャッシュの保存も失敗、ならキャッシュ(容量)が原因の見込み)";
 }
 // 書き込みが中断されたら、データベースを開き直して1回だけやり直す
 async function idbRetry(fn) {

@@ -1556,7 +1556,7 @@ function renderRace(rid) {
   const bItems = BP_ITEMS.map(([n, color]) => ({ name: n, color, inner: cell(n + "の内外"), front: cell(n + "の前後") })).filter(x => x.inner || x.front);
   const ra = raceBiasActual(rid);
   const nTo = num(r0["今日のレース数"]);
-  const todayPt = nTo && num(r0["今日の内外"]) != null && num(r0["今日の前後"]) != null ? [{ name: `今日のここまで(${nTo}レース)`, color: "#ff8a3d",
+  const todayPt = nTo && num(r0["今日の内外"]) != null && num(r0["今日の前後"]) != null ? [{ name: `今日のここまで(${nTo}レース)`, short: "今日", color: "#ff8a3d",
     inner: { v: num(r0["今日の内外"]), lo: num(r0["今日の内外"]), hi: num(r0["今日の内外"]), html: `<b>${num(r0["今日の内外"]) >= 0 ? "+" : ""}${num(r0["今日の内外"]).toFixed(3)}</b>` },
     front: { v: num(r0["今日の前後"]), lo: num(r0["今日の前後"]), hi: num(r0["今日の前後"]), html: `<b>${num(r0["今日の前後"]) >= 0 ? "+" : ""}${num(r0["今日の前後"]).toFixed(3)}</b>` } }] : [];
   const bNorm = { inner: biasNorm(bItems.find(x => x.inner)?.inner.guide || ""), front: biasNorm(bItems.find(x => x.front)?.front.guide || "") };
@@ -3185,32 +3185,52 @@ const BIAS_FLAT = 0.03;   // ふだんとの差がこれ未満なら「ふだん
 // 馬場傾向を1枚に(2026-11-23 ユーザーの指示「縦軸 内外・横軸 前後で1枚に」「この開催・過去の同じ週・前の開催日の3項目」)。
 // items: [{ name, color, inner: {v, lo, hi, html}, front: {...} }]。norm: ふだん、act: 結果(黄色の◆)、extra: 今日など追加の点
 const BP_ITEMS = [["この開催", "#4f8cff"], ["過去の同じ週", "#b06cff"], ["前の開催日", "#2fb37a"]];
-function biasPanel(items, norm, act, extra = []) {
-  const R = 0.3, W = 230, P = 30, sz = W + P * 2;
+const BP_NORM = "このコースの平均(2019〜23年)";   // 「ふだん」の言い換え(11/23 ユーザーの指示「何を示すのかわかりやすく」)
+function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ") {
+  items = items.map(it => ({ ...it, name: it.name + "（予想）" }));   // 表と図の名前は「この開催（予想）」(11/23 ユーザーの指示)
+  const R = 0.3, W = 280, P = 30, sz = W + P * 2;
   const x = f => P + (Math.max(-R, Math.min(R, f)) + R) / (2 * R) * W, y = i => P + (Math.max(-R, Math.min(R, i)) + R) / (2 * R) * W;
-  let g = `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}" role="img" aria-label="馬場傾向の図(縦 内外・横 前後)">` +
+  const TT = 20;   // 上にタイトルの行
+  let g = `<svg width="${sz}" height="${sz + TT}" viewBox="0 0 ${sz} ${sz + TT}" role="img" aria-label="馬場傾向の図(縦 内外・横 前後)">` +
+    `<text x="${sz - 2}" y="13" font-size="12" font-weight="700" fill="var(--text)" text-anchor="end">${esc(title)}</text><text x="2" y="13" font-size="10" fill="var(--muted)">縦 内外・横 前後</text><g transform="translate(0 ${TT})">` +
     `<rect x="${P}" y="${P}" width="${W}" height="${W}" fill="none" stroke="var(--line)"/>`;
   for (const t of [-0.2, -0.1, 0.1, 0.2]) g += `<line x1="${x(t)}" y1="${P}" x2="${x(t)}" y2="${P + W}" stroke="var(--line)" stroke-dasharray="2 3"/><line x1="${P}" y1="${y(t)}" x2="${P + W}" y2="${y(t)}" stroke="var(--line)" stroke-dasharray="2 3"/>`;
   g += `<line x1="${x(0)}" y1="${P}" x2="${x(0)}" y2="${P + W}" stroke="var(--muted)"/><line x1="${P}" y1="${y(0)}" x2="${P + W}" y2="${y(0)}" stroke="var(--muted)"/>`;
+  const labels = [];
+  // 点の名前(点の右上。右端に近いときは左に出す)
+  const lbl = (X, Y, t, c) => `<text x="${X > P + W - 60 ? X - 9 : X + 9}" y="${Y - 7}" font-size="10" font-weight="600" fill="${c}" text-anchor="${X > P + W - 60 ? "end" : "start"}" paint-order="stroke" stroke="var(--panel)" stroke-width="3">${esc(t)}</text>`;
   const tx = (X, Y, t, a = "middle") => `<text x="${X}" y="${Y}" font-size="11" fill="var(--muted)" text-anchor="${a}">${t}</text>`;
   g += tx(P + W / 2, P - 8, "↑ 内有利") + tx(P + W / 2, P + W + 18, "↓ 外有利") + tx(P - 4, P + W / 2 + 4, "前", "end") + tx(P + W + 4, P + W / 2 + 4, "後", "start") +
     tx(P, P + W + 18, "← 前有利", "start") + tx(P + W, P + W + 18, "後ろ有利 →", "end");
   if (norm && norm.inner != null && norm.front != null)
-    g += `<g stroke="var(--muted)" stroke-width="2"><line x1="${x(norm.front) - 6}" y1="${y(norm.inner)}" x2="${x(norm.front) + 6}" y2="${y(norm.inner)}"/><line x1="${x(norm.front)}" y1="${y(norm.inner) - 6}" x2="${x(norm.front)}" y2="${y(norm.inner) + 6}"/><title>ふだん 内外 ${norm.inner.toFixed(2)}・前後 ${norm.front.toFixed(2)}</title></g>`;
+    g += `<g stroke="var(--muted)" stroke-width="2"><line x1="${x(norm.front) - 6}" y1="${y(norm.inner)}" x2="${x(norm.front) + 6}" y2="${y(norm.inner)}"/><line x1="${x(norm.front)}" y1="${y(norm.inner) - 6}" x2="${x(norm.front)}" y2="${y(norm.inner) + 6}"/><title>${BP_NORM} 内外 ${norm.inner.toFixed(2)}・前後 ${norm.front.toFixed(2)}</title></g>` ;
   for (const it of [...items, ...extra]) {
     const fi = it.front, ii = it.inner;
+    if (fi?.v != null && ii?.v != null) labels.push([x(fi.v), y(ii.v), it.short || it.name, it.color]);
     if (fi?.v == null || ii?.v == null) continue;
     const lab = `${it.name}: 内外 ${ii.v >= 0 ? "+" : ""}${ii.v.toFixed(3)}・前後 ${fi.v >= 0 ? "+" : ""}${fi.v.toFixed(3)}`;
     if (fi.hi - fi.lo > 1e-9 || ii.hi - ii.lo > 1e-9)
       g += `<rect x="${x(fi.lo) - 4}" y="${y(ii.lo) - 4}" width="${x(fi.hi) - x(fi.lo) + 8}" height="${y(ii.hi) - y(ii.lo) + 8}" rx="5" fill="${it.color}" fill-opacity=".25" stroke="${it.color}"><title>${esc(lab)}(レースで違う)</title></rect>`;
     g += `<circle cx="${x(fi.v)}" cy="${y(ii.v)}" r="6" fill="${it.color}" stroke="var(--panel)" stroke-width="1.5"><title>${esc(lab)}</title></circle>`;
   }
+  if (act && act.inner != null && act.front != null) labels.push([x(act.front), y(act.inner), "結果", "#d4a800"]);
+  // 名前が重ならないよう、近くに先に置いた名前があれば下にずらす
+  const placed = [];
+  if (norm && norm.inner != null && norm.front != null) labels.unshift([x(norm.front), y(norm.inner), "平均", "var(--muted)"]);
+  for (const [lx, ly, t, c] of labels) {
+    let ty = ly - 7;
+    while (placed.some(([px, py]) => Math.abs(px - lx) < 70 && Math.abs(py - ty) < 12)) ty += 12;
+    placed.push([lx, ty]);
+    // ずらしたときは点と名前を細い線でつなぐ
+    if (ty !== ly - 7) g += `<line x1="${lx}" y1="${ly}" x2="${lx > P + W - 60 ? lx - 8 : lx + 8}" y2="${ty - 3}" stroke="${c}" stroke-width="1" opacity=".7"/>`;
+    g += lbl(lx, ty + 7, t, c);
+  }
   if (act && act.inner != null && act.front != null)
     g += `<rect x="${x(act.front) - 6}" y="${y(act.inner) - 6}" width="12" height="12" fill="#f5c400" stroke="var(--panel)" transform="rotate(45 ${x(act.front)} ${y(act.inner)})"><title>結果: 内外 ${act.inner.toFixed(3)}・前後 ${act.front.toFixed(3)}</title></rect>`;
-  g += `</svg>`;
+  g += `</g></svg>`;
   let t = `<table class="bp-t"><tr><th></th><th>内外</th><th>前後</th></tr>`;
   for (const it of [...items, ...extra]) t += `<tr><th style="white-space:nowrap"><span class="bp-dot" style="background:${it.color}"></span>${esc(it.name)}</th><td>${it.inner?.html || `<span class="dim">-</span>`}</td><td>${it.front?.html || `<span class="dim">-</span>`}</td></tr>`;
-  t += `<tr><th style="white-space:nowrap"><span class="bp-dot" style="background:var(--muted);border-radius:0;width:10px;height:2px;vertical-align:3px"></span>ふだん</th><td>${norm?.inner != null ? (norm.inner >= 0 ? "+" : "") + norm.inner.toFixed(2) : "-"}</td><td>${norm?.front != null ? (norm.front >= 0 ? "+" : "") + norm.front.toFixed(2) : "-"}</td></tr>`;
+  t += `<tr><th style="white-space:nowrap"><span class="bp-dot" style="background:var(--muted);border-radius:0;width:10px;height:2px;vertical-align:3px"></span>${BP_NORM}</th><td>${norm?.inner != null ? (norm.inner >= 0 ? "+" : "") + norm.inner.toFixed(2) : "-"}</td><td>${norm?.front != null ? (norm.front >= 0 ? "+" : "") + norm.front.toFixed(2) : "-"}</td></tr>`;
   if (act) t += `<tr><th style="white-space:nowrap"><span style="color:#f5c400;margin-right:4px">◆</span>${esc(act.name || "結果")}</th><td>${act.inner != null ? `<b>${act.inner >= 0 ? "+" : ""}${act.inner.toFixed(3)}</b>` : "-"}</td><td>${act.front != null ? `<b>${act.front >= 0 ? "+" : ""}${act.front.toFixed(3)}</b>` : "-"}</td></tr>`;
   return `<div class="bp">${g}${t}</table></div>`;
 }

@@ -633,7 +633,7 @@ function changeCard(rows) {
 
 // 当日の馬場傾向(2026-11-22 ユーザーの指示「足したい」「ビューアから見れるようにしたい」)。予想 CSV の「今日の内外・前後・レース数」
 // (同じ日・同じ競馬場・同じ芝ダで発走が前のレース)。当日前_ の列があれば、馬体重の版の最初の値からの変化も出す
-function todayBiasRows(r0) {
+function todayBiasRows(r0, rid) {
   if (!("今日のレース数" in r0)) return "";
   const n = num(r0["今日のレース数"]), n0 = num(r0["当日前_今日のレース数"]);
   const f = v => v == null ? "-" : `${v >= 0 ? "+" : ""}${v.toFixed(3)}`;
@@ -641,7 +641,9 @@ function todayBiasRows(r0) {
   const row = (label, c, a, b) => {
     const v = num(r0[c]), v0 = num(r0[`当日前_${c}`]);
     const mv = v0 != null && v != null && v0 !== v ? ` <span class="dim">(馬体重の版の最初 ${f(v0)} → 今)</span>` : "";
-    return `<div class="pace"><div class="pl">${label}</div><div><b>${f(v)}</b> ${side(v, a, b)}${mv}</div></div>`;
+    const ax = c.includes("内外") ? "inner" : "front", ra = rid ? raceBiasActual(rid) : null;
+    return `<div class="pace"><div class="pl">${label}</div><div><b>${f(v)}</b> ${side(v, a, b)}${mv}` +
+      (v != null ? biasGraph({ pred: v, norm: 0, act: ra?.[ax] ?? null, ...BG_AXIS[ax] }) : "") + `</div></div>`;
   };
   if (!n) return `<div style="margin-top:6px"><div class="pace"><div class="pl">今日のここまで</div><div><span class="muted">この競馬場・芝ダで、このレースより前の結果はまだ無い</span></div></div></div>`;
   return `<div style="margin-top:6px">` + row(`今日の内外(${n}レース)`, "今日の内外", "内有利", "外有利") + row(`今日の前後(${n}レース)`, "今日の前後", "前有利", "後ろ有利") +
@@ -1547,22 +1549,31 @@ function renderRace(rid) {
     // 予想 CSV に確度が無い項目(過去の同じ週の前後)はレース情報.csv の確度を使う
     const src = r0[`${label}の確度`] ? r0 : (state.info.get(rid) || {});
     const cw = src[`${label}の確度の根拠`];
+    const ax = label.includes("内外") ? "inner" : "front", ra = raceBiasActual(rid);
     return `<div class="pace"><div class="pl">${esc(label)}</div><div><b>${v >= 0 ? "+" : ""}${v.toFixed(3)}</b>` +
       (word ? ` <span class="chip ${biasTone(word)}">${esc(word)}</span>` : "") + confChip(src, label) +
+      biasGraph({ pred: v, norm: biasNorm(guide), act: ra?.[ax] ?? null, ...BG_AXIS[ax] }) +
       (why || cw ? `<div class="note" style="margin:0">${esc(why)}${why && cw ? "。" : ""}${cw ? "確度の根拠: " + esc(cw) : ""}</div>` : "") + `</div></div>`;
   }).join("");
   const tenkaiCard = `<div class="card" data-fold="baba-tenkai"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">展開予想${updTag("予想", rid)}</h3>${favBox}</div>${favNote}` +
     `${pace || `<span class="muted">列がありません</span>`}` +
     (pace ? `<div class="note">目安(札)は検証期間(2019〜2023年)の同じ芝ダのレースと比べたもの。ペース予想の数字はコースの基準タイムとの差で、ふつうのレースでも前に行く馬は基準より少し速い(平均は下の行のとおり)ので、札はそれと比べた速さ。逃げ・先行馬が多くペースが速いと差しが届きやすく、少なく遅いと前が残りやすい。</div>` : "") +
     `</div>`;
-  const today = todayBiasRows(r0);
+  const today = todayBiasRows(r0, rid);
+  // 時計のかかり具合(11/23 ユーザーの指示)。予想 = 勝ちタイムの予想、結果 = 実際の勝ちタイム。どちらも基準との差(%)
+  const ck = clockPct(rid);
+  const clockRow = ck.pred == null ? "" : `<div class="pace"><div class="pl">時計(勝ちタイム)</div><div><b>${pctFmt(ck.pred)}</b> <span class="chip ${ck.pred >= CLOCK_FLAT ? "warn" : ck.pred <= -CLOCK_FLAT ? "up" : "gray"}">${esc(clockWord(ck.pred))}</span>` +
+    (ck.act != null ? ` <span class="muted">結果 ${pctFmt(ck.act)}(${esc(clockWord(ck.act))})</span>` : "") + clockGraph(ck.pred, ck.act) +
+    `<div class="note" style="margin:0">勝ちタイムの予想と、基準(同じ競馬場・芝ダ・距離・馬場状態${ck.baba ? `「${esc(ck.baba)}」` : ""}の過去3年の平均)との差。プラスは時計がかかる、マイナスは速い。` +
+    `基準は馬場状態ごとなので、重・不良そのものの遅さは含まない(同じ馬場状態の中で、さらにかかるか速いか)</div></div></div>`;
   const babaCard = `<div class="card" data-fold="baba-tenkai"><h3>馬場傾向予想（仮）<button class="help" data-help="baba" title="馬場傾向予想の各項目の説明(別ウインドウ)">？</button>${updTag("予想", rid)}</h3>` +
-    `${info ? `<dl class="kv">${info}</dl>` : ""}` +
+    `${info ? `<dl class="kv">${info}</dl>` : ""}` + (clockRow ? `<div style="margin-top:6px">${clockRow}</div>` : "") +
+    `<div class="note" style="margin:4px 0">グラフ: <span style="color:var(--accent)">●</span> 予想(帯は幅)、<span style="color:var(--muted)">│</span> そのコースのふだん、<span style="color:#f5c400">◆</span> このレースの結果(結果が出たら)。</div>` +
     (bias ? `<div style="margin-top:6px">${bias}</div><div class="note">馬場傾向の数字は、3着以内の馬の位置の平均 − 全馬の平均。` +
       `内外は馬番÷頭数(0 = 内、1 = 外)、前後は最初のコーナーの順位÷頭数(0 = 前、1 = 後ろ)で、マイナスなら内・前が有利。` +
       `目安の「いつも」は、検証期間(2019〜2023年)の同じ競馬場・同じ芝ダのレースの値(札の「東京芝のふだん」がその平均)。` +
       `そのコースのふだんより内・前が来ているか、外・後ろが来ているかを表す(2026-11-13 までに作った予想は、競馬場を問わない同じ芝ダの全レースと比べている)。</div>` : "") +
-    today + (info || bias || today ? "" : `<span class="muted">列がありません</span>`) + `</div>`;
+    today + (info || bias || today || clockRow ? "" : `<span class="muted">列がありません</span>`) + `</div>`;
   html += `<div class="grid2">${babaCard}${tenkaiCard}</div>`;   // 左に馬場、右に展開
 
   html += changeCard(base) + todayChangeCard(base);   // 得意モデルだけの表示のときも、枠順確定との比較は6モデルの平均どうしで
@@ -2676,8 +2687,10 @@ function sendToBought(rid, tickets) {
   const date = rid.slice(0, 8), b = boughtOf(date);
   for (const x of tickets) {
     if (!(x.amount > 0)) continue;     // 0円は「買わない」
-    const hit = b.find(y => y.rid === rid && y.kind === x.kind && y.t.join("-") === x.t.join("-"));
-    if (hit) hit.amount += x.amount; else b.push({ rid, kind: x.kind, t: x.t.map(String), amount: x.amount, at: new Date().toISOString() });
+    // フォーメーションの名前も持たせる(日別ページでフォーメーションごとにまとめる。11/23)。同じフォーメーションの同じ買い目だけ金額を足す
+    const form = (x.forms || []).join(" / ");
+    const hit = b.find(y => y.rid === rid && y.kind === x.kind && y.t.join("-") === x.t.join("-") && (y.form || "") === form);
+    if (hit) hit.amount += x.amount; else b.push({ rid, kind: x.kind, t: x.t.map(String), amount: x.amount, at: new Date().toISOString(), ...(form ? { form } : {}) });
   }
   saveBought(date);
 }
@@ -2954,6 +2967,7 @@ function renderDayPage(date) {
       if (j) { judged++; if (j.mark === "○") hit++; if (j.mark === "△") near++; }
       return `<div class="pace"><div class="pl">${esc(lab)}</div><div><b>${hi - lo < 0.0005 ? sg(lo) : `${sg(lo)}〜${sg(hi)}`}</b>` +
         (word ? ` <span class="chip ${biasTone(word)}">${esc(word)}</span>` : "") + confChip(src, lab) +
+        biasGraph({ pred: [lo, hi], norm: biasNorm(guide), act: act?.done ? act[axis] : null, ...BG_AXIS[axis] }) +
         (j ? ` <span class="chip ${j.mark === "○" ? "up" : j.mark === "△" ? "gray" : "down"}" title="${esc(j.why)}">${
           { "○": "○ 合っていた", "△": "△ 向きは合っていた(差は小さい)", "×": "× 外れ" }[j.mark]}</span>` : "") +
         (hi - lo >= 0.0005 ? `<span class="note" style="margin:0 0 0 6px">レースで違う(目安は${raceNo(rs[0])}のもの)</span>` : "") +
@@ -2969,8 +2983,15 @@ function renderDayPage(date) {
           `<span class="chip warn">確定前</span> <span class="muted">結果の出たレース ${act.done} / ${rs.length}${venueDone ? "" : `(場の全 ${bRids.length}レースの結果がそろったら判定)`}</span>`) +
         (act.done ? `<div${final ? "" : ` class="muted"`}>内外 ${show("inner")}・前後 ${show("front")}${final ? "" : "(途中の値)"}</div>` : "") + `</div></div>`;
     }
+    // 時計(11/23): レースごとの勝ちタイムの予想・結果の、基準との差(%)。予想は幅、結果は結果の出たレースの平均
+    const cks = rs.map(clockPct), cp = cks.map(c => c.pred).filter(v => v != null), ca = cks.map(c => c.act).filter(v => v != null);
+    const cAvg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+    const clockItem = !cp.length ? "" : `<div class="pace"><div class="pl">時計(勝ちタイム)</div><div><b>${pctFmt(cAvg(cp))}</b> <span class="chip ${cAvg(cp) >= CLOCK_FLAT ? "warn" : cAvg(cp) <= -CLOCK_FLAT ? "up" : "gray"}">${esc(clockWord(cAvg(cp)))}</span>` +
+      (ca.length ? ` <span class="muted">結果 ${pctFmt(cAvg(ca))}(${esc(clockWord(cAvg(ca)))}・${ca.length}レース)</span>` : "") +
+      clockGraph([Math.min(...cp), Math.max(...cp)], cAvg(ca)) +
+      `<div class="note" style="margin:0">勝ちタイムの予想の、基準(同じ競馬場・芝ダ・距離・馬場状態の過去3年の平均)との差の平均。帯はレースごとの幅。プラスは時計がかかる</div></div></div>`;
     return `<div class="day-bias"><h4 style="margin:4px 0">${esc(s)}<span class="muted" style="font-weight:400">(${rs.length}レース: ${rs.map(rid => +rid.slice(14, 16) + "R").join("・")})</span></h4>` +
-      res + (items || `<span class="muted">馬場傾向の列がありません</span>`) + `</div>`;
+      res + clockItem + (items || `<span class="muted">馬場傾向の列がありません</span>`) + `</div>`;
   }).join("");
   h += (bias ? `<div class="grid2">${bias}</div>` : `<div class="muted">この場のレースがありません。</div>`) +
     `<div class="note">予想 CSV の馬場傾向の列(3着以内の馬の位置の平均 − 全馬の平均。マイナスなら内・前が有利)を、場・芝ダごとにまとめたもの。` +
@@ -3054,17 +3075,41 @@ function renderDayPage(date) {
         setCost ? `総回収額(${setRaces.size}レース。収支 ${setBack - setCost >= 0 ? "+" : "−"}${Math.abs(Math.round(setBack - setCost)).toLocaleString()}円${setCost < cost ? `・結果待ち ${(cost - setCost).toLocaleString()}円分は入れない` : ""})` : "総回収額(結果が出たら出す)") +
       kpi(setCost ? `<span class="${setBack >= setCost ? "hi" : ""}">${fix(setBack / setCost * 100)}%</span>` : "-",
         setCost ? `回収率(${setCost.toLocaleString()}円 → ${Math.round(setBack).toLocaleString()}円)` : "回収率(結果が出たら出す)") + `</div></div></div>`;
-    h += `<div class="scroll" style="max-height:520px;overflow-y:auto"><table><tr><th>レース</th><th>券種</th><th>買い目</th><th class="n">金額</th><th class="n">確率</th>` +
-      `<th class="n">オッズ</th><th class="n">期待値</th><th class="n">払戻の期待値</th><th class="n">結果</th><th></th></tr>`;
+    // レースごと・フォーメーションごとにまとめる。レース合計・場合計の列。レース・結果・金額・レース合計で並べ替え(11/23 ユーザーの指示)
+    const bs = state.boughtSort || { k: "race", dir: 1 };
+    const raceSum = new Map(), raceBack = new Map(), jyoSum = new Map(), jyoOf = rid => rid.slice(0, 8) + rid.slice(8, 10);
     for (const r of rows) {
+      raceSum.set(r.rid, (raceSum.get(r.rid) || 0) + (r.amount || 0));
+      if (r.settled) raceBack.set(r.rid, (raceBack.get(r.rid) || 0) + (r.back || 0));
+      jyoSum.set(jyoOf(r.rid), (jyoSum.get(jyoOf(r.rid)) || 0) + (r.amount || 0));
+    }
+    const rowVal = r => bs.k === "res" ? (r.settled ? r.back || 0 : -1) : bs.k === "amt" ? r.amount || 0 : 0;
+    const raceVal = rid => bs.k === "res" ? (raceBack.has(rid) ? raceBack.get(rid) : -1) : bs.k === "amt" || bs.k === "rsum" ? raceSum.get(rid) || 0 : 0;
+    const raceOrder = [...new Set(rows.map(r => r.rid))].sort((a, b) => bs.k === "race" ? bs.dir * a.localeCompare(b) : bs.dir * (raceVal(a) - raceVal(b)) || a.localeCompare(b));
+    const formOrder = new Map(); rows.forEach(r => { const k = r.rid + "|" + (r.form || ""); if (!formOrder.has(k)) formOrder.set(k, formOrder.size); });
+    rows.sort((a, b) => raceOrder.indexOf(a.rid) - raceOrder.indexOf(b.rid) || formOrder.get(a.rid + "|" + (a.form || "")) - formOrder.get(b.rid + "|" + (b.form || ""))
+      || (bs.k === "res" || bs.k === "amt" ? bs.dir * (rowVal(a) - rowVal(b)) : 0) || a.i - b.i);
+    const sh = (k, label, cls = "n") => `<th class="${cls} bosort" data-k="${k}" style="cursor:pointer" title="押すとこの順に並べる(もう一度で逆)">${label}${bs.k === k ? (bs.dir > 0 ? " ▲" : " ▼") : ""}</th>`;
+    h += `<div class="scroll" style="max-height:520px;overflow-y:auto"><table class="basket-table"><tr>${sh("race", "レース", "")}<th>フォーメーション</th><th>券種</th><th>買い目</th>${sh("amt", "金額")}<th class="n">確率</th>` +
+      `<th class="n">オッズ</th><th class="n">期待値</th><th class="n">払戻の期待値</th>${sh("res", "結果")}${sh("rsum", "レース合計")}<th class="n" title="同じ競馬場のこの日の購入金額の合計">場の合計</th><th></th></tr>`;
+    // 同じ値が続く行をまとめる(rowspan)
+    const span = (k, key) => { let n = 1; while (k + n < rows.length && key(rows[k + n]) === key(rows[k])) n++; return n; };
+    const first = (k, key) => k === 0 || key(rows[k - 1]) !== key(rows[k]);
+    const kRace = r => r.rid, kForm = r => r.rid + "|" + (r.form || ""), kJyo = r => jyoOf(r.rid);
+    rows.forEach((r, k) => {
       const lower = r.kind === "複勝" || r.kind === "ワイド", sep = CALC_KINDS[r.kind]?.[1] && r.t.length > 1 ? "→" : "-";
-      h += `<tr class="${r.amount ? "" : "dim"}${r.settled && r.back ? " hit" : ""}"><td>${raceLink(r.rid)}</td><td>${esc(r.kind)}</td><td><b>${esc(r.t.join(sep))}</b></td>` +
+      const cRace = first(k, kRace) ? `<td class="bform" rowspan="${span(k, kRace)}">${raceLink(r.rid)}</td>` : "";
+      const cForm = first(k, kForm) ? `<td class="bform" rowspan="${span(k, kForm)}">${r.form ? esc(r.form).replace(/ \/ /g, "<br>") : `<span class="dim">-</span>`}${span(k, kForm) > 1 ? `<div class="dim">${span(k, kForm)}点</div>` : ""}</td>` : "";
+      const rb = raceBack.get(r.rid);
+      const cRsum = first(k, kRace) ? `<td class="n bform" rowspan="${span(k, kRace)}"><b>${(raceSum.get(r.rid) || 0).toLocaleString()}円</b>${rb != null ? `<div class="${rb ? "hi" : "dim"}">払戻 ${Math.round(rb).toLocaleString()}円</div>` : ""}</td>` : "";
+      const cJyo = first(k, kJyo) ? `<td class="n bform" rowspan="${span(k, kJyo)}">${(jyoSum.get(jyoOf(r.rid)) || 0).toLocaleString()}円<div class="dim">${esc(JYO[r.rid.slice(8, 10)] || "")}</div></td>` : "";
+      h += `<tr class="${r.amount ? "" : "dim"}${r.settled && r.back ? " hit" : ""}">${cRace}${cForm}<td>${esc(r.kind)}</td><td><b>${esc(r.t.join(sep))}</b></td>` +
         `<td class="n"><input class="odds boughtAmt" data-i="${r.i}" type="number" min="0" step="100" value="${r.amount}" style="width:90px"> 円</td><td class="n">${r.p != null ? pct(r.p, 2) : "-"}</td>` +
         `<td class="n">${r.o ? fix(r.o) + (lower ? "〜" : "") : `<span class="dim">オッズなし</span>`}</td><td class="n">${r.o && r.p ? evCell(r.o, 1 / r.p) : ""}</td>` +
         `<td class="n">${r.o && r.p != null ? Math.round(r.p * r.o * r.amount).toLocaleString() + "円" : "-"}</td>` +
-        `<td class="n">${!r.amount ? `<span class="dim">買わない</span>` : !r.settled ? `<span class="dim">結果待ち</span>` : r.back ? `<b class="hi">${Math.round(r.back).toLocaleString()}円</b>` : `<span class="dim">はずれ</span>`}</td>` +
+        `<td class="n">${!r.amount ? `<span class="dim">買わない</span>` : !r.settled ? `<span class="dim">結果待ち</span>` : r.back ? `<b class="hi">${Math.round(r.back).toLocaleString()}円</b>` : `<span class="dim">はずれ</span>`}</td>` + cRsum + cJyo +
         `<td><button class="boughtDel" data-i="${r.i}" title="この馬券を一覧から消す">×</button></td></tr>`;
-    }
+    });
     h += `</table></div><div class="calc" style="margin-top:8px"><button id="boughtClear">この日の購入した馬券を全部消す</button></div>`;
   }
   h += `<div class="note">金額は馬券ごとに変えられる(100円単位に丸める。0円は「買わない」で表には残り、集計には入れない)。購入した馬券はこのブラウザに覚えておく(日付ごと)。実際の購入とはつながっていない(送ったものを買ったものとして数える)。` +
@@ -3081,6 +3126,11 @@ function renderDayPage(date) {
   document.body.classList.add("day-page-active");
   main.querySelectorAll(".dayTabs button").forEach(b => b.onclick = () => { state[b.parentElement.dataset.k] = b.dataset.j; renderDayPage(date); });
   main.querySelectorAll("a.dayRace").forEach(a => a.onclick = e => { e.preventDefault(); state.dayPage = null; state.current = a.dataset.rid; state.open.clear(); render(); });
+  main.querySelectorAll("th.bosort").forEach(th => th.onclick = () => {
+    const k = th.dataset.k, cur = state.boughtSort || { k: "race", dir: 1 };
+    state.boughtSort = cur.k === k ? { k, dir: -cur.dir } : { k, dir: k === "race" ? 1 : -1 };
+    keepScroll(() => renderDayPage(date));
+  });
   main.querySelectorAll("input.boughtAmt").forEach(x => x.onchange = () => {
     const b = boughtOf(date)[+x.dataset.i];
     if (!b) return;
@@ -3124,6 +3174,34 @@ function dayBiasActual(rids) {
   return { inner: avg("inner"), front: avg("front"), done: xs.length };
 }
 const BIAS_FLAT = 0.03;   // ふだんとの差がこれ未満なら「ふだん並み」
+// 馬場傾向・時計の横棒グラフ(11/23 ユーザーの指示「数値だとわかりづらいので横のグラフで」「答え合わせを点で重ねて」)。
+// pred: 予想(値か [下, 上] の幅。青の点・帯)、norm: ふだん(灰色の縦線)、act: 結果(黄色の◆)。値は min〜max に収める
+function biasGraph({ pred, norm, act, min = -0.3, max = 0.3, left = "内", right = "外", fmt = v => `${v >= 0 ? "+" : ""}${v.toFixed(3)}`, ticks = [-0.2, -0.1, 0, 0.1, 0.2] }) {
+  const x = v => Math.max(0, Math.min(100, (v - min) / (max - min) * 100));
+  let h = `<div class="bg-wrap"><span class="bg-l">← ${esc(left)}</span><div class="viz-track"><div class="bg-axis"></div>` +
+    ticks.map(t => `<div class="viz-grid" style="left:${x(t)}%;${t === 0 ? "opacity:.9" : ""}"></div>`).join("");
+  if (norm != null) h += `<div class="bg-norm" style="left:${x(norm)}%" title="ふだん ${fmt(norm)}"></div>`;
+  const lo = Array.isArray(pred) ? pred[0] : pred, hi = Array.isArray(pred) ? pred[1] : pred;
+  if (lo != null) h += hi - lo > 1e-9 ? `<div class="viz-b" style="left:${x(lo)}%;width:${Math.max(1, x(hi) - x(lo))}%" title="予想 ${fmt(lo)}〜${fmt(hi)}"></div>`
+    : `<div class="viz-dot" style="left:${x(lo)}%" title="予想 ${fmt(lo)}"></div>`;
+  if (act != null) h += `<div class="viz-res" style="left:${x(act)}%" title="結果 ${fmt(act)}"></div>`;
+  return h + `</div><span class="bg-r">${esc(right)} →</span>` +
+    `<div class="bg-ticks">${ticks.map(t => `<span class="viz-tick" style="left:${x(t)}%">${fmt(t).replace(/\.?0+$/, "") || "0"}</span>`).join("")}</div></div>`;
+}
+const BG_AXIS = { inner: { left: "内有利", right: "外有利" }, front: { left: "前有利", right: "後ろ有利" } };
+// 時計のかかり具合: 勝ちタイム − 基準(同じ競馬場・芝ダ・距離・馬場状態の過去3年の平均)の、基準に対する % 。プラスは時計がかかる
+function parseRunTime(t) { const m = String(t || "").match(/^(?:(\d+):)?(\d+(?:\.\d+)?)$/); return m ? (+(m[1] || 0)) * 60 + +m[2] : null; }
+function clockPct(rid) {
+  const i = state.info.get(rid) || {}, base = num(i["勝ちタイムの基準"]), v = num(i["勝ちタイムの予想"]);
+  const w = (state.results.get(rid) || []).find(r => num(r["着順"]) === 1), a = parseRunTime(w?.["走破タイム"]);
+  return { pred: base && v != null ? (v - base) / base * 100 : null, act: base && a != null ? (a - base) / base * 100 : null, baba: i["馬場状態"] || "" };
+}
+const CLOCK_FLAT = 0.4;   // 基準との差(%)がこれ未満なら「ふつう」
+function clockWord(p) { return p == null ? "" : p <= -CLOCK_FLAT * 2 ? "高速(時計が速い)" : p <= -CLOCK_FLAT ? "やや速い" : p >= CLOCK_FLAT * 2 ? "時計がかかる" : p >= CLOCK_FLAT ? "やや時計がかかる" : "ふつう"; }
+const pctFmt = v => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+function clockGraph(pred, act) {
+  return biasGraph({ pred, act, norm: 0, min: -3, max: 3, left: "速い", right: "かかる", fmt: pctFmt, ticks: [-2, -1, 0, 1, 2] });
+}
 function biasNorm(guide) {
   // 目安の文言の「芝のふだん -0.01」の値(無い古い CSV は 0 = 全馬の平均と同じ)
   const m = String(guide).match(/のふだん\s*([+-]?\d+(?:\.\d+)?)/);

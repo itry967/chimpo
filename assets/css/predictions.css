@@ -582,3 +582,9 @@ a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
 }
 
 .viz-jk, td.jk { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+
+.bg-wrap { display: grid; grid-template-columns: 52px minmax(160px, 420px) 52px; align-items: center; gap: 6px; margin: 4px 0 2px; }
+.bg-l, .bg-r { font-size: 11px; color: var(--muted); white-space: nowrap; } .bg-l { text-align: right; }
+.bg-axis { position: absolute; left: 0; right: 0; top: 8px; height: 2px; background: var(--line); border-radius: 1px; }
+.bg-norm { position: absolute; top: 1px; height: 16px; width: 0; border-left: 2px solid var(--muted); opacity: .8; }
+.bg-ticks { position: relative; height: 13px; grid-column: 2; }

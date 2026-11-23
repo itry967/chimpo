@@ -486,6 +486,8 @@ body.day-page-active #result { display: none !important; }
 a.dayRace, a.toDay { color: var(--accent); font-weight: 600; text-decoration: none; }
 a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
 .day-bias { min-width: 0; }
+.day-bias-list { display: flex; flex-direction: column; gap: 14px; }
+.day-bias-list > .day-bias + .day-bias { border-top: 1px solid var(--line); padding-top: 10px; }
 .fund-table td { vertical-align: top; }
 .fund-table input.fundPick { width: 20px; height: 20px; }
 .fund-tickets { font-size: 12px; line-height: 1.5; white-space: nowrap; }

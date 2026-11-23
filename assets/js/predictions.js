@@ -3001,7 +3001,7 @@ function renderDayPage(date) {
     return `<div class="day-bias"><h4 style="margin:4px 0">${esc(s)}<span class="muted" style="font-weight:400">(${rs.length}レース: ${rs.map(rid => +rid.slice(14, 16) + "R").join("・")})</span></h4>` +
       res + clockItem + (items || `<span class="muted">馬場傾向の列がありません</span>`) + `</div>`;
   }).join("");
-  h += (bias ? `<div class="grid2">${bias}</div>` : `<div class="muted">この場のレースがありません。</div>`) +
+  h += (bias ? `<div class="day-bias-list">${bias}</div>`   /* 芝 → ダートの順に縦に並べる(11/23 ユーザーの指示) */ : `<div class="muted">この場のレースがありません。</div>`) +
     `<div class="note">予想 CSV の馬場傾向の列(3着以内の馬の位置の平均 − 全馬の平均。マイナスなら内・前が有利)を、場・芝ダごとにまとめたもの。` +
     `前の開催日までのレースから出す値なので、同じ場・芝ダならふつうはその日のどのレースでも同じ(違うときは幅で出す)。<br>` +
     `<b>結果</b>: 結果 CSV(馬番・通過順)から同じ定義で出したその日の値(内外 = 3着以内の馬の 馬番÷頭数 の平均 − 全馬の平均、` +

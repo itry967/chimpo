@@ -258,7 +258,7 @@ async function expandBundles(bundles) {
   }
   const out = [];
   for (const b of bundles) {
-    const text = await new Response(b.blob.stream().pipeThrough(new DecompressionStream("gzip"))).text();
+    const text = await new Response((b.blob || new Blob([Uint8Array.from(atob(b.b64), ch => ch.charCodeAt(0))])).stream().pipeThrough(new DecompressionStream("gzip"))).text();
     const data = JSON.parse(text);
     const date = data.date || b.date;
     for (const f of data.files || []) {
@@ -1339,8 +1339,8 @@ function renderNav() {
 }
 
 // ---------- レース一覧のランプ(2026-11-22 ユーザーの指示) ----------
-// 締め切り = 発走の2分前(JRA の発売締め切り)。前のレースの締め切り(1R は朝 9:00)から: 締め切り20分前までは緑の点灯、
-// 20分前〜10分前は緑の点滅、10分前〜5分前はオレンジの点滅、5分前〜締め切りは赤の点滅、締め切りから5分(レース中)は赤の点灯。ほかは消す
+// 締め切り = 発走の2分前(JRA の発売締め切り)。前のレースの締め切り(1R は朝 9:00)から: 締め切り15分前までは緑の点灯、
+// 15分前〜10分前は緑の点滅、10分前〜5分前はオレンジの点滅、5分前〜締め切りは赤の点滅、締め切りから5分(レース中)は赤の点灯。ほかは消す
 const LAMP_CLOSE = 2;
 function raceDeadline(rid) {
   const r = state.races.get(rid)?.[0], hm = String(r?.hasso_time ?? "").padStart(4, "0");
@@ -1357,10 +1357,10 @@ function lampState(rid, prev, now = new Date()) {
   if (m < 0) return "rs";        // レース中(締め切りから5分)
   if (m <= 5) return "rb";
   if (m <= 10) return "ob";
-  if (m <= 20) return "gb";
+  if (m <= 15) return "gb";
   return "gs";
 }
-const LAMP_TIP = { gs: "発売中(締め切りまで20分より前)", gb: "締め切り20分前", ob: "締め切り10分前", rb: "締め切り5分前", rs: "レース中(締め切りから5分)" };
+const LAMP_TIP = { gs: "発売中(締め切りまで15分より前)", gb: "締め切り15分前", ob: "締め切り10分前", rb: "締め切り5分前", rs: "レース中(締め切りから5分)" };
 function updateLamps() {
   const now = new Date();
   document.querySelectorAll(".lamp[data-lamp]").forEach(l => {

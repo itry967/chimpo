@@ -128,7 +128,8 @@ function renderDateFolders() {
   for (const folder of dateFolders) {
     const option = document.createElement("option");
     option.value = folder.name;
-    option.textContent = folder.name.slice(0,4) + "/" + folder.name.slice(4,6) + "/" + folder.name.slice(6,8);
+    option.textContent = folder.name.slice(0,4) + "/" + folder.name.slice(4,6) + "/" + folder.name.slice(6,8)
+      + "(" + "日月火水木金土"[new Date(+folder.name.slice(0,4), +folder.name.slice(4,6)-1, +folder.name.slice(6,8)).getDay()] + ")";
     dateSelect.appendChild(option);
   }
   if (dateSelect.options.length) dateSelect.options[0].selected = true;
@@ -399,6 +400,14 @@ async function saveTransfer(payload) {
   return idbRetry(() => saveTransferOnce(payload));
 }
 async function saveTransferOnce(payload) {
+  // iPhone の Safari は、保存場所から読んだファイル(Blob)をもう一度書くと理由なしで取り消すことがあるので、中身を文字にして渡す(11/23)
+  if (payload.bundles) payload={...payload,bundles:await Promise.all(payload.bundles.map(async b => {
+    if (!b.blob) return b;
+    const {blob,...rest}=b;
+    const buf=new Uint8Array(await blob.arrayBuffer()); let bin="";
+    for (let i=0;i<buf.length;i+=32768) bin+=String.fromCharCode.apply(null,buf.subarray(i,i+32768));
+    return {...rest,b64:btoa(bin)};
+  }))};
   const db=await openTransferDb();
   try {
     await new Promise((resolve,reject) => {

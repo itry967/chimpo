@@ -284,6 +284,11 @@ async function fetchDayBundles(accessToken, accountEmail, dates) {
     days[date] = day;
   }
   for (const d of Object.keys(days)) if (!keepDateOnDevice(d, dates)) delete days[d];
+  // 前の版でファイル(Blob)の形で持っていた別の日の分は、文字(b64)が無いので捨てる(受け渡しで atob が失敗した。11/23)
+  for (const d of Object.keys(days)) {
+    for (const k of Object.keys(days[d] || {})) if (!days[d][k]?.b64) delete days[d][k];
+    if (!Object.keys(days[d] || {}).length) delete days[d];
+  }
   try {
     await saveBundleCache(accountEmail, {days});
     lastCacheSave = "できた";

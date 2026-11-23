@@ -258,6 +258,7 @@ async function expandBundles(bundles) {
   }
   const out = [];
   for (const b of bundles) {
+    if (!b.blob && !b.b64) continue;   // 中身の無い分(前の版のキャッシュ)は飛ばす
     const text = await new Response((b.blob || new Blob([Uint8Array.from(atob(b.b64), ch => ch.charCodeAt(0))])).stream().pipeThrough(new DecompressionStream("gzip"))).text();
     const data = JSON.parse(text);
     const date = data.date || b.date;

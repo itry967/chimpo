@@ -3284,8 +3284,6 @@ function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ"
   const tx = (X, Y, t, a = "middle") => `<text x="${X}" y="${Y}" font-size="11" fill="var(--muted)" text-anchor="${a}">${t}</text>`;
   g += tx(P + W / 2, P - 8, "↑ 内有利") + tx(P + W / 2, P + W + 18, "↓ 外有利") + tx(P - 4, P + W / 2 + 4, "前", "end") + tx(P + W + 4, P + W / 2 + 4, "後", "start") +
     tx(P, P + W + 18, "← 前有利", "start") + tx(P + W, P + W + 18, "後ろ有利 →", "end");
-  if (norm && norm.inner != null && norm.front != null)
-    g += `<g stroke="var(--muted)" stroke-width="2"><line x1="${x(norm.front) - 6}" y1="${y(norm.inner)}" x2="${x(norm.front) + 6}" y2="${y(norm.inner)}"/><line x1="${x(norm.front)}" y1="${y(norm.inner) - 6}" x2="${x(norm.front)}" y2="${y(norm.inner) + 6}"/><title>${BP_NORM} 内外 ${norm.inner.toFixed(2)}・前後 ${norm.front.toFixed(2)}</title></g>` ;
   for (const it of [...items, ...extra]) {
     const fi = it.front, ii = it.inner;
     if (fi?.v != null && ii?.v != null) labels.push([x(fi.v), y(ii.v), it.short || it.name, it.color]);
@@ -3348,6 +3346,11 @@ function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ"
       g += `<line x1="${lx}" y1="${ly}" x2="${cx}" y2="${cy}" stroke="${c}" stroke-width="1" opacity=".6"/>`;
     }
     g += `<text x="${bx}" y="${by + h - 2}" font-size="10" font-weight="600" fill="${c}" paint-order="stroke" stroke="var(--panel)" stroke-width="3">${esc(t)}</text>`;
+  }
+  // 平均の「＋」は、ほかの点の後ろに隠れないよう点のあとに描く(縁取り付き。2026-11-24 ユーザーの指示)
+  if (norm && norm.inner != null && norm.front != null) {
+    const nx = x(norm.front), ny = y(norm.inner), plus = `<line x1="${nx - 7}" y1="${ny}" x2="${nx + 7}" y2="${ny}"/><line x1="${nx}" y1="${ny - 7}" x2="${nx}" y2="${ny + 7}"/>`;
+    g += `<g><g stroke="var(--panel)" stroke-width="3">${plus}</g><g stroke="var(--text)" stroke-width="1.6">${plus}</g><title>${BP_NORM} 内外 ${norm.inner.toFixed(2)}・前後 ${norm.front.toFixed(2)}</title></g>`;
   }
   if (act && act.inner != null && act.front != null)
     g += `<rect x="${x(act.front) - 6}" y="${y(act.inner) - 6}" width="12" height="12" fill="#f5c400" stroke="var(--panel)" transform="rotate(45 ${x(act.front)} ${y(act.inner)})"><title>結果: 内外 ${act.inner.toFixed(3)}・前後 ${act.front.toFixed(3)}</title></rect>`;

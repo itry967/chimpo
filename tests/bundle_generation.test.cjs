@@ -1,0 +1,21 @@
+const fs = require('fs'), vm = require('vm'), assert = require('assert'), zlib = require('zlib');
+const js = fs.readFileSync('assets/js/predictions.js', 'utf8');
+const code = js.slice(js.indexOf('async function expandBundles('), js.indexOf('async function clearDriveTransferCache('));
+const ctx = vm.createContext({Response, Blob, DecompressionStream, Uint8Array, atob});
+vm.runInContext(code + '\nglobalThis.expand = expandBundles;', ctx);
+const sig = js.match(/const sigOf = item => ([^;]+);/);
+if (!sig) throw new Error('更新判定が見つかりません');
+vm.runInContext('globalThis.signature = item => ' + sig[1] + ';', ctx);
+const pack = (kind, generation) => ({date:'20000101', kind, b64:zlib.gzipSync(Buffer.from(JSON.stringify({date:'20000101',kind,...(generation ? {generation} : {}),files:[{p:kind+'.csv',t:'',c:'x'}]}))).toString('base64')});
+(async () => {
+  const a = 'a'.repeat(64), b = 'b'.repeat(64);
+  assert.strictEqual((await ctx.expand([pack('main',a),pack('odds',a)])).length,2);
+  const oldItems = await ctx.expand([pack('main',a),pack('odds',a)]);
+  const newItems = await ctx.expand([pack('main',b),pack('odds',b)]);
+  assert.notStrictEqual(ctx.signature(oldItems[0]), ctx.signature(newItems[0]), '世代更新で同サイズ・同時刻のCSVが再読込されません');
+  await assert.rejects(ctx.expand([pack('main',a),pack('odds',b)]), /揃っていません/);
+  await assert.rejects(ctx.expand([pack('main',a),pack('odds',null)]), /揃っていません/);
+  await assert.rejects(ctx.expand([pack('main',a)]), /揃っていません/);
+  assert.strictEqual((await ctx.expand([pack('main',null)])).length,1);
+  console.log('まとめファイルの版一致: 成功');
+})().catch(e => { console.error(e); process.exitCode = 1; });

@@ -95,6 +95,13 @@ async function readFile(file, path, modifiedTime) {
       if (!prev || new Date(stamp) > new Date(prev)) state.fileUpdated.set(folderKey, stamp);
     }
   }
+  if (cols.includes("区分") && cols.includes("コード") && cols.includes("3年")) {   // 人のレーティング.csv(騎手・調教師・馬主。2026-11-28)
+    const day = (name.match(/(\d{8})\/[^/]+$/) || [])[1];
+    if (!day) return 0;
+    state.people = state.people || new Map();
+    state.people.set(day, rows);
+    return 1;
+  }
   if (cols.includes("開催日目") && cols.includes("内外") && cols.includes("jyo_cd")) {   // 馬場傾向の推移.csv(この開催の日ごとの実績。11/23)
     const day = (name.match(/(\d{8})\/[^/]+$/) || [])[1];
     if (!day) return 0;
@@ -1695,7 +1702,7 @@ function renderRace(rid) {
     html += `<tr class="horse${why ? " has-why" : ""}" data-key="${key}"><td class="rank">${esc(r["平均_順位"])}${changeView() ? moveMark(rankMove(r)) : ""}</td><td class="mark-col">${markSelect(rid, r.umaban)}</td>` +
       `<td>${umaBadge(r.umaban, nUma)}</td><td class="name">${esc(r.horse_name)}${num(r["オッズで取消"]) === 1 ? ' <span class="dim">取消</span>' : ""}${cdot(r, "予想")}</td><td class="n">${ratingCell(r, "馬レーティング")}</td><td>${bar(num(r["平均_勝率"]), maxWin)}${changeView() ? winMove(r) : ""}</td><td>${placeBar(top2(r), top3(r), maxTop3)}${preTops(r, ms)}</td>` +
       `<td class="n hide-sm">${w == null ? "" : w + (z == null ? "" : `<span class="dim">(${z > 0 ? "+" : ""}${z})</span>`)}</td>` +
-      `<td class="jk"${jockeyRatingTitle(r) ? ` title="${esc(jockeyRatingTitle(r))}" tabindex="0"` : ""}>${jockeyOf(rid, r) ? esc(jockeyOf(rid, r)) : `<span class="dim">-</span>`}</td>` +
+      `<td class="jk"${jockeyRatingTitle(r) ? ` title="${esc(jockeyRatingTitle(r))}" tabindex="0"` : ""}>${jkLink(rid, r)}</td>` +
       `<td class="n">${ratingCell(r, "騎手レーティング")}</td>` +
       `<td class="n">${fix(num(r["妥当オッズ_単勝"]))}${gapMark(getOdds(rid, r.umaban, r), num(r["妥当オッズ_単勝"]), "単勝")}${colMove(r, "妥当オッズ_単勝", 1, true)} / ` +
       `${fix(num(r["妥当オッズ_複勝"]))}${gapMark(num(r["複勝オッズ_下限"]), num(r["妥当オッズ_複勝"]), "複勝(下限)")}${colMove(r, "妥当オッズ_複勝", 1, true)}</td>` +
@@ -1985,16 +1992,51 @@ function calibrationInfo(rows) {
 function horseRating(r) {
   return num("馬レーティング_U71" in r ? r["馬レーティング_U71"] : r["馬レーティング"]);
 }
+// 人のレーティング(人のレーティング.csv。2026-11-28 ユーザーの指示「騎手は表示の期間を3年に」「騎手名を押すと通算・1年・3年・芝・ダ・競馬場・距離別」)
+function personRow(rid, kind, name) {
+  const rows = state.people?.get(String(rid).slice(0, 8));
+  return rows && name ? rows.find(x => x["区分"] === kind && x["名前"] === name) || null : null;
+}
+const personScore = v => v == null || !Number.isFinite(v) ? null : Math.max(0, 50 + v * 100);
 function jockeyRating(r) {
+  const p = personRow(r.race_id, "騎手", r.jockey_name || jockeyOf(r.race_id, r));
+  if (p) { const n = num(p["3年_走数"]); return n > 0 ? num(p["3年"]) : null; }   // 3年(人のレーティング.csv)が無い日は前の1年の列
   const n = num(r["騎手レーティング対象数"]);
   return n != null && n > 0 ? num(r["騎手レーティング"]) : null;
 }
 function jockeyRatingTitle(r) {
   const v = jockeyRating(r);
   if (v == null || !Number.isFinite(v)) return "";
-  const score = Math.max(0, 50 + v * 100);
-  return `騎手レーティング: ${score.toFixed(3)}点（基準50点、換算前 ${v > 0 ? "+" : ""}${v.toFixed(6)}、対象 ${num(r["騎手レーティング対象数"])}走）`;
+  const p = personRow(r.race_id, "騎手", r.jockey_name || jockeyOf(r.race_id, r));
+  return p ? `騎手レーティング(前日までの3年): ${personScore(v).toFixed(1)}点(基準50点、${num(p["3年_走数"])}走・確度 ${p["確度"]})。騎手名を押すと条件別` :
+    `騎手レーティング(前日までの1年): ${personScore(v).toFixed(1)}点(基準50点、対象 ${num(r["騎手レーティング対象数"])}走)`;
 }
+const JYO_NAME = c => (typeof JYO !== "undefined" && JYO[String(c).padStart(2, "0")]) || c;
+function personModal(rid, kind, name) {
+  const p = personRow(rid, kind, name);
+  if (!p) { alert(`${name} のレーティングがありません(この日の 人のレーティング.csv が無いか、名前が見つからない)`); return; }
+  const cols = Object.keys(p).filter(c => !c.endsWith("_走数") && !["区分", "コード", "名前", "確度"].includes(c));
+  const label = c => c.startsWith("場") ? JYO_NAME(c.slice(1)) : c === "〜1400" ? "〜1400m" : c === "〜1800" ? "1401〜1800m" : c === "〜2200" ? "1801〜2200m" : c === "2201〜" ? "2201m〜" : c;
+  const group = c => ["通算", "1年", "3年"].includes(c) ? "期間" : ["芝", "ダート"].includes(c) ? "芝ダ(3年)" : c.startsWith("場") ? "競馬場(3年)" : "距離(3年)";
+  let h = `<div class="bpz-back"><div class="bpz" style="height:auto;max-height:90%;width:min(520px,100%)"><div class="bpz-bar"><b>${esc(kind)} ${esc(name)} のレーティング</b><span style="flex:1"></span><button class="pm-close">閉じる</button></div>` +
+    `<div style="padding:10px 14px;overflow:auto"><table><tr><th>区分</th><th>条件</th><th class="n">点数</th><th class="n">走数</th></tr>`;
+  for (const c of cols) {
+    const v = num(p[c]), n = num(p[c + "_走数"]);
+    h += `<tr><td class="muted" style="font-size:12px">${esc(group(c))}</td><td>${esc(label(c))}</td><td class="n">${n > 0 && v != null ? `<b class="${personScore(v) >= 55 ? "hi" : ""}">${personScore(v).toFixed(1)}</b>` : `<span class="dim">-</span>`}</td><td class="n">${n ? n.toLocaleString() : 0}</td></tr>`;
+  }
+  h += `</table><div class="note">騎乗馬の強さ(前日までの馬のレーティング)から見込まれる着順と、実際の着順の差を、前日までの期間で平均して100倍し、50点を平均とした点数。高いほど見込みより上の着順に持ってきている。` +
+    `走数が少ない条件は平均(50点)に寄せている。確度(3年の走数): ${esc(p["確度"] || "-")}。表示のためのもので、予想には使っていない。</div></div></div></div>`;
+  const d = document.createElement("div"); d.innerHTML = h; const back = d.firstElementChild;
+  back.addEventListener("click", e => { if (e.target === back || e.target.closest(".pm-close")) back.remove(); });
+  document.body.appendChild(back);
+}
+document.addEventListener("click", e => {
+  const a = e.target.closest?.(".jkLink");
+  if (!a) return;
+  e.preventDefault(); e.stopPropagation();
+  personModal(a.dataset.rid, "騎手", a.dataset.name);
+});
+const jkLink = (rid, r) => { const nm = jockeyOf(rid, r); return nm ? `<a href="#" class="jkLink" data-rid="${rid}" data-name="${esc(nm)}" title="押すと条件別のレーティング">${esc(nm)}</a>` : `<span class="dim">-</span>`; };
 function ratingCell(r, name) {
   const v = name === "騎手レーティング" ? jockeyRating(r) : horseRating(r);
   if (v == null || !Number.isFinite(v)) return `<span class="dim">-</span>`;
@@ -2365,7 +2407,7 @@ function renderViz(rid, rows, favBox = "") {
   for (const { r, b, k, o, nk } of items) {
     const [lo, hi, p10, p90, mean] = b, inB = k != null && k >= lo && k <= hi;
     h += `<div class="viz-row" title="${esc(r.horse_name)}: 着順の見込み ${bandStr(b)}(80% の範囲 ${p10}〜${p90}、平均 ${mean.toFixed(1)}着)${k != null ? `・結果 ${k}着` : ""}">` +
-      `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-jk">${jockeyOf(rid, r) ? esc(jockeyOf(rid, r)) : `<span class="dim">-</span>`}</div>` +
+      `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-jk">${jkLink(rid, r)}</div>` +
       `<div class="viz-n">${nk ?? `<span class="dim">-</span>`}</div><div class="viz-n">${o != null ? fix(o) : `<span class="dim">-</span>`}</div><div class="viz-n">${num(r[pre ? "枠順時_順位" : "平均_順位"]) ?? "-"}${cdot(r, "予想")}</div>` +
       `<div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${k}</b>` : `<span class="dim">-</span>`}</div><div class="viz-track">` +
       gridTicks.map(t => `<span class="viz-grid" style="left:${x(t)}"></span>`).join("") +
@@ -2421,7 +2463,7 @@ function renderVizSec(rid, rows, secs, favBox) {
   for (const { r, v, k, o, nk } of items) {
     const inB = k != null && v.lo != null && v.hi != null && k >= v.lo - 1e-9 && k <= v.hi + 1e-9;
     h += `<div class="viz-row" title="${esc(r.horse_name)}: 予想 ${tm(v.s)}(20〜80% ${tm(v.lo)}〜${tm(v.hi)})${k != null ? `・結果 ${tm(k)}` : ""}">` +
-      `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-jk">${jockeyOf(rid, r) ? esc(jockeyOf(rid, r)) : `<span class="dim">-</span>`}</div>` +
+      `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-jk">${jkLink(rid, r)}</div>` +
       `<div class="viz-n">${nk ?? `<span class="dim">-</span>`}</div><div class="viz-n">${o != null ? fix(o) : `<span class="dim">-</span>`}</div>` +
       `<div class="viz-n">${tm(v.s)}</div><div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${tm(k)}</b>` : `<span class="dim">-</span>`}</div><div class="viz-track">` +
       ticks.map(t => `<span class="viz-grid" style="left:${x(t)}${t === 0 ? ";opacity:.9;border-left-style:solid" : ""}"></span>`).join("") +

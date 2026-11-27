@@ -1597,6 +1597,17 @@ function renderRace(rid) {
   // モデルごとの自信と区分の回収率(カードの一番下に出す)
   let modelCard = `<div class="card"><h3>モデルごとの自信と、その区分の過去の回収率${updTag("予想", rid)}</h3><div class="scroll"><table>` +
     `<tr><th>モデル</th><th>区分</th>${bets.map(b => `<th class="n">${esc(b)}</th>`).join("")}</tr>`;
+  // 総合の行(2026-11-28 ユーザーの指示「自信の区分ごとの回収率みたいに総合を」): 6モデルの平均の自信の上位%から区分を決め、
+  // 自信の区分ごとの回収率.csv の「総合」の行の回収率を出す
+  {
+    const c = confLevel(rows), top = c?.top;
+    const edges = [5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 101];
+    const labels = ["上位5%", "上位5〜10%", "上位10〜15%", "上位15〜20%", "上位20〜30%", "上位30〜40%", "上位40〜50%", "上位50〜60%", "上位60〜70%", "上位70〜80%", "上位80〜90%", "上位90〜100%"];
+    const lab = top == null ? null : labels[edges.findIndex(e => top < e)] ?? labels[labels.length - 1];
+    const br = lab && (state.band || []).find(x => x["モデル"] === "総合" && x["自信の区分"] === lab);
+    if (br) modelCard += `<tr style="font-weight:600"><td style="font-size:12px">総合(6モデルの平均)</td><td><span class="chip ${bandTone(lab)}" title="上位 ${fix(top)}%${c.exact ? "" : "(各モデルの平均で代用)"}">${esc(bandShort(lab))}</span></td>` +
+      bets.map(b => { const v = num(br[`${b}_回収率`]); return `<td class="n"><span class="${v >= 100 ? "hi" : ""}">${v == null ? "" : fix(v) + "%"}</span></td>`; }).join("") + `</tr>`;
+  }
   for (const m of ms) {
     const roi = roiOf(m);
     modelCard += `<tr><td style="font-size:12px">${esc(m)}</td><td><span class="chip ${bandTone(r0[`${m}_自信の区分`])}" ` +

@@ -102,6 +102,12 @@ async function readFile(file, path, modifiedTime) {
     state.blockBias.set(day, rows);
     return 1;
   }
+  if (cols.includes("race_id") && cols.includes("秒差_下") && cols.includes("秒差_上")) {   // タイム_….csv(U69 の走破タイムの予想と幅。2026-11-28)
+    state.times = state.times || new Map();
+    state.times.set(rows[0].race_id, new Map(rows.map(r => [String(+r.umaban), { s: num(r["予想秒差"]), lo: num(r["秒差_下"]), hi: num(r["秒差_上"]),
+      t: num(r["予想タイム"]), tl: num(r["タイム_下"]), th: num(r["タイム_上"]) }])));
+    return 1;
+  }
   if (cols.includes("race_id") && cols.includes("平均_勝率")) {
     const rid = rows[0].race_id;
     if (rows.some(r => r.race_id !== rid)) return 0;   // 複数のレースが入った CSV(昔の形)は読まない
@@ -1782,6 +1788,7 @@ function renderRace(rid) {
     const d = document.getElementById("guide"); if (!d.open) d.showModal();
   }));
   document.getElementById("vizPre")?.addEventListener("change", e => { state.vizPre = e.target.checked; renderRace(rid); });
+  document.querySelectorAll("button.vizAxis").forEach(b => b.onclick = () => { state.vizAxis = b.dataset.v; renderRace(rid); });
   document.querySelectorAll(".vizSort").forEach(b => b.onclick = () => {
     const cur = ["res", "uma", "ninki", "odds"].includes(state.vizSort) ? state.vizSort : "pred";
     state.vizDir = cur === b.dataset.k && state.vizDir !== -1 ? -1 : 1; state.vizSort = b.dataset.k; renderRace(rid);
@@ -2307,6 +2314,9 @@ function renderViz(rid, rows, favBox = "") {
   const n = rows.length;
   if (n < 2) return "";
   const hasPreV = rows.some(r => num(r["枠順時_勝率"]) != null);
+  // 2026-11-28: 走破タイムの版(U69 の幅つき)。タイム_….csv があるレースだけ
+  const secs = state.times?.get(rid);
+  if (secs && state.vizAxis === "sec") return renderVizSec(rid, rows, secs, favBox);
   const pre = hasPreV && !!state.vizPre;
   const m = pre ? "枠順時" : "平均";
   const x = v => ((v - 0.5) / n * 100).toFixed(2) + "%";
@@ -2336,7 +2346,7 @@ function renderViz(rid, rows, favBox = "") {
   const sb = (k, l, tip) => `<span class="vizSort${sort === k ? " on" : ""}" data-k="${k}" title="${tip}で並べる">${l}${sort === k ? (dir === 1 ? " ▲" : " ▼") : ""}</span>`;
   let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想<button class="help" data-help="viz" title="ビジュアライズ予想の各項目の説明">？</button>${updTag(["予想"], rid)}</h3>` +
     `<div class="calc" style="margin-bottom:6px;gap:10px">` +
-    favBox + (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
+    favBox + (secs ? `<span class="tabs" style="margin:0"><button class="vizAxis on" data-v="rank">着順</button><button class="vizAxis" data-v="sec" title="走破タイムの予想と幅(U69。予想の勝ちタイムを 0 にそろえる)">走破タイム</button></span>` : "") + (hasPreV ? `<label title="馬体重が出る前(枠順確定の時点)の予想の勝率で描く"><input type="checkbox" id="vizPre" ${pre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
     `<span class="muted" style="font-size:12px">列の見出し(馬番・人気・単勝・予想着順・結果)を押すと並べ替え</span>` +
     `<button class="nkMarksBtn" title="このページの印を netkeiba のこのレースに転記する(確認のダイアログが出る。使い方は右の ？)">netkeiba に印を転記</button><button class="help nkHelpBtn" title="netkeiba への印の転記の使い方(ブックマークの登録)">？</button>${nkSentTag(rid)}</div>` +
     `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-jk muted">騎手</div><div class="viz-n">${sb("ninki", "人気", "人気")}</div><div class="viz-n">${sb("odds", "単勝", "単勝オッズ")}</div><div class="viz-n">${sb("pred", "予想着順", "予想着順")}</div><div class="viz-n">${sb("res", "結果", "結果")}</div><div class="viz-track">` +
@@ -2357,6 +2367,60 @@ function renderViz(rid, rows, favBox = "") {
   return h + `</div><div class="note">${pre ? "馬体重確定前(枠順確定の時点)" : "今"}の平均の勝率から、勝率の高い馬から順に残りの馬の勝率の比で着順を決めるくり返しで作った着順の分布。` +
     `「予想着順」は予想の順位(勝率の順)、「結果」は実際の着順。太い帯は実際の着順が半々で入る範囲(表の「着順の見込み」)、細い線は 80% の範囲、点は平均の着順。` +
     `結果が出たレースは、実際の着順を黄色の ◆ で出す。帯が短いほど予想がはっきりしている。モデルの勝率だけから作った見込みで、当たり方はまだ確かめていない。</div></div>`;
+}
+function renderVizSec(rid, rows, secs, favBox) {
+  // 走破タイムの版(U69。2026-11-28 ユーザーの指示「着順と同じように騎手・人気・単勝」「予想走破タイムの列」
+  // 「グラフの0秒を予想走破タイム(予想の勝ちタイム)にし、結果はそれを基に点を打つ」)。
+  // 横の軸 = 予想の勝ちタイム(そのレースで一番速い予想)からの秒。点 = その馬の予想、帯 = 20〜80% の幅、◆ = 実際の走破タイム − 予想の勝ちタイム
+  const n = rows.length;
+  const any = [...secs.values()][0] || {};
+  const hasT = any.t != null;
+  const t0 = hasT ? Math.min(...[...secs.values()].map(v => v.t).filter(v => v != null)) : null;   // 予想の勝ちタイム
+  const resRows = state.results.get(rid) || [];
+  const win = resRows.find(x => num(x["着順"]) === 1);
+  const resOf = u => {
+    const x = resRows.find(y => String(+y["馬番"]) === u);
+    if (!x) return null;
+    if (hasT) { const a = parseRunTime(x["走破タイム"]); return a == null ? null : a - t0; }
+    return num(x["着順"]) === 1 ? 0 : num(x["タイム差"]);   // 予想タイムが無いときは 1着からの秒差
+  };
+  const items = rows.map(r => { const u = String(+r.umaban), v = secs.get(u); return v && v.s != null ? { r, v, k: resOf(u), o: getOdds(rid, r.umaban, r) } : null; }).filter(Boolean);
+  const oddsSorted = items.map(o => o.o).filter(v => v != null && v > 0).sort((a, b) => a - b);
+  for (const o of items) o.nk = o.o != null && o.o > 0 ? oddsSorted.indexOf(o.o) + 1 : null;
+  const sort = ["uma", "res", "ninki", "odds"].includes(state.vizSort) ? state.vizSort : "pred";
+  const dir = state.vizDir === -1 ? -1 : 1;
+  const val = o => sort === "uma" ? +o.r.umaban : sort === "res" ? o.k : sort === "ninki" ? o.nk : sort === "odds" ? o.o : o.v.s;
+  items.sort((a, b) => val(a) == null ? (val(b) == null ? +a.r.umaban - +b.r.umaban : 1) :
+    val(b) == null ? -1 : dir * (val(a) - val(b)) || +a.r.umaban - +b.r.umaban);
+  const sb = (k, label, tip) => `<span class="vizSort${sort === k ? " on" : ""}" data-k="${k}" title="${tip}で並べる">${label}${sort === k ? (dir === 1 ? " ▲" : " ▼") : ""}</span>`;
+  // 軸の範囲: 予想の幅と結果がおさまるように(はみ出す結果は端に寄せる)。0.5秒刻みに丸める
+  const vals = items.flatMap(o => [o.v.lo, o.v.hi, o.k].filter(v => v != null));
+  const lo = Math.floor(Math.min(-0.5, ...vals.filter(v => v > -3)) * 2) / 2, hi = Math.ceil(Math.min(Math.max(1, ...vals), 6) * 2) / 2;
+  const x = v => ((Math.min(Math.max(v, lo), hi) - lo) / (hi - lo) * 96 + 2).toFixed(2) + "%";
+  const step = hi - lo > 4 ? 1 : 0.5, ticks = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(1));
+  const lab = v => v === 0 ? (hasT ? clock(t0) : "0秒") : `${v > 0 ? "+" : ""}${v}秒`;
+  const tm = v => v == null ? "-" : hasT ? clock(t0 + v) : `${v.toFixed(2)}秒`;
+  let h = `<div class="card day-fold viz-card"><h3>ビジュアライズ予想<button class="help" data-help="viz" title="ビジュアライズ予想の各項目の説明">？</button>${updTag(["予想", "タイム"], rid)}</h3>` +
+    `<div class="calc" style="margin-bottom:6px;gap:10px">${favBox}<span class="tabs" style="margin:0"><button class="vizAxis" data-v="rank">着順</button><button class="vizAxis on" data-v="sec">走破タイム</button></span>` +
+    `<span class="muted" style="font-size:12px">列の見出し(馬番・人気・単勝・予想タイム・結果)を押すと並べ替え</span></div>` +
+    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-jk muted">騎手</div>` +
+    `<div class="viz-n">${sb("ninki", "人気", "人気")}</div><div class="viz-n">${sb("odds", "単勝", "単勝オッズ")}</div><div class="viz-n">${sb("pred", "予想", "予想タイム")}</div><div class="viz-n">${sb("res", "結果", "実際の走破タイム")}</div><div class="viz-track">` +
+    ticks.map(t => `<span class="viz-tick" style="left:${x(t)}${t === 0 ? ";font-weight:700;color:var(--text)" : ""}">${lab(t)}</span>`).join("") + `</div><div></div></div>`;
+  for (const { r, v, k, o, nk } of items) {
+    const inB = k != null && v.lo != null && v.hi != null && k >= v.lo - 1e-9 && k <= v.hi + 1e-9;
+    h += `<div class="viz-row" title="${esc(r.horse_name)}: 予想 ${tm(v.s)}(20〜80% ${tm(v.lo)}〜${tm(v.hi)})${k != null ? `・結果 ${tm(k)}` : ""}">` +
+      `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-jk">${jockeyOf(rid, r) ? esc(jockeyOf(rid, r)) : `<span class="dim">-</span>`}</div>` +
+      `<div class="viz-n">${nk ?? `<span class="dim">-</span>`}</div><div class="viz-n">${o != null ? fix(o) : `<span class="dim">-</span>`}</div>` +
+      `<div class="viz-n">${tm(v.s)}</div><div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${tm(k)}</b>` : `<span class="dim">-</span>`}</div><div class="viz-track">` +
+      ticks.map(t => `<span class="viz-grid" style="left:${x(t)}${t === 0 ? ";opacity:.9;border-left-style:solid" : ""}"></span>`).join("") +
+      (v.lo != null && v.hi != null ? `<span class="viz-b" style="left:calc(${x(v.lo)} - 6px);width:calc(${x(v.hi)} - ${x(v.lo)} + 12px)"></span>` : "") +
+      `<span class="viz-dot" style="left:${x(v.s)}"></span>` + (k != null ? `<span class="viz-res${inB ? " in" : ""}" style="left:${x(k)}" title="結果 ${tm(k)}"></span>` : "") +
+      `</div><div class="viz-txt">${v.lo != null ? `${v.lo.toFixed(1)}〜${v.hi.toFixed(1)}` : ""}</div></div>`;
+  }
+  return h + `</div><div class="note">走破タイムの予想(U69。LightGBM の分位回帰で 1着からの秒差の 20%・50%・80% を予想し、勝ちタイムの予想に足したもの)。` +
+    `横の軸の 0 は、このレースの予想の勝ちタイム${hasT ? `(${clock(t0)})` : ""}で、右へいくほど遅い。点は予想、帯は 20〜80% の幅、◆ は実際の走破タイム(結果が出たら。帯の中なら緑)。` +
+    `右端の数字は幅(予想の勝ちタイムからの秒)。2023年で確かめると、幅に実際が入った割合は 56%(狙いの 60% より少し狭い)。勝ちタイムの予想のぶれはまだ幅に入っていない。予想(勝率)には使っていない。</div></div>`;
 }
 function vizHelpHTML() {
   return `<p>1頭1行で、その馬が実際に何着くらいに来そうかの見込みを横向きの図で出す。横の軸は着順で、左が1着、右が最下位。</p>` +

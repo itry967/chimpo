@@ -5046,6 +5046,23 @@ document.getElementById("theme").onclick = () => {
   if (theme) { theme.textContent = "◐ ダークモード切替"; set.appendChild(theme); }
   const fh = document.getElementById("foldHorses")?.closest("label");
   if (fh) set.appendChild(fh);
+  // 11/28 ユーザーの指示: 各項目の末尾の補足説明(.note)を出さない設定。既定は出す(このブラウザに覚えておく)
+  const hn = document.createElement("label");
+  hn.title = "✓のとき、各項目の末尾の補足説明を出さない";
+  hn.innerHTML = '<input type="checkbox" id="hideNotes"> 補足説明を表示しない';
+  set.appendChild(hn);
+  const hnBox = hn.querySelector("input");
+  try { hnBox.checked = localStorage.getItem("keiba-viewer:hideNotes") === "1"; } catch (e) {}
+  document.body.classList.toggle("hide-notes", hnBox.checked);
+  hnBox.addEventListener("change", () => {
+    document.body.classList.toggle("hide-notes", hnBox.checked);
+    try { localStorage.setItem("keiba-viewer:hideNotes", hnBox.checked ? "1" : "0"); } catch (e) {}
+  });
+  if (!document.getElementById("hideNotesCss")) {
+    const st = document.createElement("style"); st.id = "hideNotesCss";
+    st.textContent = "body.hide-notes main .note, body.hide-notes #app .note { display: none !important; }";
+    document.head.appendChild(st);
+  }
   const closeAll = () => { help.hidden = true; set.hidden = true; };
   document.getElementById("helpMenuBtn").onclick = e => { e.stopPropagation(); const o = help.hidden; closeAll(); help.hidden = !o; };
   document.getElementById("setMenuBtn").onclick = e => { e.stopPropagation(); const o = set.hidden; closeAll(); set.hidden = !o; };

@@ -3568,6 +3568,7 @@ function renderDayPage(date) {
     keepScroll(() => renderDayPage(date));
   });
   bindFund(date);
+  main.querySelectorAll("th.simSortTh").forEach(th => th.onclick = () => { state.simSort = th.dataset.v; keepScroll(() => renderDayPage(date)); });
   main.querySelectorAll(".simBtn").forEach(b => b.onclick = () => {
     if (b.dataset.k === "simMode") setSimMode(b.dataset.v);
     else if (b.dataset.k.startsWith("diff")) setDiff(b.dataset.k, b.dataset.v === "1");
@@ -4197,8 +4198,7 @@ function renderDaySim(date, raceLink) {
     `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">買い方:</span>` +
     FUND_MODES.map(([k, l]) => btn("simMode", k, l, mode === k)).join("") +
     `<span class="muted" style="align-self:center;margin-left:6px">(資金配分案のモードとは別)</span></div>` +
-    `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">並び:</span>` +
-    btn("simSort", "rank", "順位順", simSort === "rank") + btn("simSort", "race", "レース順(発走順)", simSort === "race") + `</div>`;
+    "";   // 並びは表の列名(レース・順位)を押して変える(11/28 ユーザーの指示)
   const rows = [];
   let cost = 0, back = 0, setCost = 0, hitRaces = 0, setRaces = 0, waitRaces = 0;
   for (const x of P.ok) {
@@ -4226,7 +4226,7 @@ function renderDaySim(date, raceLink) {
     (waitRaces ? kpi(`${waitRaces}レース`, "結果待ち(収支に入れない)") : "") + `</div>`;
   if (!P.ok.length) h += `<div class="muted">この場のレースの予想がありません。</div>`;
   else {
-    h += `<div class="scroll" style="max-height:560px;overflow-y:auto"><table><tr><th>レース</th><th class="n" title="見込みの回収率と期待値の平均の順">順位</th><th class="n">見込み</th><th class="n">期待値</th><th>買い方</th><th>券種</th><th>買い目</th><th class="n">金額</th><th class="n">払戻</th><th class="n">レースの収支</th></tr>`;
+    h += `<div class="scroll" style="max-height:560px;overflow-y:auto"><table><tr><th class="simSortTh" data-v="race" style="cursor:pointer" title="押すとレース順(発走順)に並べる">レース${simSort === "race" ? " ▲" : ""}</th><th class="n simSortTh" data-v="rank" style="cursor:pointer" title="見込みの回収率と期待値の平均の順。押すと順位順に並べる">順位${simSort === "rank" ? " ▲" : ""}</th><th class="n">見込み</th><th class="n">期待値</th><th>買い方</th><th>券種</th><th>買い目</th><th class="n">金額</th><th class="n">払戻</th><th class="n">レースの収支</th></tr>`;
     for (const r of rows) {
       if (r.skip || r.none) {
         const rk = rank.get(r.x.rid);

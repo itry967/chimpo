@@ -3379,7 +3379,11 @@ function updateRaceStatus() {
     const date = state.dayPage;
     const fullDate = ymdw(date);
     const shortDate = fullDate.replace(/^\d{4}\//, "");
-    status.innerHTML = `<span class="status-date-full">${fullDate}</span><span class="status-date-short">${shortDate}</span>　日別ページ`;
+    // 11/28 ユーザーの指示: 日別ページも ◀▶ で日を切り替える(データのある日だけ。◀ = 前の日)
+    const days = [...new Set([...state.races.keys()].map(x => x.slice(0, 8)))].sort(), di = days.indexOf(date);
+    const dbtn = (to, s, t) => `<button class="rhMove dayMove" data-to="${to || ""}" ${to ? "" : "disabled"} title="${t}">${s}</button>`;
+    status.innerHTML = `${dbtn(days[di - 1], "◀", "前の日")}<span class="status-date-full">${fullDate}</span><span class="status-date-short">${shortDate}</span>${dbtn(days[di + 1], "▶", "次の日")}　日別ページ`;
+    status.querySelectorAll("button.dayMove").forEach(b => b.onclick = e => { e.stopPropagation(); if (!b.dataset.to) return; state.dayPage = b.dataset.to; state.open.clear(); render(); window.scrollTo(0, 0); });
   } else if (state.races.has(state.current)) {
     const rid = state.current;
     const date = rid.slice(0, 8);

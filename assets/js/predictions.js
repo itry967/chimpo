@@ -1643,9 +1643,11 @@ function placeBar(top2, top3, max) {
   const w2 = max > 0 && top2 != null ? Math.max(0, top2 / max * 100) : 0;
   return `<div class="bar place-bar" title="2着内 ${pct(top2)} / 3着内 ${pct(top3)}"><i class="place-top3" style="width:${w3}%"></i><i class="place-top2" style="width:${w2}%"></i><span>2着内 ${pct(top2)} / 3着内 ${pct(top3)}</span></div>`;
 }
+// 前の名前で書かれた CSV も新しい名前で出す(11/28 ユーザーの指示「分かりやすい表現に」)
+const REASON_ALIAS = { "父の産駒の2歳・新馬の成績": "父の早熟度(産駒の2歳・新馬の成績)" };
 function parseReasons(text) {
   const out = []; const re = /(.*?)\(([+-]\d+(?:\.\d+)?)\)(?:・|$)/g; let m;
-  while ((m = re.exec(text || "")) && m[0]) out.push([m[1], +m[2]]);
+  while ((m = re.exec(text || "")) && m[0]) out.push([REASON_ALIAS[m[1]] || m[1], +m[2]]);
   return out;
 }
 const CATS = ["能力", "適性", "調子", "人", "展開"];
@@ -1935,6 +1937,8 @@ function renderRace(rid) {
   });
   document.getElementById("simpleView")?.addEventListener("change", e => {
     try { localStorage.setItem("keiba-viewer:detail", e.target.checked ? "1" : "0"); } catch (err) { state.detail = e.target.checked; }
+    // 11/28 ユーザーの指示: 切り替えたときは、行ごとに開いた・たたんだ状態を捨てて全頭そろえる
+    state.open.clear(); state.whyOpen?.clear();
     renderRace(rid);
   });
   document.querySelectorAll(".tabs.combo button").forEach(b => b.onclick = () => { state.comboTab = b.dataset.t; renderRace(rid); });

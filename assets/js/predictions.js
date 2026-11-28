@@ -95,6 +95,13 @@ async function readFile(file, path, modifiedTime) {
       if (!prev || new Date(stamp) > new Date(prev)) state.fileUpdated.set(folderKey, stamp);
     }
   }
+  if (cols.includes("馬場状態") && cols.includes("内外") && cols.includes("レース数") && !cols.includes("開催日目")) {   // 馬場状態ごとの傾向.csv(V4。2026-11-28)
+    const day = (name.match(/(\d{8})\/[^/]+$/) || [])[1];
+    if (!day) return 0;
+    state.stateBias = state.stateBias || new Map();
+    state.stateBias.set(day, rows);
+    return 1;
+  }
   if (cols.includes("時計_例年同開催") && cols.includes("芝ダ")) {   // 時計の比べ.csv(V3。2026-11-28)
     const day = (name.match(/(\d{8})\/[^/]+$/) || [])[1];
     if (!day) return 0;
@@ -1753,7 +1760,7 @@ function renderRace(rid) {
     front: { v: num(r0["今日の前後"]), lo: num(r0["今日の前後"]), hi: num(r0["今日の前後"]), html: `<b>${num(r0["今日の前後"]) >= 0 ? "+" : ""}${num(r0["今日の前後"]).toFixed(3)}</b>` } }] : [];
   const bNorm = { inner: biasNorm(bItems.find(x => x.inner)?.inner.guide || ""), front: biasNorm(bItems.find(x => x.front)?.front.guide || "") };
   const rSurf = state.info.get(rid)?.["芝ダ"] || r0["芝ダ"] || "";
-  const bias = bItems.length ? biasPanel(bItems, bNorm, ra && (ra.inner != null || ra.front != null) ? { ...ra, name: "このレースの結果" } : null, todayPt,
+  const bias = bItems.length ? biasPanel(bItems, bNorm, ra && (ra.inner != null || ra.front != null) ? { ...ra, name: "このRの結果" } : null, [...todayPt, ...stateBiasPts(rid)],
     "馬場傾向マップ", blockTrail(rid.slice(0, 8), rid.slice(8, 10), rSurf)) : "";
   const tenkaiCard = `<div class="card" data-fold="baba-tenkai"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">展開予想${updTag("予想", rid)}</h3>${favBox}</div>${favNote}` +
     `${pace || `<span class="muted">列がありません</span>`}` +
@@ -3389,7 +3396,7 @@ function renderDayPage(date) {
     };
     const dItems = BP_ITEMS.map(([n, color]) => ({ name: n, color, inner: cellOf(n + "の内外"), front: cellOf(n + "の前後") })).filter(x => x.inner || x.front);
     const dNorm = { inner: biasNorm(dItems.find(x => x.inner)?.inner.guide || ""), front: biasNorm(dItems.find(x => x.front)?.front.guide || "") };
-    const items = dItems.length ? biasPanel(dItems, dNorm, act?.done && (act.inner != null || act.front != null) ? { inner: act.inner, front: act.front, name: final ? "この日の結果" : "この日の結果(途中)" } : null, [], "馬場傾向マップ",
+    const items = dItems.length ? biasPanel(dItems, dNorm, act?.done && (act.inner != null || act.front != null) ? { inner: act.inner, front: act.front, name: final ? "この日の結果" : "この日の結果(途中)" } : null, stateBiasPts(rs[0]), "馬場傾向マップ",
       blockTrail(date, bj, s)) : "";
     // 実際の馬場傾向(結果)。場の最終レースまで結果がそろうまでは「確定前」(途中の値は薄く出す)
     let res = "";
@@ -3671,6 +3678,21 @@ document.addEventListener("click", e => {
   document.body.appendChild(wrap);
 });
 const BP_NORM = "このコースの平均(2019〜23年)";   // 「ふだん」の言い換え(11/23 ユーザーの指示「何を示すのかわかりやすく」)
+// V4(11/23 ユーザーの指示): 馬場傾向マップに、馬場状態ごとの過去3年の傾向の点(今の馬場状態は目立たせ、20レース未満は薄く)
+function stateBiasPts(rid) {
+  const rows = state.stateBias?.get(String(rid).slice(0, 8));
+  if (!rows) return [];
+  const inf = state.info.get(rid) || {};
+  const surf = String(inf["芝ダ"] || "").startsWith("芝") ? "芝" : "ダート";
+  const cur = String(inf["馬場"] || inf["馬場状態"] || "");
+  const isCur = s => cur.includes(s) && (s !== "重" || !cur.includes("稍"));
+  return rows.filter(x => String(x.jyo_cd).padStart(2, "0") === String(rid).slice(8, 10) && x["芝ダ"] === surf).map(x => {
+    const s = x["馬場状態"], n = num(x["レース数"]) || 0, i = num(x["内外"]), f = num(x["前後"]), on = isCur(s);
+    const cell = v => ({ v, lo: v, hi: v, html: `<b>${v >= 0 ? "+" : ""}${v.toFixed(3)}</b>` });
+    return { name: `過去3年の${s}(${n}レース)`, short: `${s}${on ? "(今)" : ""}`, color: on ? "#8b5cf6" : "#9ca3af", op: n < 20 ? 0.35 : on ? 1 : 0.8,
+      r: on ? 7 : 4, noLabel: !on && n < 20, inner: cell(i), front: cell(f) };
+  }).filter(x => x.inner.v != null && x.front.v != null);
+}
 function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ", trail = []) {
   // 前の開催日は実績の値そのものなので「（予想）」を付けない(11/23 ユーザーの指示)
   items = items.map(it => ({ ...it, name: it.name === "前の開催日" || it.name === "過去の同じ週" ? it.name : it.name + "（予想）" }));   // 表と図の名前は「この開催（予想）」(11/23 ユーザーの指示)
@@ -3690,12 +3712,12 @@ function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ"
     tx(P, P + W + 18, "← 前有利", "start") + tx(P + W, P + W + 18, "後ろ有利 →", "end");
   for (const it of [...items, ...extra]) {
     const fi = it.front, ii = it.inner;
-    if (fi?.v != null && ii?.v != null) labels.push([x(fi.v), y(ii.v), it.short || it.name, it.color]);
+    if (fi?.v != null && ii?.v != null && !it.noLabel) labels.push([x(fi.v), y(ii.v), it.short || it.name, it.color]);
     if (fi?.v == null || ii?.v == null) continue;
     const lab = `${it.name}: 内外 ${ii.v >= 0 ? "+" : ""}${ii.v.toFixed(3)}・前後 ${fi.v >= 0 ? "+" : ""}${fi.v.toFixed(3)}`;
     if (fi.hi - fi.lo > 1e-9 || ii.hi - ii.lo > 1e-9)
       g += `<rect x="${x(fi.lo) - 4}" y="${y(ii.lo) - 4}" width="${x(fi.hi) - x(fi.lo) + 8}" height="${y(ii.hi) - y(ii.lo) + 8}" rx="5" fill="${it.color}" fill-opacity=".25" stroke="${it.color}"><title>${esc(lab)}(レースで違う)</title></rect>`;
-    g += `<circle cx="${x(fi.v)}" cy="${y(ii.v)}" r="6" fill="${it.color}" stroke="var(--panel)" stroke-width="1.5"><title>${esc(lab)}</title></circle>`;
+    g += `<circle cx="${x(fi.v)}" cy="${y(ii.v)}" r="${it.r || 6}" fill="${it.color}" fill-opacity="${it.op ?? 1}" stroke="var(--panel)" stroke-width="1.5"><title>${esc(lab)}</title></circle>`;
   }
   if (act && act.inner != null && act.front != null) labels.push([x(act.front), y(act.inner), "結果", "#d4a800"]);
   // この開催の日ごとの実績を線でつなぐ(✓のときだけ。初期は出さない)

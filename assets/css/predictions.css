@@ -611,3 +611,4 @@ a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
 a.jkLink { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }   /* 騎手名は元の文字色のまま(押せることは点線で。11/28) */
 .rh-name { margin-left: 8px; font-size: 15px; font-weight: 600; } @media (max-width: 760px) { .rh-name { display: none; } } button.rhMove { padding: 0 6px; margin: 0 4px; font-size: 13px; } select.rhJyo { font-size: inherit; font-weight: 700; } #status .lamp { margin-right: 4px; }
 .basket-empty { border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; color: var(--muted); } .basket-empty b { color: var(--fg, inherit); } .basket-empty ol { margin: 6px 0 0 18px; padding: 0; }
+.viz.nores .viz-row:not(.viz-sec) { grid-template-columns: 44px minmax(110px, 200px) 64px 34px 46px 52px 1fr 52px; }

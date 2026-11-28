@@ -2486,6 +2486,7 @@ function renderVizSec(rid, rows, secs, favBox) {
     return num(x["着順"]) === 1 ? 0 : num(x["タイム差"]);   // 予想タイムが無いときは 1着からの秒差
   };
   const items = rows.map(r => { const u = String(+r.umaban), v = secs.get(u); return v && v.s != null ? { r, v, k: resOf(u), o: getOdds(rid, r.umaban, r) } : null; }).filter(Boolean);
+  const anyRes = items.some(it => it.k != null);   // 11/28 ユーザーの指示: 結果が出ていないときは結果の列ごと出さない
   const oddsSorted = items.map(o => o.o).filter(v => v != null && v > 0).sort((a, b) => a - b);
   for (const o of items) o.nk = o.o != null && o.o > 0 ? oddsSorted.indexOf(o.o) + 1 : null;
   const sort = ["uma", "res", "ninki", "odds"].includes(state.vizSort) ? state.vizSort : "pred";
@@ -2506,15 +2507,15 @@ function renderVizSec(rid, rows, secs, favBox) {
     `<div class="calc" style="margin-bottom:6px;gap:10px">${favBox}<span class="tabs" style="margin:0"><button class="vizAxis" data-v="rank">着順</button><button class="vizAxis on" data-v="sec">走破タイム</button></span>` +
     (preT ? `<label title="馬体重が出る前の特徴量で予想した走破タイムで描く"><input type="checkbox" id="vizPre" ${usePre ? "checked" : ""}> 馬体重確定前の予想</label>` : "") +
     `<span class="muted" style="font-size:12px">列の見出し(馬番・人気・単勝・予想タイム・結果)を押すと並べ替え</span></div>` +
-    `<div class="viz"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-jk muted">騎手</div>` +
-    `<div class="viz-n">${sb("ninki", "人気", "人気")}</div><div class="viz-n">${sb("odds", "単勝", "単勝オッズ")}</div><div class="viz-n">${sb("pred", "予想", "予想タイム")}</div><div class="viz-n">${sb("res", "結果", "実際の走破タイム")}</div><div class="viz-track">` +
+    `<div class="viz${anyRes ? "" : " nores"}"><div class="viz-row viz-axis"><div class="viz-mark muted">印</div><div class="viz-name">${sb("uma", "馬番・馬名", "馬番")}</div><div class="viz-jk muted">騎手</div>` +
+    `<div class="viz-n">${sb("ninki", "人気", "人気")}</div><div class="viz-n">${sb("odds", "単勝", "単勝オッズ")}</div><div class="viz-n">${sb("pred", "予想", "予想タイム")}</div>${anyRes ? `<div class="viz-n">${sb("res", "結果", "実際の走破タイム")}</div>` : ""}<div class="viz-track">` +
     ticks.map(t => `<span class="viz-tick" style="left:${x(t)}${t === 0 ? ";font-weight:700;color:var(--text)" : ""}">${lab(t)}</span>`).join("") + `</div><div></div></div>`;
   for (const { r, v, k, o, nk } of items) {
     const inB = k != null && v.lo != null && v.hi != null && k >= v.lo - 1e-9 && k <= v.hi + 1e-9;
     h += `<div class="viz-row" title="${esc(r.horse_name)}: 予想 ${tm(v.s)}(20〜80% ${tm(v.lo)}〜${tm(v.hi)})${k != null ? `・結果 ${tm(k)}` : ""}">` +
       `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-jk">${jkLink(rid, r)}</div>` +
       `<div class="viz-n">${nk ?? `<span class="dim">-</span>`}</div><div class="viz-n">${o != null ? fix(o) : `<span class="dim">-</span>`}</div>` +
-      `<div class="viz-n">${tm(v.s)}</div><div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${tm(k)}</b>` : `<span class="dim">-</span>`}</div><div class="viz-track">` +
+      `<div class="viz-n">${tm(v.s)}</div>${anyRes ? `<div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${tm(k)}</b>` : `<span class="dim">-</span>`}</div>` : ""}<div class="viz-track">` +
       ticks.map(t => `<span class="viz-grid" style="left:${x(t)}${t === 0 ? ";opacity:.9;border-left-style:solid" : ""}"></span>`).join("") +
       (v.lo != null && v.hi != null ? `<span class="viz-b" style="left:calc(${x(v.lo)} - 6px);width:calc(${x(v.hi)} - ${x(v.lo)} + 12px)"></span>` : "") +
       `<span class="viz-dot" style="left:${x(v.s)}"></span>` + (k != null ? `<span class="viz-res${inB ? " in" : ""}" style="left:${x(k)}" title="結果 ${tm(k)}"></span>` : "") +

@@ -852,3 +852,8 @@ header .hdr-pop label { display: flex; align-items: center; gap: 6px; white-spac
   body:not(.nav-peek) header { transform: translateY(calc(-1 * var(--hdrRow1, 0px))); }
   body:not(.nav-peek) .hdr-pop { display: none !important; }
 }
+
+/* 11/28: ヘッダの1段目も隠れるようになったので、レース一覧の帯はその分も上へ動かして隠しきる */
+@media (max-width: 760px) {
+  body.mobile-nav-collapsed:not(.nav-peek) nav { transform: translateY(calc(-100% - var(--hdrRow1, 0px) - 6px)); }
+}

@@ -845,3 +845,10 @@ header .hdr-pop label { display: flex; align-items: center; gap: 6px; white-spac
   nav { transition: transform .2s ease; }
   body.mobile-nav-collapsed:not(.nav-peek) nav { transform: translateY(-120%); }
 }
+
+/* 11/28 ユーザーの指示: 携帯はヘッダの1段目(タイトル・データを更新・？・⚙)も、下へスクロールで隠れ、上へスクロールで出る。2段目の青い欄は出したまま */
+@media (max-width: 760px) {
+  header { transition: transform .2s ease; }
+  body:not(.nav-peek) header { transform: translateY(calc(-1 * var(--hdrRow1, 0px))); }
+  body:not(.nav-peek) .hdr-pop { display: none !important; }
+}

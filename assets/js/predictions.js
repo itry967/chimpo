@@ -5068,11 +5068,12 @@ document.getElementById("theme").onclick = () => {
     });
     syncDot();
     document.body.style.setProperty("--hdrH", header.offsetHeight + "px");
+    const st = document.getElementById("status"); if (st) document.body.style.setProperty("--hdrRow1", Math.max(0, st.offsetTop - 5) + "px");   // 1段目の高さ(スクロールで隠す分)
   };
   place();
   try { mq.addEventListener("change", place); } catch (e) {}
   window.addEventListener("resize", place);
-  try { new ResizeObserver(() => document.body.style.setProperty("--hdrH", header.offsetHeight + "px")).observe(header); } catch (e) {}
+  try { new ResizeObserver(() => place()).observe(header); } catch (e) {}
 })();
 
 

@@ -5072,7 +5072,7 @@ setInterval(updateAutoLamp, 5000);
 document.addEventListener("visibilitychange", updateAutoLamp);
 updateAutoLamp();
 
-// 11/28 ユーザーの指示: 携帯のレース一覧の横帯は、下へスクロールすると(ヘッダの下に)出て、上へスクロールすると隠れる
+// 11/28 ユーザーの指示(3回目): 携帯のレース一覧の横帯は、下へスクロールすると隠れ、上へスクロールすると(ヘッダの下に)出る
 (function navPeek() {
   let last = window.scrollY;
   document.body.classList.add("nav-peek");
@@ -5080,7 +5080,7 @@ updateAutoLamp();
     const y = window.scrollY, d = y - last;
     if (y < 40) { document.body.classList.add("nav-peek"); last = y; return; }   // 一番上の近くでは元の場所に出す
     if (Math.abs(d) < 6) return;
-    document.body.classList.toggle("nav-peek", d > 0);
+    document.body.classList.toggle("nav-peek", d < 0);
     last = y;
   }, { passive: true });
 })();

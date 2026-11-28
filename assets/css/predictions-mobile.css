@@ -829,3 +829,7 @@ header { padding-right: 58px; }
     height: calc(100dvh - var(--hdrH, 110px)) !important; max-height: calc(100dvh - var(--hdrH, 110px)) !important; min-height: 240px !important;
   }
 }
+
+/* ⚙ のメニューの中では明るさボタンを右上に固定しない(11/28 ユーザーの指示「要素が重なっている」) */
+header .hdr-pop #theme { position: static !important; top: auto !important; right: auto !important; margin: 0 !important; order: 0 !important; width: 100%; text-align: left; font-size: 13px !important; padding: 6px 8px !important; }
+header .hdr-pop label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }

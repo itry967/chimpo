@@ -5104,11 +5104,18 @@ updateAutoLamp();
 (function navPeek() {
   let last = window.scrollY;
   document.body.classList.add("nav-peek");
-  window.addEventListener("scroll", () => {
-    const y = window.scrollY, d = y - last;
+  // iPhone の Safari では body(overflow-x: hidden)などが縦にスクロールして window.scrollY が動かないことがあるので、
+  // ページの土台の要素のスクロールも拾って一番大きい値を使う(11/28 ユーザーの指摘「Safari で隠れない」)
+  const roots = () => [document.scrollingElement, document.documentElement, document.body, document.getElementById("app"), document.querySelector("main")].filter(Boolean);
+  const curY = () => Math.max(window.scrollY || 0, window.pageYOffset || 0, ...roots().map(e => e.scrollTop || 0));
+  last = curY();
+  document.addEventListener("scroll", ev => {
+    const t = ev.target;
+    if (t !== document && !roots().includes(t)) return;   // レース一覧・表などの中のスクロールは数えない
+    const y = curY(), d = y - last;
     if (y < 40) { document.body.classList.add("nav-peek"); last = y; return; }   // 一番上の近くでは元の場所に出す
     if (Math.abs(d) < 6) return;
     document.body.classList.toggle("nav-peek", d < 0);
     last = y;
-  }, { passive: true });
+  }, { passive: true, capture: true });
 })();

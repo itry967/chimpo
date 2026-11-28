@@ -845,7 +845,7 @@ ${list}
     Object.fromEntries(items.map(x => [x.name, x.amount])));
   try { localStorage.setItem("keiba-viewer:nkBetSent:" + rid, JSON.stringify({ at: `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`, n: ok.length, yen, items })); } catch (e) {}
   document.querySelectorAll(".nk-bet-sent").forEach(x => x.outerHTML = nkBetSentTag(rid));
-  if (!state.dayPage) renderRace(rid);   // 買い目候補の IPAT の列を新しくする
+  if (!state.dayPage) keepScroll(() => renderRace(rid));   // 買い目候補の IPAT の列を新しくする(11/28: スクロールはそのまま)
 }
 // 買い目転記が成功したら、日別ページの「購入した馬券」に入れる(2026-11-22 ユーザーの指示。？から外せる。拡張機能 1.3 以降のときだけ。ブックマークでは結果が分からない)
 function nkBetToBought() { try { return localStorage.getItem("keiba-viewer:nkBetToBought") !== "0"; } catch (e) { return true; } }
@@ -863,7 +863,7 @@ function nkBetResult(r) {
   }
   nkToast(r.ok ? `✔ netkeiba の購入画面に買い目を ${r.n}点(${(r.yen || 0).toLocaleString()}円)入れました。netkeiba の画面で確かめて「IPAT投票」を押してください。${note}` +
     (r.ng?.length ? `(入れられなかった: ${r.ng.join("、")})` : "") : `✖ 買い目を入れられませんでした: ${(r.ng || []).join("、")}`, r.ok ? "ok" : "ng");
-  if (state.dayPage) render(); else if (state.current) renderRace(state.current);   // 買い目候補の IPAT・購入した馬券の列も新しくする
+  keepScroll(() => { if (state.dayPage) render(); else if (state.current) renderRace(state.current); });   // 11/28: スクロールはそのまま。買い目候補の IPAT・購入した馬券の列も新しくする
 }
 function nkBetHelpHTML() {
   const pc = !window.matchMedia("(max-width: 760px)").matches;
@@ -4885,6 +4885,29 @@ document.getElementById("theme").onclick = () => {
   const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
   root.dataset.theme = dark ? "light" : "dark";
 };
+// 右上の ⚙(設定)と ？ のメニュー(11/28 ユーザーの指示)。今あるボタンをメニューの中へ移す(押したときの動きはそのまま)
+(function setupHeaderMenus() {
+  const header = document.querySelector("header");
+  if (!header || document.getElementById("hdrMenus")) return;
+  const wrap = document.createElement("span");
+  wrap.id = "hdrMenus";
+  wrap.innerHTML = `<span class="hdr-m"><button id="helpMenuBtn" title="ヘルプ(自信の区分ごとの回収率・指標の説明・データ更新タイミング)" aria-label="ヘルプ">？</button><div class="hdr-pop" id="helpMenu" hidden></div></span>` +
+    `<span class="hdr-m"><button id="setMenuBtn" title="設定(ダークモード・個別馬の折りたたみ)" aria-label="設定">⚙</button><div class="hdr-pop" id="setMenu" hidden></div></span>`;
+  header.appendChild(wrap);
+  const help = document.getElementById("helpMenu"), set = document.getElementById("setMenu");
+  ["bandOpen", "guideBtn", "updateTimingOpen"].forEach(id => { const b = document.getElementById(id); if (b) help.appendChild(b); });
+  const theme = document.getElementById("theme");
+  if (theme) { theme.textContent = "◐ ダークモード切替"; set.appendChild(theme); }
+  const fh = document.getElementById("foldHorses")?.closest("label");
+  if (fh) set.appendChild(fh);
+  const closeAll = () => { help.hidden = true; set.hidden = true; };
+  document.getElementById("helpMenuBtn").onclick = e => { e.stopPropagation(); const o = help.hidden; closeAll(); help.hidden = !o; };
+  document.getElementById("setMenuBtn").onclick = e => { e.stopPropagation(); const o = set.hidden; closeAll(); set.hidden = !o; };
+  help.addEventListener("click", e => { if (e.target.closest("button")) closeAll(); });
+  set.addEventListener("click", e => e.stopPropagation());
+  document.addEventListener("click", closeAll);
+})();
+
 
 // 自動更新のランプ(2026-11-21 ユーザーの指示): ヘッダの右側。緑=自動更新が有効、灰=無効(理由はランプにのせると出る)
 const autoLamp = document.createElement("span");

@@ -810,3 +810,22 @@ header { padding-right: 58px; }
   header #autoLamp { order: 4; margin-left: auto; }
   header #autoLamp ~ #theme { margin-left: 6px; }
 }
+
+/* 11/28(2回目)ユーザーの指示: 携帯は 1段目 = タイトル・ランプ・データを更新・？・⚙、2段目 = 表示中のレース(省略しない)。
+   注意点・お知らせは ？ のメニューの中(JS で移す)。レース一覧を開いたときは画面の下まで */
+@media (max-width: 760px) {
+  header > h1 { order: 1 !important; }
+  header #autoLamp { order: 4 !important; margin-left: auto !important; }
+  header > #driveReload { order: 5 !important; }
+  header > #hdrMenus { order: 6 !important; margin-left: 0 !important; }
+  header > #status {
+    order: 9 !important; flex: 1 1 100% !important; white-space: normal !important; overflow: visible !important;
+  }
+  header > #resOpen { order: 10 !important; }
+  #helpMenuBtn { position: relative; }
+  #helpMenuBtn .notice-new { position: absolute; top: 1px; right: 1px; width: 8px; height: 8px; border-radius: 50%; background: #e5484d; }
+  #helpMenu > button { flex: none !important; min-height: 0 !important; padding: 6px 8px !important; font-size: 13px !important; overflow: visible !important; }
+  body:not(.mobile-nav-collapsed) nav {
+    height: calc(100dvh - var(--hdrH, 110px)) !important; max-height: calc(100dvh - var(--hdrH, 110px)) !important; min-height: 240px !important;
+  }
+}

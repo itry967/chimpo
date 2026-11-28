@@ -5009,6 +5009,27 @@ document.getElementById("theme").onclick = () => {
   help.addEventListener("click", e => { if (e.target.closest("button")) closeAll(); });
   set.addEventListener("click", e => e.stopPropagation());
   document.addEventListener("click", closeAll);
+  // 携帯では注意点・お知らせも ？ の中へ。お知らせの赤い点は ？ にも付ける(11/28 ユーザーの指示)
+  const mq = window.matchMedia("(max-width: 760px)");
+  const caution = document.getElementById("cautionOpen"), notice = document.getElementById("noticeOpen");
+  const helpBtn = document.getElementById("helpMenuBtn");
+  const dot = document.createElement("span"); dot.className = "notice-new"; dot.hidden = true; helpBtn.appendChild(dot);
+  const ndot = notice && notice.querySelector(".notice-new");
+  const syncDot = () => { dot.hidden = !mq.matches || !ndot || ndot.hidden; };
+  if (ndot) new MutationObserver(syncDot).observe(ndot, { attributes: true, attributeFilter: ["hidden"] });
+  const place = () => {
+    const anchor = document.getElementById("status");
+    [caution, notice].filter(Boolean).forEach((b, i) => {
+      if (mq.matches) help.insertBefore(b, help.children[i] || null);
+      else if (b.parentElement !== header) header.insertBefore(b, anchor);
+    });
+    syncDot();
+    document.body.style.setProperty("--hdrH", header.offsetHeight + "px");
+  };
+  place();
+  try { mq.addEventListener("change", place); } catch (e) {}
+  window.addEventListener("resize", place);
+  try { new ResizeObserver(() => document.body.style.setProperty("--hdrH", header.offsetHeight + "px")).observe(header); } catch (e) {}
 })();
 
 

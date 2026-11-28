@@ -2591,7 +2591,14 @@ function renderVizSec(rid, rows, secs, favBox) {
     if (hasT) { const a = parseRunTime(x["走破タイム"]); return a == null ? null : a - t0; }
     return num(x["着順"]) === 1 ? 0 : num(x["タイム差"]);   // 予想タイムが無いときは 1着からの秒差
   };
-  const items = rows.map(r => { const u = String(+r.umaban), v = secs.get(u); return v && v.s != null ? { r, v, k: resOf(u), o: getOdds(rid, r.umaban, r) } : null; }).filter(Boolean);
+  // 11/28 ユーザーの指示「順位のように 50% の範囲を帯、50〜80% を線」。予想は 20・50・80% の分位なので、
+  // 片側ずつ正規分布の比(25%: 0.674/0.842、10%: 1.282/0.842)で 25〜75%・10〜90% に広げる(近似)
+  const K50 = 0.6745 / 0.8416, K80 = 1.2816 / 0.8416;
+  const items = rows.map(r => { const u = String(+r.umaban), v0 = secs.get(u); if (!v0 || v0.s == null) return null;
+    const v = { ...v0 };
+    if (v.lo != null && v.hi != null) { const dl = Math.max(v.s - v.lo, 0), dh = Math.max(v.hi - v.s, 0);
+      v.b1 = v.s - dl * K50; v.b2 = v.s + dh * K50; v.w1 = v.s - dl * K80; v.w2 = v.s + dh * K80; }
+    return { r, v, k: resOf(u), o: getOdds(rid, r.umaban, r) }; }).filter(Boolean);
   const anyRes = items.some(it => it.k != null);   // 11/28 ユーザーの指示: 結果が出ていないときは結果の列ごと出さない
   const oddsSorted = items.map(o => o.o).filter(v => v != null && v > 0).sort((a, b) => a - b);
   for (const o of items) o.nk = o.o != null && o.o > 0 ? oddsSorted.indexOf(o.o) + 1 : null;
@@ -2602,7 +2609,7 @@ function renderVizSec(rid, rows, secs, favBox) {
     val(b) == null ? -1 : dir * (val(a) - val(b)) || +a.r.umaban - +b.r.umaban);
   const sb = (k, label, tip) => `<span class="vizSort${sort === k ? " on" : ""}" data-k="${k}" title="${tip}で並べる">${label}${sort === k ? (dir === 1 ? " ▲" : " ▼") : ""}</span>`;
   // 軸の範囲: 予想の幅と結果がおさまるように(はみ出す結果は端に寄せる)。0.5秒刻みに丸める
-  const vals = items.flatMap(o => [o.v.lo, o.v.hi, o.k].filter(v => v != null));
+  const vals = items.flatMap(o => [o.v.w1, o.v.w2, o.k].filter(v => v != null));
   const lo = Math.floor(Math.min(-0.5, ...vals.filter(v => v > -3)) * 2) / 2, hi = Math.ceil(Math.min(Math.max(1, ...vals), 6) * 2) / 2;
   const x = v => ((Math.min(Math.max(v, lo), hi) - lo) / (hi - lo) * 96 + 2).toFixed(2) + "%";
   const step = hi - lo > 4 ? 1 : 0.5, ticks = [];
@@ -2617,19 +2624,19 @@ function renderVizSec(rid, rows, secs, favBox) {
     `<div class="viz-n">${sb("ninki", "人気", "人気")}</div><div class="viz-n">${sb("odds", "単勝", "単勝オッズ")}</div><div class="viz-n">${sb("pred", "予想", "予想タイム")}</div>${anyRes ? `<div class="viz-n">${sb("res", "結果", "実際の走破タイム")}</div>` : ""}<div class="viz-track">` +
     ticks.map(t => `<span class="viz-tick" style="left:${x(t)}${t === 0 ? ";font-weight:700;color:var(--text)" : ""}">${lab(t)}</span>`).join("") + `</div><div></div></div>`;
   for (const { r, v, k, o, nk } of items) {
-    const inB = k != null && v.lo != null && v.hi != null && k >= v.lo - 1e-9 && k <= v.hi + 1e-9;
-    h += `<div class="viz-row" title="${esc(r.horse_name)}: 予想 ${tm(v.s)}(20〜80% ${tm(v.lo)}〜${tm(v.hi)})${k != null ? `・結果 ${tm(k)}` : ""}">` +
+    const inB = k != null && v.b1 != null && k >= v.b1 - 1e-9 && k <= v.b2 + 1e-9;
+    h += `<div class="viz-row" title="${esc(r.horse_name)}: 予想 ${tm(v.s)}(50% ${tm(v.b1)}〜${tm(v.b2)}・80% ${tm(v.w1)}〜${tm(v.w2)})${k != null ? `・結果 ${tm(k)}` : ""}">` +
       `<div class="viz-mark">${markSelect(rid, r.umaban)}</div><div class="viz-name">${umaBadge(r.umaban, n)} ${esc(r.horse_name)}</div><div class="viz-jk">${jkLink(rid, r)}</div>` +
       `<div class="viz-n">${nk ?? `<span class="dim">-</span>`}</div><div class="viz-n">${o != null ? fix(o) : `<span class="dim">-</span>`}</div>` +
       `<div class="viz-n">${tm(v.s)}</div>${anyRes ? `<div class="viz-n">${k != null ? `<b class="${inB ? "hi" : ""}">${tm(k)}</b>` : `<span class="dim">-</span>`}</div>` : ""}<div class="viz-track">` +
       ticks.map(t => `<span class="viz-grid" style="left:${x(t)}${t === 0 ? ";opacity:.9;border-left-style:solid" : ""}"></span>`).join("") +
-      (v.lo != null && v.hi != null ? `<span class="viz-b" style="left:calc(${x(v.lo)} - 6px);width:calc(${x(v.hi)} - ${x(v.lo)} + 12px)"></span>` : "") +
+      (v.b1 != null ? `<span class="viz-w" style="left:${x(v.w1)};width:calc(${x(v.w2)} - ${x(v.w1)})"></span><span class="viz-b" style="left:calc(${x(v.b1)} - 6px);width:calc(${x(v.b2)} - ${x(v.b1)} + 12px)"></span>` : "") +
       `<span class="viz-dot" style="left:${x(v.s)}"></span>` + (k != null ? `<span class="viz-res${inB ? " in" : ""}" style="left:${x(k)}" title="結果 ${tm(k)}"></span>` : "") +
-      `</div><div class="viz-txt">${v.lo != null ? `${v.lo.toFixed(1)}〜${v.hi.toFixed(1)}` : ""}</div></div>`;
+      `</div><div class="viz-txt">${v.b1 != null ? `${v.b1.toFixed(1)}〜${v.b2.toFixed(1)}` : ""}</div></div>`;
   }
   return h + `</div><div class="note">走破タイムの予想(U69。LightGBM の分位回帰で 1着からの秒差の 20%・50%・80% を予想し、勝ちタイムの予想に足したもの)。` +
-    `横の軸の 0 は、このレースの予想の勝ちタイム${hasT ? `(${clock(t0)})` : ""}で、右へいくほど遅い。点は予想、帯は 20〜80% の幅、◆ は実際の走破タイム(結果が出たら。帯の中なら緑)。` +
-    `右端の数字は幅(予想の勝ちタイムからの秒)。2023年で確かめると、幅に実際が入った割合は 56%(狙いの 60% より少し狭い)。勝ちタイムの予想のぶれはまだ幅に入っていない。予想(勝率)には使っていない。<br>` +
+    `横の軸の 0 は、このレースの予想の勝ちタイム${hasT ? `(${clock(t0)})` : ""}で、右へいくほど遅い。点は予想、太い帯は半々(50%)で入る範囲、細い線は 80% の範囲(モデルの 20・50・80% の予想から正規分布の比で広げた近似)、◆ は実際の走破タイム(結果が出たら。帯の中なら緑)。` +
+    `右端の数字は 50% の帯(予想の勝ちタイムからの秒)。2023年で確かめると、モデルの 20〜80% の幅に実際が入った割合は 56%(狙いの 60% より少し狭い)ので、帯・線も少し狭めに出ている見込み。勝ちタイムの予想のぶれはまだ幅に入っていない。予想(勝率)には使っていない。<br>` +
     `<b>着順の版と並びが違うことがある理由</b>: ①別のモデル(着順の版は本番の6本の平均の勝率、こちらは U69 の1本で、馬のレーティング U71 は入っていない)、` +
     `②予想するものが違う(着順の版は「1着になる確率」、こちらは「ふつうに走ったときのタイム」。ぶれの大きい馬は勝率では上でも、真ん中のタイムでは下になりやすい)、` +
     `③隣の馬との差が 0.1秒未満のことが多く、わずかな差で入れ替わる。${usePre ? "今は馬体重が出る前の版。" : ""}</div></div>`;

@@ -1771,12 +1771,13 @@ function renderRace(rid) {
   const ck = clockPct(rid);
   const clockRow = ck.pred == null ? "" : `<div class="pace"><div class="pl">時計(勝ちタイム)</div><div><b>${pctFmt(ck.pred)}</b> <span class="chip ${ck.pred >= CLOCK_FLAT ? "warn" : ck.pred <= -CLOCK_FLAT ? "up" : "gray"}">${esc(clockWord(ck.pred))}</span>` +
     (ck.act != null ? ` <span class="muted">結果 ${pctFmt(ck.act)}(${esc(clockWord(ck.act))})</span>` : "") + clockGraph(ck.pred, ck.act) +
+    (ck.reason ? `<div class="note" style="margin:0">基準からの補正: ${esc(ck.reason)}。各項目は検証期間の平均との差による補正。表示の丸めにより合計と予想の差が少しずれることがあります。</div>` : "") +
     `<div class="note" style="margin:0">勝ちタイムの予想と、基準(同じ競馬場・芝ダ・距離・馬場状態${ck.baba ? `「${esc(ck.baba)}」` : ""}の過去3年の平均)との差。プラスは時計がかかる、マイナスは速い。` +
     `基準は馬場状態ごとなので、重・不良そのものの遅さは含まない(同じ馬場状態の中で、さらにかかるか速いか)</div></div></div>`;
   const babaCard = `<div class="card" data-fold="baba-tenkai"><h3>馬場傾向予想（仮）<button class="help" data-help="baba" title="馬場傾向予想の各項目の説明(別ウインドウ)">？</button>${updTag("予想", rid)}</h3>` +
     `${info ? `<dl class="kv">${info}</dl>` : ""}` + babaMeasurement(r0) + babaCompare(rid) + clockCompare(rid) + (clockRow ? `<div style="margin-top:6px">${clockRow}</div>` : "") +
     `<div class="note" style="margin:4px 0">グラフ: <span style="color:var(--accent)">●</span> 予想(帯は幅)、<span style="color:var(--muted)">│</span> そのコースのふだん、<span style="color:#f5c400">◆</span> このレースの結果(結果が出たら)。</div>` +
-    (bias ? `<div style="margin-top:6px">${bias}</div><div class="note">馬場傾向の数字は、3着以内の馬の位置の平均 − 全馬の平均。` +
+    (bias ? `<div style="margin-top:6px">${bias}</div>${biasEvidence(r0, state.info.get(rid), blockTrail(rid.slice(0, 8), rid.slice(8, 10), state.info.get(rid)?.["芝ダ"] || r0["芝ダ"] || ""))}<div class="note">馬場傾向の数字は、3着以内の馬の位置の平均 − 全馬の平均。` +
       `内外は馬番÷頭数(0 = 内、1 = 外)、前後は最初のコーナーの順位÷頭数(0 = 前、1 = 後ろ)で、マイナスなら内・前が有利。` +
       `目安の「いつも」は、検証期間(2019〜2023年)の同じ競馬場・同じ芝ダのレースの値(札の「東京芝のふだん」がその平均)。` +
       `そのコースのふだんより内・前が来ているか、外・後ろが来ているかを表す(2026-11-13 までに作った予想は、競馬場を問わない同じ芝ダの全レースと比べている)。</div>` : "") +
@@ -3416,7 +3417,7 @@ function renderDayPage(date) {
       clockGraph([Math.min(...cp), Math.max(...cp)], cAvg(ca)) +
       `<div class="note" style="margin:0">勝ちタイムの予想の、基準(同じ競馬場・芝ダ・距離・馬場状態の過去3年の平均)との差の平均。帯はレースごとの幅。プラスは時計がかかる</div></div></div>`;
     return `<div class="day-bias"><h4 style="margin:4px 0">${esc(s)}<span class="muted" style="font-weight:400">(${rs.length}レース: ${rs.map(rid => +rid.slice(14, 16) + "R").join("・")})</span></h4>` +
-      babaCompare(rs[0]) + res + clockItem + clockCompare(rs[0]) + (items || `<span class="muted">馬場傾向の列がありません</span>`) + `</div>`;
+      babaCompare(rs[0]) + res + clockItem + clockCompare(rs[0]) + (items ? items + biasEvidence(state.races.get(rs[0])?.[0], state.info.get(rs[0]), blockTrail(date, bj, s)) : `<span class="muted">馬場傾向の列がありません</span>`) + `</div>`;
   }).join("");
   h += (bias ? `<div class="day-bias-list">${bias}</div>`   /* 芝 → ダートの順に縦に並べる(11/23 ユーザーの指示) */ : `<div class="muted">この場のレースがありません。</div>`) +
     `<div class="note">予想 CSV の馬場傾向の列(3着以内の馬の位置の平均 − 全馬の平均。マイナスなら内・前が有利)を、場・芝ダごとにまとめたもの。` +
@@ -3693,6 +3694,24 @@ function stateBiasPts(rid) {
       r: on ? 7 : 4, noLabel: !on && n < 20, inner: cell(i), front: cell(f) };
   }).filter(x => x.inner.v != null && x.front.v != null);
 }
+function biasEvidence(r, info, trail) {
+  const details = [];
+  for (const [label, valueCol, guideCol] of BIAS) {
+    const value = num(r?.[valueCol]);
+    if (value == null) continue;
+    const guide = r[guideCol] || "", why = r[`${label}の確度の根拠`] || info?.[`${label}の確度の根拠`] || "";
+    details.push(`<li>${esc(label)}: ${value >= 0 ? "+" : ""}${value.toFixed(3)}${guide ? `（${esc(guide)}）` : ""}${why ? `・${esc(why)}` : ""}</li>`);
+  }
+  const rail = ["仮柵", "連続開催の何日目", "連続開催の何週目", "仮柵を替えて何日目"]
+    .filter(k => r?.[k] != null && String(r[k]).trim() !== "")
+    .map(k => `${k}: ${esc(r[k])}`).join("・");
+  const days = trail.map(t => `${esc(t.date)}（${t.n}日目・${t.races}レース）`).join("、");
+  if (!details.length && !rail && !days) return "";
+  return `<details class="note"><summary>馬場傾向の元になった情報</summary>` +
+    (rail ? `<div>${rail}</div>` : "") + (days ? `<div>この開催の前日までの実績: ${days}</div>` : "") +
+    (details.length ? `<ul>${details.join("")}</ul>` : "") +
+    `<div>各項目はそれぞれの実績や予想の値です。雨・含水率を内外の予想理由として加えたものではありません。</div></details>`;
+}
 function biasPanel(items, norm, act, extra = [], title = "馬場傾向マップ", trail = []) {
   // 前の開催日は実績の値そのものなので「（予想）」を付けない(11/23 ユーザーの指示)
   items = items.map(it => ({ ...it, name: it.name === "前の開催日" || it.name === "過去の同じ週" ? it.name : it.name + "（予想）" }));   // 表と図の名前は「この開催（予想）」(11/23 ユーザーの指示)
@@ -3809,7 +3828,7 @@ function parseRunTime(t) { const m = String(t || "").match(/^(?:(\d+):)?(\d+(?:\
 function clockPct(rid) {
   const i = state.info.get(rid) || {}, base = num(i["勝ちタイムの基準"]), v = num(i["勝ちタイムの予想"]);
   const w = (state.results.get(rid) || []).find(r => num(r["着順"]) === 1), a = parseRunTime(w?.["走破タイム"]);
-  return { pred: base && v != null ? (v - base) / base * 100 : null, act: base && a != null ? (a - base) / base * 100 : null, baba: i["馬場状態"] || "" };
+  return { pred: base && v != null ? (v - base) / base * 100 : null, act: base && a != null ? (a - base) / base * 100 : null, baba: i["馬場状態"] || "", reason: i["勝ちタイムの補正内訳"] || "" };
 }
 const CLOCK_FLAT = 0.4;   // 基準との差(%)がこれ未満なら「ふつう」
 function clockWord(p) { return p == null ? "" : p <= -CLOCK_FLAT * 2 ? "高速(時計が速い)" : p <= -CLOCK_FLAT ? "やや速い" : p >= CLOCK_FLAT * 2 ? "時計がかかる" : p >= CLOCK_FLAT ? "やや時計がかかる" : "ふつう"; }

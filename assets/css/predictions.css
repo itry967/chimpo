@@ -346,6 +346,7 @@ table.grid td.gmark[data-m="消"] { color: var(--muted); text-decoration: line-t
   body.nav-closed #app { grid-template-columns: minmax(var(--main-min), 1fr); }
   body.nav-closed nav { display: none; }
   nav { position: sticky; left: 0; top: auto; max-height: 240px; width: 100vw; border-right: 0; border-bottom: 1px solid var(--line); }
+  body:not(.mobile-nav-collapsed):not(.nav-closed) nav { max-height: calc(100dvh - 56px); }   /* 11/28: スマホでレース一覧を開いたときは画面の下まで */
   main { padding: 12px 16px; }
   .hide-sm { display: none; }
 }
@@ -608,3 +609,5 @@ a.dayRace:hover, a.toDay:hover { text-decoration: underline; }
 .bpZoom { margin-top: 4px; font-size: 12px; }
 
 a.jkLink { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }   /* 騎手名は元の文字色のまま(押せることは点線で。11/28) */
+.rh-name { margin-left: 8px; font-size: 15px; font-weight: 600; } @media (max-width: 760px) { .rh-name { display: none; } } button.rhMove { padding: 0 6px; margin: 0 4px; font-size: 13px; } select.rhJyo { font-size: inherit; font-weight: 700; } #status .lamp { margin-right: 4px; }
+.basket-empty { border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; color: var(--muted); } .basket-empty b { color: var(--fg, inherit); } .basket-empty ol { margin: 6px 0 0 18px; padding: 0; }

@@ -130,6 +130,11 @@ async function readFile(file, path, modifiedTime) {
     state.blockBias.set(day, rows);
     return 1;
   }
+  if (cols.includes("race_id") && cols.includes("馬場抜き_勝率")) {   // 馬場抜き_….csv(V6。馬場傾向をふだんに置き換えた予想。2026-11-28)
+    state.nobias = state.nobias || new Map();
+    state.nobias.set(rows[0].race_id, new Map(rows.map(r => [String(+r.umaban), r])));
+    return 1;
+  }
   if (cols.includes("race_id") && cols.includes("秒差_下") && cols.includes("秒差_上")) {   // タイム_….csv(U69 の走破タイムの予想と幅。2026-11-28)
     const pre = /(^|\/)タイム前_/.test(name);   // 馬体重が出る前の版(タイム前_….csv)
     if (pre) { state.timesPre = state.timesPre || new Map(); }
@@ -1827,6 +1832,7 @@ function renderRace(rid) {
   }
   html += `</table></div>${favNote}<div class="note">勝率・3着内は6モデルの平均。妥当オッズの横の印は実際のオッズとの差(▲▲ 1.5倍以上・▲ 1.2倍以上高い、▼ 0.8倍未満・▼▼ 0.5倍未満に低い。上にのせると比)。期待値 = オッズ ÷ 妥当オッズ(1 を超えると予想の上では得。緑は 1.0 以上、太字は 1.2 以上。複勝は下限のオッズで計算)。単勝オッズの横は人気(オッズの低い順)。「割れ」はモデルの順位の幅が4以上。馬名・予想着順・脚質・通過予想・上がり予想の横の印は確度(○ ◔ ◑ ◕ ● の5段階で、●ほど当たりやすい。色は緑 = 高・灰 = 中・橙 = 低。上にのせると0〜100の点と、検証期間の同じ条件での平均のずれ)。馬名の横は勝率・3着内・期待値を含む予想全体の確度。通過予想は前半(最初のコーナー)→ 4コーナーの番手、上がり予想は秒(かっこ内はレースで速い順、緑は3位まで)。根拠は説明用の LightGBM で、▲が評価を上げた項目、▼が下げた項目。数字は点数の差(レースの平均と比べた分)と、勝つ見込みのおおよその倍率(×)。総合・能力・適性・調子・人・展開は、根拠の項目を分類ごとに足したもの(総合は全部の合計)。1行目の「相対値」はこのレースの中の順位から星(点は1位が100・最下位が0)、2行目の「絶対値」は検証期間 2019〜2023年の全出走馬の中の位置(点は上位何%かで、80以上が★5)。横の高・中・低は確度(元になった出走数・調教などのデータの量。総合は能力・適性・調子のうち一番低いもの)で、低いものは薄く出す。</div></div>`;
 
+  html += nobiasCard(rid, rows);
   html += renderViz(rid, rows, favBox);
   html += renderPlan(rid);
   html += renderCalc(rid);
@@ -2041,6 +2047,32 @@ function renderRace(rid) {
 // ---------- 出走馬の表: 列の見出しで並べ替え・枠の色 ----------
 // [見出し, 並べ替えの値, 最初に押したときの向き(1 = 小さい順、-1 = 大きい順), th の class, title]
 const STYLE_ORDER = { "逃": 1, "先行": 2, "差": 3, "追込": 4, "自在": 5, "不明": 6 };
+// V6(11/23・11/28 ユーザーの指示「1(ふだんに置き換える)にして」): 馬場傾向を抜いた予想。出走馬の下に、✓のときだけ今の予想と並べて出す
+function nobiasOn() { try { return localStorage.getItem("keiba-viewer:nobias") === "1"; } catch (e) { return !!state.nobiasOn; } }
+function nobiasCard(rid, rows) {
+  const nb = state.nobias?.get(rid);
+  if (!nb) return "";
+  const on = nobiasOn();
+  let h = `<div class="card"><label style="font-size:13px"><input type="checkbox" id="nobiasView" ${on ? "checked" : ""}> <b>馬場傾向を抜いた予想</b>と比べる</label>`;
+  if (!on) return h + `</div>`;
+  const list = rows.map(r => { const x = nb.get(String(+r.umaban)); return { r, p: num(x?.["馬場抜き_勝率"]), k: num(x?.["馬場抜き_順位"]), t3: num(x?.["馬場抜き_3着内"]) }; })
+    .filter(x => x.p != null).sort((a, b) => a.k - b.k);
+  h += `<div class="scroll"><table><tr><th class="n">順位<br><small>馬場抜き</small></th><th class="n">今の<br>順位</th><th>馬番</th><th>馬名</th><th class="n">勝率<br><small>馬場抜き</small></th><th class="n">今の<br>勝率</th><th class="n">差</th><th class="n">3着内<br><small>馬場抜き</small></th></tr>`;
+  for (const x of list) {
+    const cur = num(x.r["平均_勝率"]), ck = num(x.r["平均_順位"]), d = cur != null ? cur - x.p : null;
+    h += `<tr><td class="n"><b>${x.k}</b></td><td class="n">${ck ?? "-"}${ck != null && ck !== x.k ? ` <span class="${ck < x.k ? "hi" : "dim"}">${ck < x.k ? "↑" : "↓"}${Math.abs(ck - x.k)}</span>` : ""}</td>` +
+      `<td>${umaBadge(x.r.umaban, rows.length)}</td><td>${esc(x.r.horse_name || "")}</td><td class="n">${pct(x.p)}</td><td class="n">${cur != null ? pct(cur) : "-"}</td>` +
+      `<td class="n">${d == null ? "" : `<span class="${d >= 0.005 ? "hi" : d <= -0.005 ? "dim" : ""}">${d >= 0 ? "+" : "−"}${(Math.abs(d) * 100).toFixed(1)}</span>`}</td><td class="n">${x.t3 != null ? pct(x.t3) : "-"}</td></tr>`;
+  }
+  return h + `</table></div><div class="note">馬場傾向の特徴量(当日・前の開催日・この開催・過去の同じ週の内外と前後)を、そのコースのふだん(同じ競馬場・芝ダの前日までの3年の平均)に置き換えて、同じモデルで予想し直したもの。` +
+    `「今回の馬場がいつもと同じだったら」の予想。差 = 今の勝率 − 馬場抜きの勝率(ポイント)で、+ は今の馬場傾向で上がっている馬。時計・雨などは置き換えていない。表示用で、推奨馬券には使わない。</div></div>`;
+}
+document.addEventListener("change", e => {
+  if (e.target?.id !== "nobiasView") return;
+  state.nobiasOn = e.target.checked;
+  try { localStorage.setItem("keiba-viewer:nobias", e.target.checked ? "1" : "0"); } catch (err) {}
+  if (state.current && !state.dayPage) keepScroll(() => renderRace(state.current));
+});
 function horseCols(rid) {
   const o = r => getOdds(rid, r.umaban, r);
   const ratio = (a, b) => a != null && b ? a / b : null;

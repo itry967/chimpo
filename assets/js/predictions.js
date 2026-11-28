@@ -95,6 +95,13 @@ async function readFile(file, path, modifiedTime) {
       if (!prev || new Date(stamp) > new Date(prev)) state.fileUpdated.set(folderKey, stamp);
     }
   }
+  if (cols.includes("含水率_例年同開催") && cols.includes("芝ダ")) {   // 馬場の比べ.csv(V2。2026-11-28)
+    const day = (name.match(/(\d{8})\/[^/]+$/) || [])[1];
+    if (!day) return 0;
+    state.babaCmp = state.babaCmp || new Map();
+    state.babaCmp.set(day, rows);
+    return 1;
+  }
   if (cols.includes("区分") && cols.includes("コード") && cols.includes("3年")) {   // 人のレーティング.csv(騎手・調教師・馬主。2026-11-28)
     const day = (name.match(/(\d{8})\/[^/]+$/) || [])[1];
     if (!day) return 0;
@@ -1545,6 +1552,34 @@ function setupCardFolds(root, sel = ".card", shutByDefault = false) {
   });
 }
 
+// V2(11/23・11/28 ユーザーの指示): 含水率・クッション値の通年平均・例年の同開催との差と、前回の開催日からの降水量・平均気温(例年も)
+function babaCompare(rid) {
+  const rows = state.babaCmp?.get(String(rid).slice(0, 8));
+  if (!rows) return "";
+  const surf = String(state.info.get(rid)?.["芝ダ"] || "").startsWith("芝") ? "芝" : "ダート";
+  const c = rows.find(x => String(x.jyo_cd).padStart(2, "0") === String(rid).slice(8, 10) && x["芝ダ"] === surf);
+  if (!c) return "";
+  const d = (v, base, unit = "") => v == null || base == null ? "" : `${v - base >= 0 ? "+" : "−"}${Math.abs(v - base).toFixed(1)}${unit}`;
+  const line = (label, v, all, same, ny, unit, u2) => v == null ? "" :
+    `<div>${label} ${v.toFixed(1)}${unit}<span class="muted">(通年平均 ${all == null ? "-" : all.toFixed(1) + unit} との差 ${d(v, all, u2) || "-"}・例年の同開催 ${same == null ? "-" : same.toFixed(1) + unit} との差 ${d(v, same, u2) || "-"}、${ny}年分)</span></div>`;
+  const m = line(`含水率(${surf}・ゴール前)`, num(c["含水率"]), num(c["含水率_通年平均"]), num(c["含水率_例年同開催"]), num(c["含水率_例年の年数"]) || 0, "%", "ポイント");
+  const k = surf === "芝" ? line("クッション値", num(c["クッション値"]), num(c["クッション値_通年平均"]), num(c["クッション値_例年同開催"]), num(c["クッション値_例年の年数"]) || 0, "", "") : "";
+  const st = String(c["前回の開催日の翌日"] || ""), from = st.length === 8 ? `${+st.slice(4, 6)}/${+st.slice(6, 8)}` : "";
+  const rain = num(c["降水量"]), rainY = num(c["降水量_例年"]), temp = num(c["平均気温"]), tempY = num(c["平均気温_例年"]), wy = num(c["天気_例年の年数"]) || 0;
+  const w = rain == null && temp == null ? "" : `<div>前回の開催日の翌日(${from})〜前日: 降水量 ${rain == null ? "-" : rain.toFixed(1) + "mm"}<span class="muted">(例年 ${rainY == null ? "-" : rainY.toFixed(1) + "mm"})</span>・平均気温 ${temp == null ? "-" : temp.toFixed(1) + "℃"}<span class="muted">(例年 ${tempY == null ? "-" : tempY.toFixed(1) + "℃"}、${wy}年分)</span></div>`;
+  if (!m && !k && !w) return "";
+  return `<div class="pace"><div class="pl">馬場の比べ</div><div>${m}${k}${w}<div class="note" style="margin:0">通年平均は前日までの3年間の開催日の計測、例年の同開催は過去の年の同じ回次・日次(計測は2018年7月から)。` +
+    `降水量・気温は気象庁の近くの観測所の値で、例年は過去の年の同じ回次・日次について同じ決め方の期間の値</div></div></div>`;
+}
+function babaMeasurement(r) {
+  const goal = num(r?.["含水率_ゴール前"]), corner = num(r?.["含水率_4角"]), cushion = num(r?.["クッション値"]);
+  const moistDiff = num(r?.["含水率_前日までの平均差"]), cushionDiff = num(r?.["クッション値_前日までの平均差"]);
+  if (goal == null && corner == null && cushion == null) return "";
+  const diff = (v, unit = "") => v == null ? "" : ` <span class="muted">(前日までの平均差 ${v >= 0 ? "+" : ""}${v.toFixed(1)}${unit})</span>`;
+  const moist = goal == null && corner == null ? "" : `含水率 ゴール前 ${goal == null ? "-" : goal.toFixed(1) + "%"}・4角 ${corner == null ? "-" : corner.toFixed(1) + "%"}${diff(moistDiff, "ポイント")}`;
+  const cush = cushion == null ? "" : `クッション値 ${cushion.toFixed(1)}${diff(cushionDiff)}`;
+  return `<div class="pace"><div class="pl">馬場の計測値</div><div>${[moist, cush].filter(Boolean).join("<br>")}<div class="note" style="margin:0">含水率はこのレースの芝・ダート、平均差は同じ競馬場の前日までの計測平均との比較。</div></div></div>`;
+}
 function bar(v, max, cls = "") {
   const w = max > 0 && v != null ? Math.max(2, v / max * 100) : 0;
   return `<div class="bar ${cls}"><i style="width:${w}%"></i><span>${pct(v)}</span></div>`;
@@ -1701,7 +1736,7 @@ function renderRace(rid) {
     `<div class="note" style="margin:0">勝ちタイムの予想と、基準(同じ競馬場・芝ダ・距離・馬場状態${ck.baba ? `「${esc(ck.baba)}」` : ""}の過去3年の平均)との差。プラスは時計がかかる、マイナスは速い。` +
     `基準は馬場状態ごとなので、重・不良そのものの遅さは含まない(同じ馬場状態の中で、さらにかかるか速いか)</div></div></div>`;
   const babaCard = `<div class="card" data-fold="baba-tenkai"><h3>馬場傾向予想（仮）<button class="help" data-help="baba" title="馬場傾向予想の各項目の説明(別ウインドウ)">？</button>${updTag("予想", rid)}</h3>` +
-    `${info ? `<dl class="kv">${info}</dl>` : ""}` + (clockRow ? `<div style="margin-top:6px">${clockRow}</div>` : "") +
+    `${info ? `<dl class="kv">${info}</dl>` : ""}` + babaMeasurement(r0) + babaCompare(rid) + (clockRow ? `<div style="margin-top:6px">${clockRow}</div>` : "") +
     `<div class="note" style="margin:4px 0">グラフ: <span style="color:var(--accent)">●</span> 予想(帯は幅)、<span style="color:var(--muted)">│</span> そのコースのふだん、<span style="color:#f5c400">◆</span> このレースの結果(結果が出たら)。</div>` +
     (bias ? `<div style="margin-top:6px">${bias}</div><div class="note">馬場傾向の数字は、3着以内の馬の位置の平均 − 全馬の平均。` +
       `内外は馬番÷頭数(0 = 内、1 = 外)、前後は最初のコーナーの順位÷頭数(0 = 前、1 = 後ろ)で、マイナスなら内・前が有利。` +
@@ -3343,7 +3378,7 @@ function renderDayPage(date) {
       clockGraph([Math.min(...cp), Math.max(...cp)], cAvg(ca)) +
       `<div class="note" style="margin:0">勝ちタイムの予想の、基準(同じ競馬場・芝ダ・距離・馬場状態の過去3年の平均)との差の平均。帯はレースごとの幅。プラスは時計がかかる</div></div></div>`;
     return `<div class="day-bias"><h4 style="margin:4px 0">${esc(s)}<span class="muted" style="font-weight:400">(${rs.length}レース: ${rs.map(rid => +rid.slice(14, 16) + "R").join("・")})</span></h4>` +
-      res + clockItem + (items || `<span class="muted">馬場傾向の列がありません</span>`) + `</div>`;
+      babaCompare(rs[0]) + res + clockItem + (items || `<span class="muted">馬場傾向の列がありません</span>`) + `</div>`;
   }).join("");
   h += (bias ? `<div class="day-bias-list">${bias}</div>`   /* 芝 → ダートの順に縦に並べる(11/23 ユーザーの指示) */ : `<div class="muted">この場のレースがありません。</div>`) +
     `<div class="note">予想 CSV の馬場傾向の列(3着以内の馬の位置の平均 − 全馬の平均。マイナスなら内・前が有利)を、場・芝ダごとにまとめたもの。` +

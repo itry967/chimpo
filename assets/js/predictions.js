@@ -3725,14 +3725,41 @@ document.addEventListener("click", e => {
     const k = zoom / nz;
     zoom = nz; vb[0] = px - (px - vb[0]) * k; vb[1] = py - (py - vb[1]) * k; vb[2] = base[2] / zoom; vb[3] = base[3] / zoom; clamp(); apply();
   }, { passive: false });
-  let drag = null;
-  svg.addEventListener("pointerdown", ev => { drag = { x: ev.clientX, y: ev.clientY, vx: vb[0], vy: vb[1] }; svg.setPointerCapture(ev.pointerId); svg.style.cursor = "grabbing"; });
+  // ドラッグで動かす。指2本ならつまんで拡大・縮小(11/28 ユーザーの指示「二本指でも」)。指の間の場所を動かさずに拡大する
+  let drag = null, pinch = null;
+  const pts = new Map();
+  const toSvg = (cx, cy) => {
+    const r = svg.getBoundingClientRect(), s = Math.max(vb[2] / r.width, vb[3] / r.height);
+    const ox = (r.width - vb[2] / s) / 2, oy = (r.height - vb[3] / s) / 2;
+    return [vb[0] + (cx - r.left - ox) * s, vb[1] + (cy - r.top - oy) * s];
+  };
+  const two = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+  svg.addEventListener("pointerdown", ev => {
+    pts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY }); try { svg.setPointerCapture(ev.pointerId); } catch (e) {}
+    if (pts.size === 2) { const t = two(); pinch = { d: t.d, zoom, p: toSvg(t.x, t.y) }; drag = null; }
+    else if (pts.size === 1) { drag = { x: ev.clientX, y: ev.clientY, vx: vb[0], vy: vb[1] }; svg.style.cursor = "grabbing"; }
+  });
   svg.addEventListener("pointermove", ev => {
+    if (!pts.has(ev.pointerId)) return;
+    pts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (pinch && pts.size >= 2) {
+      const t = two(), nz = Math.max(1, Math.min(8, pinch.zoom * t.d / pinch.d));
+      zoom = nz; vb[2] = base[2] / zoom; vb[3] = base[3] / zoom;
+      const r = svg.getBoundingClientRect(), s = Math.max(vb[2] / r.width, vb[3] / r.height);
+      const ox = (r.width - vb[2] / s) / 2, oy = (r.height - vb[3] / s) / 2;
+      vb[0] = pinch.p[0] - (t.x - r.left - ox) * s; vb[1] = pinch.p[1] - (t.y - r.top - oy) * s; clamp(); apply();
+      return;
+    }
     if (!drag) return;
     const r = svg.getBoundingClientRect(), s = Math.max(vb[2] / r.width, vb[3] / r.height);
     vb[0] = drag.vx - (ev.clientX - drag.x) * s; vb[1] = drag.vy - (ev.clientY - drag.y) * s; clamp(); apply();
   });
-  const end = () => { drag = null; svg.style.cursor = "grab"; };
+  const end = ev => {
+    pts.delete(ev.pointerId);
+    if (pts.size < 2) pinch = null;
+    if (pts.size === 1) { const [q] = [...pts.values()]; drag = { x: q.x, y: q.y, vx: vb[0], vy: vb[1] }; }   // 1本に戻ったらそこからドラッグ
+    if (!pts.size) { drag = null; svg.style.cursor = "grab"; }
+  };
   svg.addEventListener("pointerup", end); svg.addEventListener("pointercancel", end);
   const close = () => { wrap.remove(); document.removeEventListener("keydown", onKey); };
   const onKey = ev => { if (ev.key === "Escape") close(); else if (ev.key === "+" || ev.key === "=") zoomBy(1.5); else if (ev.key === "-") zoomBy(1 / 1.5); };

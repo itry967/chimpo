@@ -3572,9 +3572,27 @@ function renderDayPage(date) {
   main.querySelectorAll(".simBtn").forEach(b => b.onclick = () => {
     if (b.dataset.k === "simMode") setSimMode(b.dataset.v);
     else if (b.dataset.k.startsWith("diff")) setDiff(b.dataset.k, b.dataset.v === "1");
+    else if (b.dataset.k === "simBudget") setSimBudget(+b.dataset.v, false);
     else state[b.dataset.k] = b.dataset.v;
     const y = window.scrollY; renderDayPage(date); window.scrollTo(0, y);
   });
+  const simInput = document.getElementById("simBudgetInput");
+  const applySimBudget = (defer = false) => {
+    const raw = simInput.value.trim(), value = Number(raw);
+    if (!raw || !Number.isFinite(value) || value <= 0 || value > Number.MAX_SAFE_INTEGER - 100) {
+      simInput.setCustomValidity("100円以上の金額を入力してください"); simInput.reportValidity(); return;
+    }
+    simInput.setCustomValidity("");
+    setSimBudget(Math.max(100, Math.round(value / 100) * 100), true);
+    if (defer) setTimeout(() => keepScroll(() => renderDayPage(date)), 0);
+    else keepScroll(() => renderDayPage(date));
+  };
+  if (simInput) {
+    simInput.oninput = () => simInput.setCustomValidity("");
+    simInput.onchange = () => applySimBudget(true);
+    simInput.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); applySimBudget(); } };
+  }
+
   main.querySelectorAll("button.boughtDel").forEach(b => b.onclick = () => { boughtOf(date).splice(+b.dataset.i, 1); saveBought(date); keepScroll(() => renderDayPage(date)); });
   document.getElementById("boughtClear")?.addEventListener("click", () => {
     if (!confirm("この日の購入した馬券を全部消します。よろしいですか?")) return;
@@ -4161,10 +4179,21 @@ function fundPlan(date, fOver = null) {
   return { f, rids, jyos, inJyo, open, items, ok, picked, budget, spent: ok.reduce((s, x) => s + (x.spent || 0), 0) };
 }
 const SIM_BUDGETS = [1000, 5000, 10000];
+function simBudgetSetting() {
+  let saved = state.simBudgetSetting;
+  try { saved = JSON.parse(localStorage.getItem("keiba-viewer:simBudget") || "null") || saved; } catch (e) {}
+  const value = Number(saved?.value);
+  return Number.isSafeInteger(value) && value >= 100 && value % 100 === 0 ? { value, custom: !!saved.custom } : { value: 5000, custom: false };
+}
+function setSimBudget(value, custom) {
+  const setting = { value, custom };
+  state.simBudgetSetting = setting;
+  try { localStorage.setItem("keiba-viewer:simBudget", JSON.stringify(setting)); } catch (e) {}
+}
 function renderDaySim(date, raceLink) {
   const rids = sortedRaces().filter(rid => rid.slice(0, 8) === date);
   const jyos = [...new Set(rids.map(rid => rid.slice(8, 10)))];
-  const budget = SIM_BUDGETS.includes(+state.simBudget) ? +state.simBudget : 5000;
+  const setting = simBudgetSetting(), budget = setting.value;   // 11/28: 自由入力も(手入力)
   const jyo = state.simJyo === "all" || jyos.includes(state.simJyo) ? state.simJyo : "all";
   const base = { budget, picks: {}, past: true, byJyo: false, jyo: null, offJyo: jyo === "all" ? [] : jyos.filter(j => j !== jyo), diffOnly: diffOn("diffSim") };
   // 優先順位(2026-11-21 ユーザーの指示): 推奨(見送りでない)レースを、見込みの回収率と期待値で並べ、上から選ぶ。
@@ -4188,7 +4217,8 @@ function renderDaySim(date, raceLink) {
   const btn = (k, v, label, on) => `<button class="simBtn${on ? " on" : ""}" data-k="${k}" data-v="${v}">${label}</button>`;
   let h = `<div class="card day-fold"><h3>もし推奨馬券を一日の予算 ${budget.toLocaleString()}円で買ったら${updTag(["推奨買い目", "払戻"], rids)}</h3>` +
     `<div class="tabs" style="margin-bottom:6px"><span class="muted" style="align-self:center;margin-right:6px">予算:</span>` +
-    SIM_BUDGETS.map(b => btn("simBudget", b, b.toLocaleString() + "円", b === budget)).join("") + `</div>` +
+    SIM_BUDGETS.map(b => btn("simBudget", b, b.toLocaleString() + "円", !setting.custom && b === budget)).join("") +
+    `<label>手入力 <input id="simBudgetInput" class="odds" type="number" min="100" step="100" inputmode="numeric" style="width:110px" value="${setting.custom ? budget : ""}" placeholder="金額"> 円</label><span class="muted">100円単位</span></div>` +
     `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">場:</span>` +
     btn("simJyo", "all", "全場", jyo === "all") + jyos.map(j => btn("simJyo", j, esc(JYO[j] || j), j === jyo)).join("") + `</div>` +
     `<div class="tabs" style="margin-bottom:8px"><span class="muted" style="align-self:center;margin-right:6px">買うレース:</span>` +
